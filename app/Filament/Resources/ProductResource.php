@@ -22,8 +22,9 @@ class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
+    protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
+    protected static ?string $navigationLabel = "Liste";
+    protected static ?string $navigationGroup = "Produits";
     public static function form(Form $form): Form
     {
         return $form
@@ -60,15 +61,7 @@ class ProductResource extends Resource
                 Textarea::make('description')
                 ->columnSpanFull(),
                 FileUpload::make('picture')
-                    ->preserveFilenames()
-                    ->disk('public')
-                    ->directory('uploads/image')
-
-                    ->visibility('public')
-                    ->getUploadedFileNameForStorageUsing(
-                        fn (TemporaryUploadedFile $file): string => (string) str($file->getClientOriginalName())
-                            ->prepend(now()->timestamp),
-                    )
+                    ->disk('uploads_image')
                     ->acceptedFileTypes(['image/*'])->columnSpanFull(),
                 ])
             ]);
@@ -89,7 +82,7 @@ class ProductResource extends Resource
                     ->sortable(),
                 ToggleColumn::make('is_active')
                     ,
-                ImageColumn::make('picture'),
+                ImageColumn::make('picture')->disk('uploads_image'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

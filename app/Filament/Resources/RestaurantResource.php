@@ -9,9 +9,12 @@ use Filament\Forms\Components\{DatePicker, FileUpload, KeyValue, TextInput, Text
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Str;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class RestaurantResource extends Resource
 {
@@ -20,6 +23,7 @@ class RestaurantResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-home-modern';
 
     protected static ?string $label = "Nos restaurants";
+    protected static ?string $navigationGroup = "Thalia eats";
     protected static ?int $navigationSort =2;
     public static function form(Form $form): Form
     {
@@ -66,7 +70,8 @@ class RestaurantResource extends Resource
                     TimePicker::make('endAt')->required()->label('Heure de fermeture')
                 ])->columns(3),
                 FileUpload::make('banniere')
-                    ->columnSpanFull()
+                ->disk('uploads_image')
+                    ->acceptedFileTypes(['image/*'])->columnSpanFull(),
                 ])
             ]);
     }
@@ -75,21 +80,12 @@ class RestaurantResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('user_id')
-                    ->numeric()
-                    ->sortable(),
                 Tables\Columns\TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('slug')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('reference')
-                    ->searchable(),
-                Tables\Columns\IconColumn::make('is_active')
-                    ->boolean(),
+                Tables\Columns\ToggleColumn::make('is_active'),
                 Tables\Columns\TextColumn::make('phone')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('whatsapp')
-                    ->searchable(),
+                ImageColumn::make('banniere')->disk('uploads_image'),
                 Tables\Columns\TextColumn::make('deleted_at')
                     ->dateTime()
                     ->sortable(),
@@ -132,5 +128,10 @@ class RestaurantResource extends Resource
             'create' => Pages\CreateRestaurant::route('/create'),
             'edit' => Pages\EditRestaurant::route('/{record}/edit'),
         ];
+    }
+
+    public static function toSlug($string):String
+    {
+        return Str::slug($string);
     }
 }

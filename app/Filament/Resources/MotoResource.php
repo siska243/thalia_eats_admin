@@ -17,7 +17,8 @@ class MotoResource extends Resource
 {
     protected static ?string $model = Moto::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-cube-transparent';
+    protected static ?string $navigationGroup="Livraison";
 
     public static function form(Form $form): Form
     {
@@ -76,14 +77,14 @@ class MotoResource extends Resource
                 Tables\Actions\CreateAction::make(),
             ]);
     }
-    
+
     public static function getRelations(): array
     {
         return [
             //
         ];
     }
-    
+
     public static function getPages(): array
     {
         return [
@@ -91,5 +92,5 @@ class MotoResource extends Resource
             'create' => Pages\CreateMoto::route('/create'),
             'edit' => Pages\EditMoto::route('/{record}/edit'),
         ];
-    }    
+    }
 }

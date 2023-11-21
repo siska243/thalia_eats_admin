@@ -14,4 +14,8 @@ class Town extends Model
     {
         return $this->hasMany(Restaurant::class,'restaurant_id');
     }
+
+    public function delivrery_price():HasMany{
+        return $this->hasMany(DelivreryPrice::class);
+    }
 }

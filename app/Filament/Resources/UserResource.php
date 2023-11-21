@@ -6,6 +6,8 @@ use App\Filament\Resources\UserResource\Pages;
 use App\Filament\Resources\UserResource\RelationManagers;
 use App\Models\User;
 use Filament\Forms;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -17,7 +19,9 @@ class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-user-group';
+    protected static ?string $label = "Nos utilisateurs";
+    protected static ?string $navigationGroup = "Thalia eats";
 
     public static function form(Form $form): Form
     {
@@ -26,23 +30,26 @@ class UserResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->required()
                     ->maxLength(255),
+                TextInput::make('last_name')->required(),
+                TextInput::make('principal_adresse')->label('Principal adresse'),
+                Select::make('town_id')->label('Commune')
+                    ->relationship('town', 'title')->searchable()->preload(),
                 Forms\Components\TextInput::make('email')
                     ->email()
                     ->required()
                     ->maxLength(255),
-                Forms\Components\DateTimePicker::make('email_verified_at'),
                 Forms\Components\TextInput::make('password')
                     ->password()
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('role_user')
-                    ->required()
-                    ->numeric(),
+                Forms\Components\Select::make('role')->label('Type de compte')
+                    ->options([
+                        'drivers' => 'Livreur',
+                        'restaurant' => 'Restaurant',
+                    ])
+                    ->required(),
                 Forms\Components\TextInput::make('phone')
                     ->tel()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('slug')
-                    ->required()
                     ->maxLength(255),
             ]);
     }
@@ -92,14 +99,14 @@ class UserResource extends Resource
                 Tables\Actions\CreateAction::make(),
             ]);
     }
-    
+
     public static function getRelations(): array
     {
         return [
             //
         ];
     }
-    
+
     public static function getPages(): array
     {
         return [
@@ -107,5 +114,5 @@ class UserResource extends Resource
             'create' => Pages\CreateUser::route('/create'),
             'edit' => Pages\EditUser::route('/{record}/edit'),
         ];
-    }    
+    }
 }

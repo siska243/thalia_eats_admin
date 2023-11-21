@@ -19,8 +19,10 @@ class CategoryProductResource extends Resource
 {
     protected static ?string $model = CategoryProduct::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-table-cells';
 
+    protected static ?string $navigationLabel = "Categorie";
+    protected static ?string $navigationGroup = "Produits";
     public static function form(Form $form): Form
     {
         return $form

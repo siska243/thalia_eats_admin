@@ -17,8 +17,9 @@ class CommandeProductResource extends Resource
 {
     protected static ?string $model = CommandeProduct::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
+    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static ?string $navigationGroup = "Thalia eats";
+    protected static ?string $navigationModeleLabel = "Produit commande";
     public static function form(Form $form): Form
     {
         return $form
@@ -86,14 +87,14 @@ class CommandeProductResource extends Resource
                 Tables\Actions\CreateAction::make(),
             ]);
     }
-    
+
     public static function getRelations(): array
     {
         return [
             //
         ];
     }
-    
+
     public static function getPages(): array
     {
         return [
@@ -101,5 +102,5 @@ class CommandeProductResource extends Resource
             'create' => Pages\CreateCommandeProduct::route('/create'),
             'edit' => Pages\EditCommandeProduct::route('/{record}/edit'),
         ];
-    }    
+    }
 }

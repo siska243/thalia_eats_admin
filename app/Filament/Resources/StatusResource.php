@@ -6,6 +6,8 @@ use App\Filament\Resources\StatusResource\Pages;
 use App\Filament\Resources\StatusResource\RelationManagers;
 use App\Models\Status;
 use Filament\Forms;
+use Filament\Forms\Components\ColorPicker;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -19,14 +21,18 @@ class StatusResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-minus-circle';
 
-    protected static ?string $label = "Nos Status";
-
+    protected static ?string $label = "Status";
+    protected static ?string $navigationLabel = "Status";
     protected static ?string $navigationGroup = "Parametre";
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
                 //
+                TextInput::make('title'),
+                ColorPicker::make('color'),
+                ColorPicker::make('bg_color'),
+                TextInput::make("icon"),
             ]);
     }
 

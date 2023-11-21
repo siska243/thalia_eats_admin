@@ -25,7 +25,7 @@ class CategorieResource extends JsonResource
             'uid'=>Cipher::Encrypt($this->resource->id),
             'title'=>$this->resource->title,
             'slug'=> $this->resource->slug,
-            'sub_categorie'=>SubCategoryProductResource::collection($this->whenLoaded('sub_category_product'))
+            'sub_category_product'=>SubCategoryProductResource::collection($this->whenLoaded('sub_category_product'))
         ];
     }
 }

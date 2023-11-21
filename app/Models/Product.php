@@ -24,4 +24,9 @@ class Product extends Model
     {
       return $this->belongsTo(SubCategoryProduct::class,'sub_category_product_id');
     }
+
+    public function commande_product(): HasMany
+    {
+        return $this->hasMany(CommandeProduct::class);
+    }
 }

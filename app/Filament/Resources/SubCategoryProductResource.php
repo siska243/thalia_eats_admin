@@ -21,8 +21,9 @@ class SubCategoryProductResource extends Resource
 {
     protected static ?string $model = SubCategoryProduct::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
+    protected static ?string $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
+    protected static ?string $navigationLabel = "Sous Categorie";
+    protected static ?string $navigationGroup = "Produits";
     public static function form(Form $form): Form
     {
 
@@ -36,17 +37,8 @@ class SubCategoryProductResource extends Resource
                 Toggle::make('is_active')
                     ->required(),
                 FileUpload::make('picture')
-                ->preserveFilenames()
-                ->disk('public')
-                ->directory('uploads/image')
-
-                ->visibility('public')
-                ->getUploadedFileNameForStorageUsing(
-                    fn (TemporaryUploadedFile $file): string => (string) str($file->getClientOriginalName())
-                    ->prepend(now()->timestamp),
-                )
-                ->acceptedFileTypes(['image/*'])->
-                columnSpanFull(),
+                    ->disk('uploads_image')
+                    ->acceptedFileTypes(['image/*'])->columnSpanFull(),
 
             ])
         ])
@@ -62,7 +54,7 @@ class SubCategoryProductResource extends Resource
                 TextColumn::make('category_product.title')
                     ->sortable(),
                 ToggleColumn::make('is_active')->label('Activé'),
-                ImageColumn::make('picture'),
+                ImageColumn::make('picture')->disk('uploads_image'),
                 TextColumn::make('created_at')->label('Date de création')
                     ->dateTime()
                     ->sortable()

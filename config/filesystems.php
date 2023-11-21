@@ -39,15 +39,7 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/storage',
-            'visibility' => 'public',
-            'throw' => false,
-        ],
-
-        'uploads_image' => [
-            'driver' => 'local',
-            'root' => storage_path('app/public/uploads/image'),
-            'url' => env('APP_URL') . '/uploads/image',
+            'url' => env('APP_URL') . '/storage',
             'visibility' => 'public',
             'throw' => false,
         ],
@@ -61,6 +53,21 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            'throw' => false,
+        ],
+
+        'uploads_image' => [
+            'driver' => 'local',
+            'root' => public_path('/images'),
+            'url' => env('APP_URL') . '/images',
+            'visibility' => 'public',
+            'throw' => false,
+        ],
+        'uploads_document' => [
+            'driver' => 'local',
+            'root' => storage_path('app/public/uploads/document'),
+            'url' => env('APP_URL') . '/storage/uploads/document',
+            'visibility' => 'public',
             'throw' => false,
         ],
 
@@ -79,7 +86,8 @@ return [
 
     'links' => [
         public_path('storage') => storage_path('app/public'),
-        public_path('images')=>storage_path('app/public/uploads/image')
+        public_path('images') => storage_path('app/public/uploads/image'),
+        public_path('documents') => storage_path('app/public/uploads/document')
     ],
 
 ];

@@ -24,7 +24,8 @@ class SubCategoryProductResource extends JsonResource
             'uid'=>Cipher::Encrypt($this->id),
             'title'=>$this->resource->title,
             'slug'=>$this->slug,
-            'picture'=>$request->server('HTTP_HOST')."/storage/".$this->resource->picture
+            'picture'=>'https://'.$request->server('HTTP_HOST')."/images/".$this->resource->picture,
+            'product'=>$this->whenLoaded('product', ProductResource::collection($this->product)->where('is_active',true)),
         ];
     }
 }

@@ -27,4 +27,9 @@ class Restaurant extends Model
     {
         return $this->hasMany(Product::class);
     }
+
+    public function sub_categorie_product():BelongsTo
+    {
+ return $this->belongsTo(SubCategoryProduct::class);
+    }
 }

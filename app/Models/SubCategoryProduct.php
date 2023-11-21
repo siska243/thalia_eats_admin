@@ -20,4 +20,7 @@ class SubCategoryProduct extends Model
     {
         return $this->hasMany(Product::class);
     }
+    public function restaurant():HasMany{
+     return $this->hasMany(Restaurant::class);
+    }
 }
