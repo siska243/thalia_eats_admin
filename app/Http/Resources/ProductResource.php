@@ -33,7 +33,7 @@ class ProductResource extends JsonResource
             'picture'=>'https://'.$host.'/images/'.$this->picture,
             "is_promotional"=>$this->is_promotional,
             "is_in_forward"=>$this->is_in_forward,
-            'restaurant'=>$this->restaurant
+            'restaurant'=>new RestaurantResource($this->resource->restaurant),
         ];
     }
 }

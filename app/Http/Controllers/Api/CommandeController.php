@@ -54,7 +54,7 @@ class CommandeController extends Controller
 
             if (!$commande) {
                 $commande = new Commande();
-                $refernce = '#' . ($last_commande ? 1000 + $last_commande->id : 1000);
+                $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
                 $commande->user_id = $user->id;
                 $commande->refernce = $refernce;
                 $commande->status_id = 1;
@@ -99,12 +99,12 @@ class CommandeController extends Controller
      * Display the specified resource.
      * current commande
      */
-    public function show()
+    public function current()
     {
         try {
 
             $user = Auth()->user();
-            $commande = Commande::with('product')->where('status_id', 1)->where('user_id', $user->id)->first();
+            $commande = Commande::with('product')->where('status_id', 1)->orWhere('status_id', 2)->where('user_id', $user->id)->first();
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
         } catch (Exception $e) {
@@ -112,6 +112,10 @@ class CommandeController extends Controller
         }
     }
 
+    public function show($refernce){
+        $commandes=Commande::with('product')->where('refernce',$refernce)->first();
+        return ApiResponse::GET_DATA(new CommandeResource($commandes));
+    }
     /**
      * Update the specified resource in storage.
      */

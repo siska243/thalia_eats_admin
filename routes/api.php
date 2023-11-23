@@ -43,8 +43,9 @@ Route::middleware('auth:api')->prefix('/user')->group(function(){
 
    Route::prefix('/commande')->controller(CommandeController::class)->group(function(){
        Route::post('/add','store');
-       Route::get('/current','show');
+       Route::get('/current','current');
        Route::get('/past','index');
+       Route::get('/show/{commande:refernce}','show');
    });
 
 });
