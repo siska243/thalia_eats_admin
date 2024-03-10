@@ -10,6 +10,7 @@ use App\Models\CategoryProduct;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\SubCategoryProduct;
+use App\Wrappers\ApiResponse;
 use Exception;
 use Illuminate\Http\Request;
 
@@ -49,11 +50,14 @@ class RestaurantController extends Controller
                 $query->where('restaurant_id', $restaurant->id);
             })
             ->get();
+
             
             return SubCategoryProductResource::collection($menu);
-      } catch (Exception $th) {
+      } catch (Exception $e) {
         //throw $th;
-        dd($th);
+
+        return ApiResponse::SERVER_ERROR($e);
+
         //return $th;
       }
     }

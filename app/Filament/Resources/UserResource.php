@@ -41,7 +41,8 @@ class UserResource extends Resource
                 Forms\Components\TextInput::make('password')
                     ->password()
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->hidden(fn($operation)=>$operation=="edit"),
                 Forms\Components\Select::make('role')->label('Type de compte')
                     ->options([
                         'drivers' => 'Livreur',

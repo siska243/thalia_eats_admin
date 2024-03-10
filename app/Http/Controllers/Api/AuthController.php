@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginUserRequest;
 use App\Http\Requests\RegistrationRequest;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Wrappers\ApiResponse;
 use Exception;
@@ -48,11 +49,12 @@ class AuthController extends Controller
 
                 if(!$token) return ApiResponse::BAD_REQUEST('invalide credential','oups','erreur');
                 $user = Auth::guard('api')->user();
+                $roles = $user->getRoleNames();
                 return ApiResponse::GET_DATA(
                     [
-                    'user_role'=>$user->roles()->pluck('name'),
+                        'user'=> new UserResource($user),
+                        'roles'=> $roles,
                     'token'=>$token,
-                    'full_name'=>$user->name. ' '. $user->last_name
                     ],
                 );
 

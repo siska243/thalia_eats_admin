@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\CallbackUrlController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -13,8 +14,13 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::get('/', function () {
+/* Route::get('/', function () {
     return view('welcome');
-});
+}); */
+
+Route::get('/callback/{action}',[CallbackUrlController::class,'index'])->name('callback');
+
+Route::post('/create-payment-intent',[CallbackUrlController::class,'index'])->name('payment-intent');
+
 
 

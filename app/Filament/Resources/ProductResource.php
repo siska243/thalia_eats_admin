@@ -82,6 +82,8 @@ class ProductResource extends Resource
                     ->sortable(),
                 ToggleColumn::make('is_active')
                     ,
+                    ToggleColumn::make('preview')
+                    ,
                 ImageColumn::make('picture')->disk('uploads_image'),
                 TextColumn::make('created_at')
                     ->dateTime()

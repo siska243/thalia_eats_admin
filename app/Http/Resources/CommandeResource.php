@@ -32,6 +32,7 @@ class CommandeResource extends JsonResource
             'reference' => $this->refernce,
             'delivrery_driver_id' => $this->delivrery_driver,
             'reception' => $this->reception,
+            "reference_paiement"=>$this->resource->reference_paiement,
             'products' => $this->whenLoaded('product', CommandeProductResource::collection($this->product))
         ];
     }
