@@ -96,11 +96,11 @@ class RestaurantController extends Controller
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
 
-                ->first();
+                ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
 
-            return ApiResponse::GET_DATA(new CommandeResource($commande));
+            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -119,11 +119,12 @@ class RestaurantController extends Controller
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
 
-                ->first();
+                ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
 
-            return ApiResponse::GET_DATA(new CommandeResource($commande));
+            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
+
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
@@ -142,11 +143,11 @@ class RestaurantController extends Controller
 
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
 
-                ->first();
+                ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
 
-            return ApiResponse::GET_DATA(new CommandeResource($commande));
+            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
