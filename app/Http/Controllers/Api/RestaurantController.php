@@ -64,11 +64,9 @@ class RestaurantController extends Controller
 
             return SubCategoryProductResource::collection($menu);
         } catch (Exception $e) {
-            //throw $th;
 
             return ApiResponse::SERVER_ERROR($e);
 
-            //return $th;
         }
     }
 
@@ -103,6 +101,7 @@ class RestaurantController extends Controller
             if (!$commande) return ApiResponse::GET_DATA(null);
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
+
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }

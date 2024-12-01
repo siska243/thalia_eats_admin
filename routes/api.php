@@ -67,6 +67,8 @@ Route::middleware('auth:api')->prefix('/user')->group(function(){
 
    Route::get('/restaurant',[RestaurantController::class, 'userRestaurant']);
    Route::get('/restaurant-wait-accept-order',[RestaurantController::class, 'waitAcceptOrderRestaurant']);
+   Route::get('/restaurant-current-order',[RestaurantController::class, 'currentOrderRestaurant']);
+   Route::get('/restaurant-past-order',[RestaurantController::class, 'currentOrderRestaurant']);
    Route::post('/restaurant-accept-order',[RestaurantController::class, 'confirmOrderRestaurant']);
    Route::get('/restaurant-dash',[RestaurantController::class, 'dashRestaurant']);
 
