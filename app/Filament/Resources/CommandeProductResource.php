@@ -20,6 +20,7 @@ class CommandeProductResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
     protected static ?string $navigationGroup = "Thalia eats";
     protected static ?string $navigationModeleLabel = "Produit commande";
+    protected static bool $shouldRegisterNavigation=false;
     public static function form(Form $form): Form
     {
         return $form

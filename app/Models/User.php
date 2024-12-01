@@ -28,7 +28,10 @@ class User extends Authenticatable implements JWTSubject
         "number_street",
         "street",
         'principal_adresse',
-        'town_id'
+        'town_id',
+        'devices',
+        'mobile_permissions',
+        'type_user'
     ];
 
 
@@ -50,6 +53,8 @@ class User extends Authenticatable implements JWTSubject
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'devices'=>'array',
+        'mobile_permissions'=>'array'
     ];
 
     public function restaurant():HasMany
@@ -78,6 +83,12 @@ class User extends Authenticatable implements JWTSubject
             'email' => $this->email,
             'name' => $this->name
         ];
+    }
+
+    public  function  delivrery_driver():hasMany
+
+    {
+        return  $this->hasMany(DelivreryDriver::class);
     }
 
     public function fullName(){

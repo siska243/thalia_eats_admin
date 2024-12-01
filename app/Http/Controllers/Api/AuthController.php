@@ -30,7 +30,7 @@ class AuthController extends Controller
               'slug'=>Str::slug($request->name.'-'.time().'-'. $request->last_name)
             ]
             );
-            $user->assignRole('clients');
+            // $user->assignRole('clients');
             $user->save();
            return ApiResponse::SUCCESS_DATA($user,"Felicitations","Votre compte a été créer avec succès");
         } catch (Exception $e) {

@@ -12,6 +12,8 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Guava\FilamentIconPicker\Forms\IconPicker;
+use Guava\FilamentIconPicker\Tables\IconColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -29,10 +31,15 @@ class StatusResource extends Resource
         return $form
             ->schema([
                 //
-                TextInput::make('title'),
-                ColorPicker::make('color'),
-                ColorPicker::make('bg_color'),
-                TextInput::make("icon"),
+                Forms\Components\Section::make()
+                    ->columns(2)
+                    ->schema([
+                    TextInput::make('title'),
+                    ColorPicker::make('color'),
+                    ColorPicker::make('bg_color'),
+                    IconPicker::make('icon')->preload(),
+                ])
+
             ]);
     }
 
@@ -41,6 +48,10 @@ class StatusResource extends Resource
         return $table
             ->columns([
                 //
+                IconColumn::make('icon'),
+                Tables\Columns\TextColumn::make('title'),
+                Tables\Columns\ColorColumn::make('color'),
+                Tables\Columns\ColorColumn::make('bg_color')
             ])
             ->filters([
                 //

@@ -9,6 +9,7 @@ use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
+use Filament\Resources\Pages\Page;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -22,25 +23,30 @@ class DelivreryDriverResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-user';
     protected static ?string $navigationGroup = "Livraison";
     protected static ?string $navigationLabel = "Livreur";
+
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Select::make('user_id')
-                ->relationship('user','name')
-                ->options(User::whereHas('roles', function ($query) {
-                $query->where('name', 'drivers');
-            })->pluck('name', 'id'))
-                ->preload()
-                ->searchable(),
-                Forms\Components\DatePicker::make('birth_date'),
-                Forms\Components\TextInput::make('id_card')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\Textarea::make('contract')
-                    ->columnSpanFull(),
-                Forms\Components\Toggle::make('is_active')
-                    ->required(),
+                Forms\Components\Section::make()
+                    ->columns(2)
+                    ->schema(
+                        [
+                            Select::make('user_id')
+                                ->relationship('user', 'name', modifyQueryUsing: fn($query) => $query->whereRelation('delivrery_driver', 'type_user', 'drivers'))
+                                ->preload()
+                                ->searchable(),
+                            Forms\Components\DatePicker::make('birth_date'),
+                            Forms\Components\TextInput::make('id_card')
+                                ->required()
+                                ->maxLength(255),
+                            Forms\Components\Textarea::make('contract')
+                                ->columnSpanFull(),
+                            Forms\Components\Toggle::make('is_active')
+                                ->required(),
+                        ]
+                    )
+
             ]);
     }
 
@@ -48,13 +54,15 @@ class DelivreryDriverResource extends Resource
     {
         return $table
             ->columns([
+                Tables\Columns\TextColumn::make('user.name')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('birth_date')
                     ->date()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('id_card')->label('Numéro pièce d\'identité')
                     ->searchable(),
-                Tables\Columns\IconColumn::make('is_active')
-                    ->boolean(),
+                Tables\Columns\ToggleColumn::make('is_active')
+                ,
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -87,12 +95,22 @@ class DelivreryDriverResource extends Resource
         ];
     }
 
+    public static function getRecordSubNavigation(Page $page): array
+    {
+        return $page->generateNavigationItems([
+
+            Pages\EditDelivreryDriver::class,
+            Pages\ManageCommandeProducts::class
+        ]);
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListDelivreryDrivers::route('/'),
             'create' => Pages\CreateDelivreryDriver::route('/create'),
             'edit' => Pages\EditDelivreryDriver::route('/{record}/edit'),
+            'commande'=>Pages\ManageCommandeProducts::route('/{record}/commandes'),
         ];
     }
 }

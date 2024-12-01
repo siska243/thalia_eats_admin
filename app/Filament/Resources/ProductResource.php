@@ -16,7 +16,13 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-use Filament\Tables\Actions\{ActionGroup, BulkActionGroup, DeleteBulkAction, EditAction, CreateAction, DeleteAction, ViewAction};
+use Filament\Tables\Actions\{ActionGroup,
+    BulkActionGroup,
+    DeleteBulkAction,
+    EditAction,
+    CreateAction,
+    DeleteAction,
+    ViewAction};
 
 class ProductResource extends Resource
 {
@@ -25,52 +31,61 @@ class ProductResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = "Liste";
     protected static ?string $navigationGroup = "Produits";
+
     public static function form(Form $form): Form
     {
         return $form
-            ->schema([
-                Section::make('Information basique')
-                 ->schema([
-                    TextInput::make('title')
-                    ->required()
-                    ->maxLength(65535),
-                Select::make('restaurant_id')
-                ->required()
-                ->relationship('restaurant','name')
-                ->options(Restaurant::where('is_active', true)->pluck('name', 'id'))
-                ->searchable()
-                ,
-                Select::make('sub_category_product_id')
-                ->required()
-                ->relationship('sub_category_product','title')
-                ->options(SubCategoryProduct::where('is_active',true)->pluck('title','id'))
-                ->searchable()
-                ,
-                Select::make('currency_id')
-                ->relationship('currency','title')->label('Devise')->required()
-                ->options(Currency::where('is_active',1)->pluck('title','id'))
-                 ])->columns(2),
+            ->schema(
+                [
+                    Section::make()->schema(
+                        [
+                            Section::make('Information basique')
+                                ->schema([
+                                    TextInput::make('title')
+                                        ->required()
+                                        ->maxLength(65535),
+                                    Select::make('restaurant_id')
+                                        ->required()
+                                        ->relationship('restaurant', 'name')
+                                        ->options(Restaurant::where('is_active', true)->pluck('name', 'id'))
+                                        ->searchable()
+                                    ,
+                                    Select::make('sub_category_product_id')
+                                        ->required()
+                                        ->relationship('sub_category_product', 'title')
+                                        ->options(SubCategoryProduct::where('is_active', true)->pluck('title', 'id'))
+                                        ->searchable()
+                                    ,
+                                    Select::make('currency_id')
+                                        ->relationship('currency', 'title')->label('Devise')->required()
+                                        ->options(Currency::where('is_active', 1)->pluck('title', 'id'))
+                                ])->columns(2),
 
-                Section::make('Information complementaire')
-                ->schema([TextInput::make('price')
-                    ->required()
-                    ->numeric()
-                    ->prefix('$'),
-                TextInput::make('promotionnalPrice')
-                    ->numeric(),
-                Textarea::make('description')
-                ->columnSpanFull(),
-                FileUpload::make('picture')
-                    ->disk('uploads_image')
-                    ->acceptedFileTypes(['image/*'])->columnSpanFull(),
-                ])
-            ]);
+                            Section::make('Information complementaire')
+                                ->schema([TextInput::make('price')
+                                    ->required()
+                                    ->numeric()
+                                    ->prefix('$'),
+                                    TextInput::make('promotionnalPrice')
+                                        ->numeric(),
+                                    Textarea::make('description')
+                                        ->columnSpanFull(),
+                                    FileUpload::make('picture')
+                                        ->disk('uploads_image')
+                                        ->acceptedFileTypes(['image/*'])->columnSpanFull(),
+                                ])
+                        ]
+                    )
+                ]
+
+            );
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
+                ImageColumn::make('picture')->disk('uploads_image')->circular(),
                 TextColumn::make('title')->searchable(),
                 TextColumn::make('price')
                     ->money()
@@ -81,10 +96,10 @@ class ProductResource extends Resource
                     ->label('categorie')
                     ->sortable(),
                 ToggleColumn::make('is_active')
-                    ,
-                    ToggleColumn::make('preview')
-                    ,
-                ImageColumn::make('picture')->disk('uploads_image'),
+                ,
+                ToggleColumn::make('preview')
+                ,
+
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -100,8 +115,8 @@ class ProductResource extends Resource
             ->actions([
                 ActionGroup::make([
                     EditAction::make(),
-                ViewAction::make(),
-                DeleteAction::make(),
+                    ViewAction::make(),
+                    DeleteAction::make(),
                 ])
 
             ])

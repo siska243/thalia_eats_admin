@@ -19,5 +19,20 @@ class CommandeProduct extends Model
     {
         return $this->belongsTo(Product::class);
     }
-   
+
+    public function user():BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function currency(): BelongsTo
+    {
+        return $this->belongsTo(Currency::class);
+    }
+
+    public function delivery_driver(): BelongsTo
+    {
+        return $this->belongsTo(DelivreryDriver::class);
+    }
+
 }

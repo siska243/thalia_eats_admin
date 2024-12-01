@@ -29,7 +29,7 @@ class AdminPanelProvider extends PanelProvider
         return $panel
             ->default()
             ->id('admin')
-            ->path('')
+            ->path('admin')
             ->login()
             ->colors([
                 'primary' => Color::Amber,
@@ -44,6 +44,9 @@ class AdminPanelProvider extends PanelProvider
                 Widgets\AccountWidget::class,
                 Widgets\FilamentInfoWidget::class,
             ])
+            ->databaseNotificationsPolling(2)
+            ->databaseNotifications()
+            ->maxContentWidth('full')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -73,8 +76,8 @@ class AdminPanelProvider extends PanelProvider
                 ]),
                 ApiServicePlugin::make(),
                 FilamentSpatieLaravelHealthPlugin::make()
-                ->usingPage(\ShuvroRoy\FilamentSpatieLaravelHealth\Pages\HealthCheckResults::class),
-                // ->usingPage(HealthCheckResults::class),
+                //->usingPage(\ShuvroRoy\FilamentSpatieLaravelHealth\Pages\HealthCheckResults::class),
+                 ->usingPage(HealthCheckResults::class),
                 FilamentLaravelLogPlugin::make()->navigationGroup('System Tools')
                 ->navigationLabel('Logs')
                 ->navigationIcon('heroicon-o-bug-ant')

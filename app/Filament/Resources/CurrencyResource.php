@@ -27,19 +27,21 @@ class CurrencyResource extends Resource
     {
         return $form
             ->schema([
-                Forms\Components\TextInput::make('title')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('code')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('icon')
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('slug')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\Toggle::make('is_active')
-                    ->required(),
+                Forms\Components\Section::make()
+                    ->columns(2)
+                    ->schema([
+
+                    Forms\Components\TextInput::make('title')
+                        ->required()
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('code')
+                        ->required()
+                        ->maxLength(255),
+                    Forms\Components\TextInput::make('icon')
+                        ->maxLength(255),
+
+                ])
+
             ]);
     }
 
@@ -53,10 +55,10 @@ class CurrencyResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('icon')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('slug')
-                    ->searchable(),
-                Tables\Columns\IconColumn::make('is_active')
-                    ->boolean(),
+
+                Tables\Columns\ToggleColumn::make('is_active')
+
+                ,
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

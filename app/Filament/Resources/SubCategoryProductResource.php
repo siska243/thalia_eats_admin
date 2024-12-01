@@ -6,10 +6,12 @@ use App\Filament\Resources\SubCategoryProductResource\Pages;
 use App\Filament\Resources\SubCategoryProductResource\RelationManagers;
 use App\Models\CategoryProduct;
 use App\Models\SubCategoryProduct;
-use Filament\Forms\Components\{Grid, TextInput, Textarea, Toggle, Select};
+use Filament\Pages\Page;
+use Filament\Pages\SubNavigationPosition;
+use Filament\Forms\Components\{Grid, Section, TextInput, Textarea, Toggle, Select};
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
-use Filament\Tables\Actions\{CreateAction, DeleteBulkAction,EditAction,ViewAction,DeleteAction, BulkActionGroup};
+use Filament\Tables\Actions\{CreateAction, DeleteBulkAction, EditAction, ViewAction, DeleteAction, BulkActionGroup};
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -24,11 +26,16 @@ class SubCategoryProductResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
     protected static ?string $navigationLabel = "Sous Categorie";
     protected static ?string $navigationGroup = "Produits";
+
+    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
     public static function form(Form $form): Form
     {
 
         return $form->schema([
-            Grid::make(2)->schema([
+            Section::make()
+                ->columns(2)
+                ->schema([
                 Select::make('category_product_id')->label('Categorie')
                     ->relationship('category_product', 'title')
                     ->required(),
@@ -41,20 +48,20 @@ class SubCategoryProductResource extends Resource
                     ->acceptedFileTypes(['image/*'])->columnSpanFull(),
 
             ])
-        ])
-            ;
+        ]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-            TextColumn::make('title')
-                ->sortable(),
+                ImageColumn::make('picture')->disk('uploads_image')->circular(),
+                TextColumn::make('title')
+                    ->sortable(),
                 TextColumn::make('category_product.title')
                     ->sortable(),
                 ToggleColumn::make('is_active')->label('Activé'),
-                ImageColumn::make('picture')->disk('uploads_image'),
+
                 TextColumn::make('created_at')->label('Date de création')
                     ->dateTime()
                     ->sortable()
@@ -89,12 +96,23 @@ class SubCategoryProductResource extends Resource
         ];
     }
 
+    public static function getRecordSubNavigation(Page $page): array
+    {
+        return $page->generateNavigationItems([
+            // ...
+            Pages\EditSubCategoryProduct::class,
+            Pages\ManageProducts::class,
+
+        ]);
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListSubCategoryProducts::route('/'),
             'create' => Pages\CreateSubCategoryProduct::route('/create'),
             'edit' => Pages\EditSubCategoryProduct::route('/{record}/edit'),
+            'products'=>Pages\ManageProducts::route('/{record}/products'),
         ];
     }
 }

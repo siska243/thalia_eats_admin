@@ -38,11 +38,12 @@ Route::prefix('/list-restaurant')->controller(RestaurantController::class)->grou
 
 Route::get('/categorie-restaurant/{restaurant:slug}',[RestaurantController::class, 'categorie']);
 Route::get('/menu/{restaurant:slug}/{slug}',[RestaurantController::class, 'productRestaurant']);
+Route::get('/menu/{restaurant:slug}/{slug}',[RestaurantController::class, 'productRestaurant']);
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/refresh', [AuthController::class, 'refresh']);
-Route::get('/logout', [AuthController::class, 'logout'])->name('login');
+Route::get('/logout', [AuthController::class, 'logout'])->name('api.logout');
 
 Route::middleware('auth:api')->prefix('/user')->group(function(){
    Route::prefix('/account')->controller(UserAccountController::class)->group(function(){
@@ -63,6 +64,12 @@ Route::middleware('auth:api')->prefix('/user')->group(function(){
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
    });
+
+   Route::get('/restaurant',[RestaurantController::class, 'userRestaurant']);
+   Route::get('/restaurant-wait-accept-order',[RestaurantController::class, 'waitAcceptOrderRestaurant']);
+   Route::post('/restaurant-accept-order',[RestaurantController::class, 'confirmOrderRestaurant']);
+   Route::get('/restaurant-dash',[RestaurantController::class, 'dashRestaurant']);
+
 
 });
 

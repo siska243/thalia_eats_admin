@@ -66,9 +66,9 @@ class EasyPay
                 $description,
                 $client_name,
                 $client_email,
-                "https://github.com/",
-                "https://github.com/",
-                "https://github.com/"
+                $success_url,
+                $error_url,
+                $cancel_url
             ));
     }
 

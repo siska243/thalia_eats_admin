@@ -48,6 +48,7 @@ class CommandeController extends Controller
             $products = $request->products;
             $pricing = $request->pricing;
             $adresse = $request->adresse;
+
             $url = $request->url;
 
             $town = Town::where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
@@ -218,7 +219,7 @@ class CommandeController extends Controller
             }
 
             $commande->global_price = $globale_price;
-            
+
             $commande->code_confirmation = rand(1000, 9999);
             $commande->code_confirmation_restaurant = rand(1000, 9999);
 

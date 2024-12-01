@@ -6,8 +6,9 @@ use App\Models\Restaurant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+
 /**
- * @property Restaurantant $resource
+ * @property Restaurant $resource
  */
 class RestaurantResource extends JsonResource
 {
@@ -25,10 +26,14 @@ class RestaurantResource extends JsonResource
             'name' => $this->resource->name,
             'adresse' => $this->resource->adresse,
             'slug' => $this->resource->slug,
-            'opens' => $this->openHours,
-            'reference' => $this->reference,
-            'phone' => $this->phone,
-            'commune' => $this->whenNotNull($this->town_id),
+            'description'=>$this->resource->description,
+            'email'=> $this->resource->email,
+            'opens' => $this->resource->openHours,
+            'reference' => $this->resource->reference,
+            'phone' => $this->resource->phone,
+            'whatsapp' => $this->resource->whatsapp,
+            'location'=> $this->resource->location,
+            'commune' => $this->whenNotNull(new TownResource($this->resource->town)),
             'image' => 'https://' . $host . '/images/' . $this->resource->banniere
         ];
     }

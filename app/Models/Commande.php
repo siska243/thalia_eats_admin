@@ -27,4 +27,8 @@ class Commande extends Model
     {
         return $this->belongsTo(Town::class);
     }
+    public function commande_products(): HasMany
+    {
+        return $this->hasMany(CommandeProduct::class);
+    }
 }
