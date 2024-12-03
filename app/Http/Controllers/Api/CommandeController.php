@@ -72,8 +72,10 @@ class CommandeController extends Controller
             $commande->price_service = $pricing['service_price'];
 
             $commande->town_id = $town->id;
-            $commande->reference_adresse = $adresse['reference'] ? $adresse['reference'] : null;
+            $commande->reference_adresse = !empty($adresse['reference']) ? $adresse['reference'] : null;
             $commande->adresse_delivery = $adresse['adresse'];
+            $commande->street = $adresse['street'];
+            $commande->number_street = $adresse['number_street'];
             $commande->save();
             $globale_price = 0;
 

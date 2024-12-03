@@ -12,6 +12,7 @@ use App\Models\CategoryProduct;
 use App\Models\Commande;
 use App\Models\Product;
 use App\Models\Restaurant;
+use App\Models\Status;
 use App\Models\SubCategoryProduct;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
@@ -161,14 +162,16 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::whereIn('status_id',[3,4,5,6,7] )
+            $status=Status::query()->where('id','>',2)->pluck('id');
+
+            $commande = Commande::query()->whereIn('status_id',$status )
                 //->whereNotNull('accepted_at')
 
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
 
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
+            if (!$commande) return ApiResponse::GET_DATA([]);
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
         } catch (Exception $e) {
