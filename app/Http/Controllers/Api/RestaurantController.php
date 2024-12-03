@@ -258,7 +258,7 @@ class RestaurantController extends Controller
 
                     $commande->accepted_at = now()->format('Y-m-d');
 
-                    $commande->time_restarant = $time;
+                    $commande->time_restaurant = $time;
 
                     $commande->status_id = 3;
 
@@ -281,7 +281,7 @@ class RestaurantController extends Controller
 
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
         } catch (Exception $e) {
-            dd($e->getMessage());
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }
