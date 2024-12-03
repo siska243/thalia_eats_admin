@@ -161,7 +161,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', '>', 3)
+            $commande = Commande::where('status_id', '>', 2)
                 ->whereNotNull('accepted_at')
 
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
@@ -283,7 +283,7 @@ class RestaurantController extends Controller
 
                     $commande->time_restaurant = $time;
 
-                    $commande->status_id = 3;
+                    $commande->status_id = 2;
 
                     $commande->reception = true;
 
@@ -293,6 +293,7 @@ class RestaurantController extends Controller
                 case ActionOrderEnum::Decline->value:
 
                     $commande->cancel_at = now()->format('Y-m-d');
+                    $commande->status_id = 4;
                     //envoyer une notification au client
             }
 
