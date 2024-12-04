@@ -38,7 +38,7 @@ class EasyPay
     }
     public function setUrl(string $cid, string $token): self
     {
-        $this->url = "https://www.e-com-easypay.com/" . EasyPayMode::V1->value . "/payment/initialization?cid=" . $cid . '&token=' . $token;
+        $this->url = "https://www.e-com-easypay.com/" . EasyPayMode::SANDBOX->value . "/payment/initialization?cid=" . $cid . '&token=' . $token;
         return $this;
     }
     public function getUrl()
@@ -76,7 +76,7 @@ class EasyPay
     {
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
-        ])->post('https://www.e-com-easypay.com/' . (EasyPayMode::V1)->value . '/payment/initialization?cid=' . EasyPayMode::CID->value . '&&token=' . EasyPayMode::TOKEN->value, [
+        ])->post('https://www.e-com-easypay.com/' . (EasyPayMode::SANDBOX)->value . '/payment/initialization?cid=' . EasyPayMode::CID->value . '&&token=' . EasyPayMode::TOKEN->value, [
             'order_ref' => '$order_ref',
             'amount' => 1,
             'currency' => 'USD',
@@ -94,7 +94,35 @@ class EasyPay
 
         //return $response;
         if ($response['code'] == 1) {
-            return redirect()->away('https://www.e-com-easypay.com/sandbox/payment/initialization?reference=' . $EASYPAY_INIT_TRANSACTION_REFERENCE_RESPONSE);
+            return 'https://www.e-com-easypay.com/sandbox/payment/initialization?reference=' . $EASYPAY_INIT_TRANSACTION_REFERENCE_RESPONSE;
         }
+    }
+    public static function EASEY_APY_REDIRECT(string $reference):string
+    {
+        $mode=EasyPayMode::SANDBOX->value;
+        return "https://www.e-com-easypay.com/{$mode}/payment/initialization?reference={$reference}";
+    }
+
+    /**
+     * @param string $reference
+     * @return bool
+     */
+    public static function EASY_PAY_VERIF_TRANSACTION(string $reference):bool{
+
+        $mode=EasyPayMode::SANDBOX->value;
+        $parent = new self();
+        $parent->setUrl(EasyPayMode::CID->value, EasyPayMode::TOKEN->value);
+        $response=Http::withHeaders($parent->headers())
+            ->post( "https://www.e-com-easypay.com/{$mode}/payment/{$reference}/checking-payment");
+
+            $response->status() == 200;
+
+            if(   $response->status() == 200){
+
+                return true;
+            }
+
+            return false;
+
     }
 }
