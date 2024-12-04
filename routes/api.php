@@ -61,8 +61,10 @@ Route::middleware('auth:api')->prefix('/user')->group(function(){
        Route::get('/current','current');
        Route::get('/past','index');
        Route::post('/valide','valide');
+       Route::post('/check-paiement','verif_paiement');
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
+
    });
 
    Route::get('/restaurant',[RestaurantController::class, 'userRestaurant']);

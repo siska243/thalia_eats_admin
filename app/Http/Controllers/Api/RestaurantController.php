@@ -188,7 +188,7 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()
-                //->where('status_id', '>', 1)
+                ->where('status_id', '>', 1)
                 //>whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)));
 

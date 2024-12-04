@@ -63,6 +63,7 @@ class CommandeController extends Controller
 
 
             if (!$commande) {
+
                 $commande = new Commande();
                 $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
                 $commande->user_id = $user->id;
@@ -118,7 +119,7 @@ class CommandeController extends Controller
         try {
 
             $user = Auth()->user();
-            $commande = Commande::with('product')->where('status_id', 2)->where('user_id', $user->id)->first();
+            $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
         } catch (Exception $e) {
@@ -196,17 +197,18 @@ class CommandeController extends Controller
                  $cancle_url
 
              );
+
              if ($result['code'] == 0) {
 
                 return ApiResponse::BAD_REQUEST('Oups','Erreur','Paiement');
 
-
              }
+
              $commande->reference_paiement = $result['reference'];
              $commande->code_confirmation = rand(1000, 9999);
              $commande->code_confirmation_restaurant = rand(1000, 9999);
+             $commande->status_id=5;
              $commande->save();
-
 
 
             return ApiResponse::SUCCESS_DATA(['url'=>EasyPay::EASEY_APY_REDIRECT($result['reference'])]);
@@ -233,7 +235,7 @@ class CommandeController extends Controller
 
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid))
-            ->where('status_id','>',2)
+            ->where('status_id','>',1)
             ->where('user_id', $user->id)->first();
             if(! $commande){
                 return ApiResponse::BAD_REQUEST("Oups","Erreur","Erreur du paiement");
@@ -246,7 +248,7 @@ class CommandeController extends Controller
             }
 
 
-                $commande->status_id=3;
+                $commande->status_id=2;
                 //envoyer la commande au restaurateur
                 $commande->paied_at=now()->format("Y-m-d H:i:s");
                 $commande->save();
