@@ -97,7 +97,7 @@ class RestaurantController extends Controller
             $commande = Commande::where('status_id', 3)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-
+                ->orderBy('updated_at','desc')
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
@@ -120,7 +120,7 @@ class RestaurantController extends Controller
             $commande = Commande::where('status_id', 2)
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-
+                ->orderBy('updated_at','desc')
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
@@ -143,7 +143,7 @@ class RestaurantController extends Controller
             $commande = Commande::where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-
+                ->orderBy('updated_at','desc')
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
@@ -166,6 +166,7 @@ class RestaurantController extends Controller
             $status=Status::query()->where('id','>',2)->pluck('id');
 
             $commande = Commande::query()->whereIn('status_id',$status )
+            ->orderBy('updated_at','desc')
                 //->whereNotNull('accepted_at')
 
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))

@@ -120,9 +120,9 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
+            $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
 
-            return ApiResponse::GET_DATA(new CommandeResource($commande));
+            return ApiResponse::GET_DATA($commande ? new CommandeResource($commande):null);
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -137,7 +137,7 @@ class CommandeController extends Controller
 
             $commande = Commande::with('product')->where('status_id', 2)->where('user_id', $user->id)->first();
 
-            return ApiResponse::GET_DATA(new CommandeResource($commande));
+            return ApiResponse::GET_DATA($commande ? new CommandeResource($commande):null);
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -146,8 +146,8 @@ class CommandeController extends Controller
 
     public function show($refernce)
     {
-        $commandes = Commande::with('product')->where('refernce', $refernce)->first();
-        return ApiResponse::GET_DATA(new CommandeResource($commandes));
+        $commande = Commande::with('product')->where('refernce', $refernce)->first();
+        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande):null);
     }
     /**
      * Update the specified resource in storage.
