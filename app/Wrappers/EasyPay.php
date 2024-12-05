@@ -117,7 +117,7 @@ class EasyPay
 
             $response->status() == 200;
 
-            if(   $response->status() == 200){
+            if($response->status() == 200){
 
                 return true;
             }

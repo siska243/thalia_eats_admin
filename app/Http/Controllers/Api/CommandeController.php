@@ -181,7 +181,7 @@ class CommandeController extends Controller
             if(!$commande) return ApiResponse::NOT_FOUND("Oups","Cette commande est introuvable");
 
 
-            $user_name = auth()->user()->full_name;
+            $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
 
 
@@ -200,7 +200,7 @@ class CommandeController extends Controller
 
              if ($result['code'] == 0) {
 
-                return ApiResponse::BAD_REQUEST('Oups','Erreur','Paiement');
+                return ApiResponse::BAD_REQUEST('Oups','Erreur','Erreur de validation paiement');
 
              }
 
@@ -214,6 +214,7 @@ class CommandeController extends Controller
             return ApiResponse::SUCCESS_DATA(['url'=>EasyPay::EASEY_APY_REDIRECT($result['reference'])]);
 
         } catch (Exception $e) {
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }

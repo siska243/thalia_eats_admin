@@ -199,8 +199,6 @@ class RestaurantController extends Controller
              // Totals per month
              $trendDay = collect();
 
-
-
             // Totals per month
             $trendMonth = collect();
 
@@ -235,11 +233,24 @@ class RestaurantController extends Controller
             }
 
             DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','ONLY_FULL_GROUP_BY'));");
+
+            $current_order=Commande::query()->where('status_1',2)->count();
+            $current_order_accepted=Commande::query()->where('status_1',2)->whereNot('accepted_at')->count();;
+            $order_cancelation= Commande::query()->where('status_1',4)->count();
+            $order_delivery=Commande::query()->where('status_1',3)->count();
+
             return ApiResponse::GET_DATA([
                 "order_per_year"=>$trendYear,
                 'order_per_month'=> $trendMonth,
                 'order_per_days'=> $trendDay,
+                'order'=>[
+                    'current'=>$current_order,
+                    'order_accepted'=>$current_order_accepted,
+                    'order_cancel'=>$order_cancelation,
+                    'order_delivery'=>$order_delivery
+                ]
             ]);
+            
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
