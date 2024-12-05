@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\CategorieResource;
 use App\Http\Resources\CommandeResource;
 use App\Http\Resources\RestaurantResource;
+use App\Http\Resources\StatusResource;
 use App\Http\Resources\SubCategoryProductResource;
 use App\Models\CategoryProduct;
 use App\Models\Commande;
@@ -238,6 +239,7 @@ class RestaurantController extends Controller
             $current_order_accepted=Commande::query()->where('status_id',2)->whereNot('accepted_at')->count();;
             $order_cancelation= Commande::query()->where('status_id',4)->count();
             $order_delivery=Commande::query()->where('status_id',3)->count();
+            $status=Status::query()->get();
 
             return ApiResponse::GET_DATA([
                 "order_per_year"=>$trendYear,
@@ -247,7 +249,8 @@ class RestaurantController extends Controller
                     'current'=>$current_order,
                     'order_accepted'=>$current_order_accepted,
                     'order_cancel'=>$order_cancelation,
-                    'order_delivery'=>$order_delivery
+                    'order_delivery'=>$order_delivery,
+                    'status'=>StatusResource::collection($status),
                 ]
             ]);
 
