@@ -119,9 +119,11 @@ class CommandeController extends Controller
         try {
 
             $user = Auth()->user();
+
             $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
+
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
@@ -132,6 +134,7 @@ class CommandeController extends Controller
         try {
 
             $user = Auth()->user();
+
             $commande = Commande::with('product')->where('status_id', 2)->where('user_id', $user->id)->first();
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
@@ -173,10 +176,9 @@ class CommandeController extends Controller
             $pricing=$request->input('pricing');
 
 
-
             $user = auth()->user();
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
-            $commande = Commande::where('status_id', 1)->where('user_id', $user->id)->first();
+            $commande = Commande::whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
 
             if(!$commande) return ApiResponse::NOT_FOUND("Oups","Cette commande est introuvable");
 
