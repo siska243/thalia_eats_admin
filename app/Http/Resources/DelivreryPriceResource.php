@@ -20,10 +20,10 @@ class DelivreryPriceResource extends JsonResource
     {
         // return parent::toArray($request);
         return [
-            'interval_pricing'=>$this->interval_pricing,
-            'frais_livraison'=>$this->frais,
-            'service_price'=>$this->service_price,
-            'currency'=>$this->currency,
+            'interval_pricing'=>$this->resource->interval_pricing,
+            'frais_livraison'=>$this->resource->frais,
+            'service_price'=>$this->resource->service_price,
+            'currency'=>$this->resource->currency,
             'town'=>$this->whenLoaded('town',new TownResource($this->resource->town))
         ];
     }

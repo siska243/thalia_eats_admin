@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Api\{AuthController, CallbackUrlController, RestaurantController, CategorieProductController, CommandeController, DefaultDataController, UserAccountController};
+use App\Http\Controllers\Api\{AuthController, CallbackUrlController, RestaurantController, CategorieProductController, CommandeController, DefaultDataController, DeliveryController, UserAccountController};
 use App\Wrappers\EasyPay;
 use App\Wrappers\Notification;
 use Illuminate\Http\Request;
@@ -74,6 +74,15 @@ Route::middleware('auth:api')->prefix('/user')->group(function(){
    Route::get('/restaurant-past-order',[RestaurantController::class, 'pastOrderRestaurant']);
    Route::post('/restaurant-accept-order',[RestaurantController::class, 'confirmOrderRestaurant']);
    Route::get('/restaurant-dash',[RestaurantController::class, 'dashRestaurant']);
+
+   Route::get('/delivery',[DeliveryController::class, 'userRestaurant']);
+   Route::get('/delivery-wait-accept-order',[DeliveryController::class, 'waitAcceptOrderDelivrery']);
+   Route::get('/delivery-current-order',[DeliveryController::class, 'currentOrderDelivery']);
+   Route::get('/delivery-past-order',[DeliveryController::class, 'pastOrderRestaurant']);
+   Route::post('/delivery-accept-order',[DeliveryController::class, 'confirmOrderRestaurant']);
+   Route::post('/delivery-confirm-delivery-order',[DeliveryController::class, 'confirmDeliveryRestaurant']);
+   Route::post('/delivery-confirm-reception-order',[DeliveryController::class, 'confirmReceptionRestaurant']);
+   Route::get('/delivery-dash',[DeliveryController::class, 'dashRestaurant']);
 
 
 });

@@ -135,9 +135,9 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->where('status_id', 2)->where('user_id', $user->id)->first();
+            $commande = Commande::with('product')->where('status_id', 2)->where('user_id', $user->id)->get();
 
-            return ApiResponse::GET_DATA($commande ? new CommandeResource($commande):null);
+            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);

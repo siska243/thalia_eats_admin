@@ -31,4 +31,8 @@ class Commande extends Model
     {
         return $this->hasMany(CommandeProduct::class);
     }
+    public function delivrery_driver():BelongsTo
+    {
+        return $this->belongsTo(DelivreryDriver::class);
+    }
 }

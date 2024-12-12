@@ -11,6 +11,7 @@ use App\Http\Resources\StatusResource;
 use App\Http\Resources\SubCategoryProductResource;
 use App\Models\CategoryProduct;
 use App\Models\Commande;
+use App\Models\DelivreryDriver;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Status;
@@ -23,7 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-class RestaurantController extends Controller
+class DeliveryController extends Controller
 {
     //
     public function index()
@@ -32,117 +33,52 @@ class RestaurantController extends Controller
         return RestaurantResource::collection($restaurant);
     }
 
-    public function show(Restaurant $restaurant)
-    {
-
-        return new RestaurantResource($restaurant);
-    }
-
-    public function categorie(Restaurant $restaurant)
-    {
-        $restaurantId = $restaurant->id; // Remplacez par l'ID du restaurant souhaité
 
 
-        $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
-            $query->whereHas('product', function ($subQuery) use ($restaurantId) {
-                $subQuery->where('restaurant_id', $restaurantId);
-            });
-        }])->whereHas('sub_category_product.product', function ($query) use ($restaurantId) {
-            $query->where('restaurant_id', $restaurantId);
-        })->get();
-        return CategorieResource::collection($categories);
-    }
-
-    public function productRestaurant(Restaurant $restaurant, string $slug)
-    {
-        try {
-            //code...
-            $menu = SubCategoryProduct::with(['product'])
-                ->where('slug', $slug)
-                ->whereHas('product', function ($query) use ($restaurant) {
-                    $query->where('restaurant_id', $restaurant->id);
-                })
-                ->get();
-
-            return SubCategoryProductResource::collection($menu);
-        } catch (Exception $e) {
-
-            return ApiResponse::SERVER_ERROR($e);
-
-        }
-    }
-
-    public function userRestaurant()
+    public function currentOrderDelivery()
     {
         try {
 
-            $restaurant = $this->getCurrentRestaurant();
+            $restaurant = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
-        } catch (Exception $e) {
-            return ApiResponse::SERVER_ERROR($e);
-        }
-    }
 
-    public function currentOrderRestaurant()
-    {
-        try {
-
-            $restaurant = $this->getCurrentRestaurant();
-
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
             $commande = Commande::where('status_id', 2)
                 ->whereNotNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->where('delivrery_driver_id',$restaurant->id)
+                //->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
-                ->get();
+                ->first();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
 
-            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
+            return ApiResponse::GET_DATA(new CommandeResource($commande));
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }
 
-    public function waitAcceptOrderRestaurant()
+    public function waitAcceptOrderDelivrery()
     {
         try {
 
-            $restaurant = $this->getCurrentRestaurant();
+            $restaurant = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
-            $commande = Commande::where('status_id', 2)
-                ->whereNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-                ->orderBy('updated_at','desc')
-                ->get();
+            $check_have_cmd=Commande::where('status_id', 2)
+            ->whereNotNull('accepted_at')
+            ->where('delivrery_driver_id', $restaurant->id)->first();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
-
-            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
-
-        } catch (Exception $e) {
-            return ApiResponse::SERVER_ERROR($e);
-        }
-    }
-
-    public function acceptOrderRestaurant()
-    {
-        try {
-
-            $restaurant = $this->getCurrentRestaurant();
-
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if($check_have_cmd) return ApiResponse::GET_DATA([]);
 
             $commande = Commande::where('status_id', 2)
                 ->whereNotNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->whereNull('delivrery_driver_id')
+                //->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
                 ->get();
 
@@ -154,28 +90,29 @@ class RestaurantController extends Controller
             return ApiResponse::SERVER_ERROR($e);
         }
     }
+
+
 
     public function pastOrderRestaurant()
     {
         try {
 
-            $restaurant = $this->getCurrentRestaurant();
+            $restaurant = $this->getCurrentDelivery();
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $status=Status::query()->where('id','>',2)->pluck('id');
 
             $commande = Commande::query()->whereIn('status_id',$status )
-            ->orderBy('updated_at','desc')
-                //->whereNotNull('accepted_at')
-
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->orderBy('updated_at','desc')
+                ->where('delivrery_driver_id',$restaurant->id)
 
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA([]);
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
+
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
@@ -264,64 +201,110 @@ class RestaurantController extends Controller
     {
         try {
 
-            $restaurant = $this->getCurrentRestaurant();
+            $restaurant = $this->getCurrentDelivery();
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $uid_order = $request->input('uid_order');
 
-            $action = $request->input('action');
-
-            $time = $request->input('time');
-
-            if (!$action) {
-
-                return ApiResponse::BAD_REQUEST("Oups", "Action", "Action is required");
-            }
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
-                ->whereHas(
-                    'commande_products',
-                    fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id))
-                )
 
-                ->whereNull('accepted_at')
+                ->whereNull('delivrery_driver_id')
                 ->whereNull('cancel_at')->first();
 
 
             if (!$commande) return ApiResponse::NOT_FOUND("Oups", "Commande not found");
 
-            switch ($action) {
 
-                case ActionOrderEnum::Accept->value:
-
-                    if (!$time) return ApiResponse::BAD_REQUEST("Oups", "Time is required", "Time is required");
-
-                    $commande->accepted_at = now()->format('Y-m-d');
-
-                    $commande->time_restaurant = $time;
-
-                    $commande->status_id = 2;
-
-                    $commande->reception = true;
-
-                    //envoyer une notification au client et au livreur
-                    break;
-
-                case ActionOrderEnum::Decline->value:
-
-                    $commande->cancel_at = now()->format('Y-m-d');
-                    $commande->status_id = 4;
-                    //envoyer une notification au client
-            }
-
-
+            $commande->delivrery_driver_id=$restaurant->id;
 
             $commande->save();
 
 
 
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
+
+        } catch (Exception $e) {
+
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+
+    public function confirmReceptionRestaurant(Request $request)
+    {
+        try {
+
+            $restaurant = $this->getCurrentDelivery();
+            $time = $request->input('time');
+            $code= $request->input('code');
+            $uid_order = $request->input('uid_order');
+
+            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+
+
+            $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
+
+                ->where('delivrery_driver_id',$restaurant->id)
+                ->where('code_confirmation_restaurant',$code)
+                ->where('status_id',2)
+               ->first();
+
+            if(!$time) return ApiResponse::BAD_REQUEST('', 'Oups!!',"L'heure de livraison de la commande est obligatoire");
+
+            if(!$code) return ApiResponse::BAD_REQUEST('', 'Oups!!',"Le code de la recuperation de la commande est obligatoire");
+
+            if (!$commande) return ApiResponse::BAD_REQUEST("Oups", "Commande not found","Code de confirmation est incorrecte");
+
+
+            $commande->time_delivery=$time;
+
+            $commande->save();
+
+
+            return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
+
+        } catch (Exception $e) {
+
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    public function confirmDeliveryRestaurant(Request $request)
+    {
+        try {
+
+            $restaurant = $this->getCurrentDelivery();
+            $code= $request->input('code');
+            $uid_order = $request->input('uid_order');
+
+            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+
+
+            $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
+
+                ->where('delivrery_driver_id',$restaurant->id)
+                ->where('code_confirmation',$code)
+                ->where('status_id',2)
+               ->first();
+
+
+
+            if(!$code) return ApiResponse::BAD_REQUEST('', 'Oups!!',"Le code de livraison de la commande est obligatoire");
+
+            if (!$commande) return ApiResponse::BAD_REQUEST("Oups", "Commande not found","Code de confirmation est incorrecte");
+
+
+            $commande->status_id=3;
+
+            $commande->delivery_at=Carbon::now();
+
+            $commande->save();
+
+
+            return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
+
         } catch (Exception $e) {
 
             return ApiResponse::SERVER_ERROR($e);
@@ -330,13 +313,12 @@ class RestaurantController extends Controller
 
     public function getUser()
     {
-
         return Auth()->user();
     }
 
-    public function getCurrentRestaurant()
+    public function getCurrentDelivery()
     {
 
-        return Restaurant::where('user_id', $this->getUser()?->id)->first();
+        return DelivreryDriver::where('user_id', $this->getUser()?->id)->first();
     }
 }
