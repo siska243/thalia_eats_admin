@@ -40,14 +40,17 @@ Route::get('/categorie-restaurant/{restaurant:slug}',[RestaurantController::clas
 Route::get('/menu/{restaurant:slug}/{slug}',[RestaurantController::class, 'productRestaurant']);
 Route::get('/menu/{restaurant:slug}/{slug}',[RestaurantController::class, 'productRestaurant']);
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/refresh', [AuthController::class, 'refresh']);
+Route::post('/register', [AuthController::class, 'register'])->name('api.register');
+Route::post('/login', [AuthController::class, 'login'])
+->middleware('guest')
+->name('api.login');
+Route::post('/refresh', [AuthController::class, 'refresh'])->name('api.refresh');
 Route::get('/logout', [AuthController::class, 'logout'])->name('api.logout');
 
-Route::middleware('auth:api')->prefix('/user')->group(function(){
+Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
+
    Route::prefix('/account')->controller(UserAccountController::class)->group(function(){
-        Route::get('/', 'index');
+        Route::get('/', 'index')->name('api.account');
         Route::post('/update', 'update');
         Route::post('/update/password', 'current_password');
         Route::post('/update/adresse', 'update_adresse');

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+
+use Filament\Tables\Columns\Layout\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,9 +12,9 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
-use PHPOpenSourceSaver\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable implements JWTSubject
+
+class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
@@ -30,9 +32,23 @@ class User extends Authenticatable implements JWTSubject
         'principal_adresse',
         'town_id',
         'devices',
+        'api_token',
+        'creation_token',
         'mobile_permissions',
         'type_user'
     ];
+
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+
+
+        if(auth()->user()->hasRole('super_admin')) return true;
+
+
+        return false;
+    }
+
 
 
     /**
@@ -72,18 +88,7 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsTo(Town::class);
     }
 
-    public function getJWTIdentifier()
-    {
-        return $this->getKey();
-    }
 
-    public function getJWTCustomClaims()
-    {
-        return [
-            'email' => $this->email,
-            'name' => $this->name
-        ];
-    }
 
     public  function  delivrery_driver():hasMany
 

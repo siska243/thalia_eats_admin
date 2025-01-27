@@ -17,10 +17,7 @@ use Illuminate\Support\Facades\Validator;
 
 class UserAccountController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('auth:api');
-    }
+
     /**
      * Display a listing of the resource.
      */
@@ -99,7 +96,8 @@ class UserAccountController extends Controller
             $user->street=$street;
             $user->number_street=$number_street;
 
-            $town_id=Town::where("slug",$town['slug'])->first();
+            $town_id=Town::query()->where("slug",$town)->first();
+
             if($town) $user->town_id=$town_id->id;
 
             $user->save();
