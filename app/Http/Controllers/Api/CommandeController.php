@@ -221,8 +221,7 @@ class CommandeController extends Controller
                 'phone' => preg_replace('/[\s+]/', '', $phone),
                 'currency' => $pricing['currency']['code'],
                 'reference' => $commande->refernce,
-                'callback_url' => "https://8a11-105-75-110-129.ngrok-free.app/api/webhook-paiement-flexpay"
-            //$callback_url,
+                'callback_url' => $callback_url,
             ];
             $result = FlexPay::sendData($data);
             //$result = EasyPay::SEND_DATA(
