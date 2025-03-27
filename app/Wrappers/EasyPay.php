@@ -18,7 +18,19 @@ class EasyPay
         ];
     }
 
-    public function body(string $order_ref, $amount, string $currency, string $description, string $client_name, string $client_email, string $success_url, string $error_url, string $cancel_url)
+    /**
+     * @param string $order_ref
+     * @param $amount
+     * @param string $currency
+     * @param string $description
+     * @param string $client_name
+     * @param string $client_email
+     * @param string $success_url
+     * @param string $error_url
+     * @param string $cancel_url
+     * @return array
+     */
+    public function body(string $order_ref, $amount, string $currency, string $description, string $client_name, string $client_email, string $success_url, string $error_url, string $cancel_url):array
     {
         return [
             "order_ref" => $order_ref,

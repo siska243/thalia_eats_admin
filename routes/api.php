@@ -67,6 +67,7 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
        Route::post('/check-paiement','verif_paiement');
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
+       Route::get('/tracking','track');
 
    });
 
@@ -105,3 +106,5 @@ Route::get('/roles', function () {
     $role = Role::create(['guard_name' => 'api', 'name' => 'restaurant']);
 
 });
+
+Route::post('/webhook-paiement-flexpay',[\App\Http\Controllers\Api\PayementController::class,'webhook']);

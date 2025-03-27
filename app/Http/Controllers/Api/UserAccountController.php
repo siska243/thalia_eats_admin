@@ -36,19 +36,22 @@ class UserAccountController extends Controller
         $user = auth()->user();
         $messages = [
             'expo_token.required' => 'Expo token est requis.',
-            'champ1.max' => 'Expo token ne doit pas dépasser :max caractères.',
+            //'champ1.max' => 'Expo token ne doit pas dépasser :max caractères.',
 
         ];
         $validator = Validator::make($request->all(), [
-            'expo_token' => 'required|max:255', // Exemple de règle de validation
+            'expo_token' => 'required|max:255',
         ], $messages);
 
-        $user->expo_push_token = $request->input('expo_token');
-        $user->save();
+
 
         if ($validator->fails()) {
             return ApiResponse::BAD_REQUEST($validator->errors(), 'Oups', 'Une erreur s est produite');
         }
+
+        $user->expo_push_token = $request->input('expo_token');
+        $user->save();
+
 
         return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Updated', 'token updated');
     }

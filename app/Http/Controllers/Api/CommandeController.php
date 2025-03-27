@@ -3,16 +3,22 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CallBackEnum;
+use App\Events\PayementEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CommandeRequest;
 use App\Http\Resources\CommandeResource;
 use App\Models\Commande;
 use App\Models\CommandeProduct;
+use App\Models\Payement;
 use App\Models\Product;
+use App\Models\StatusPayement;
 use App\Models\Town;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\EasyPay;
+use App\Wrappers\FirebasePushNotification;
+use App\Wrappers\FlexPay;
+use App\Wrappers\LibPhoneNumber;
 use Exception;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
@@ -120,9 +126,9 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
+            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
 
-            return ApiResponse::GET_DATA($commande ? new CommandeResource($commande):null);
+            return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -144,11 +150,27 @@ class CommandeController extends Controller
         }
     }
 
+    public function track()
+    {
+        try {
+
+            $user = Auth()->user();
+
+            $commande = Commande::with('product')->where('status_id','>',1)->where('user_id', $user->id)->get();
+
+            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
+
+        } catch (Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
     public function show($refernce)
     {
         $commande = Commande::with('product')->where('refernce', $refernce)->first();
-        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande):null);
+        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
     }
+
     /**
      * Update the specified resource in storage.
      */
@@ -170,50 +192,85 @@ class CommandeController extends Controller
         try {
 
 
-            $success_url=$request->input('success_url');
-            $error_url=$request->input('success_url');
-            $cancle_url=$request->input('success_url');
-            $pricing=$request->input('pricing');
+            $success_url = $request->input('success_url');
+            $error_url = $request->input('success_url');
+            $cancle_url = $request->input('success_url');
+            $callback_url = $request->input('callback_url');
+            $pricing = $request->input('pricing');
+            $phone = $request->input('phone');
 
 
             $user = auth()->user();
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
-            $commande = Commande::whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
+            $commande = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user->id)->first();
 
-            if(!$commande) return ApiResponse::NOT_FOUND("Oups","Cette commande est introuvable");
-
+            if (!$commande) return ApiResponse::NOT_FOUND("Oups", "Cette commande est introuvable");
 
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
 
+            $phone_check = new LibPhoneNumber($phone);
 
-             $result = EasyPay::SEND_DATA(
-                 $commande->refernce,
-                                 $commande->global_price + $commande->price_delivery + $commande->price_service,
-                 $pricing['currency']['code'],
-                 'commande',
-                 $user_name,
-                 $user_email,
-                 $success_url,
-                 $error_url,
-                 $cancle_url
+            if (!$phone_check->checkValidationNumber()) {
+                return ApiResponse::BAD_REQUEST("Oups", "Numéro de téléphone invalide", "Mpesa");
+            }
 
-             );
+            $amount = $commande->global_price + $commande->price_delivery + $commande->price_service;
+            $data = [
+                'amount' => $amount,
+                'phone' => preg_replace('/[\s+]/', '', $phone),
+                'currency' => $pricing['currency']['code'],
+                'reference' => $commande->refernce,
+                'callback_url' => "https://8a11-105-75-110-129.ngrok-free.app/api/webhook-paiement-flexpay"
+            //$callback_url,
+            ];
+            $result = FlexPay::sendData($data);
+            //$result = EasyPay::SEND_DATA(
+            //  $commande->refernce,
+            //                 $commande->global_price + $commande->price_delivery + $commande->price_service,
+            //$pricing['currency']['code'],
+            //'commande',
+            //$user_name,
+            //$user_email,
+            //$success_url,
+            //$error_url,
+            //$cancle_url
 
-             if ($result['code'] == 0) {
 
-                return ApiResponse::BAD_REQUEST('Oups','Erreur','Erreur de validation paiement');
+            if ($result['code'] != 0) {
 
-             }
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', 'Erreur de validation paiement');
 
-             $commande->reference_paiement = $result['reference'];
-             $commande->code_confirmation = rand(1000, 9999);
-             $commande->code_confirmation_restaurant = rand(1000, 9999);
-             $commande->status_id=5;
-             $commande->save();
+            }
 
+            $commande->reference_paiement = $result['orderNumber'];
+            $commande->code_confirmation = rand(1000, 9999);
+            $commande->code_confirmation_restaurant = rand(1000, 9999);
+            $commande->status_id = 5;
+            $commande->save();
+            $commande->refresh();
 
-            return ApiResponse::SUCCESS_DATA(['url'=>EasyPay::EASEY_APY_REDIRECT($result['reference'])]);
+            $status_paiement = StatusPayement::query()->where('is_default', true)->first();
+
+            Payement::query()->updateOrCreate([
+                'commande_id' => $commande->id,
+                'phone' => preg_replace('/[\s+]/', '', $phone),
+                'channel' => "MPESA",
+            ], [
+                'code' => $result['code'],
+                'commande_id' => $commande->id,
+                'phone' => preg_replace('/[\s+]/', '', $phone),
+                'channel' => "MPESA",
+                'status_payement_id' => $status_paiement?->id,
+                'amount' => $amount,
+                'amount_customer' => $amount,
+            ]);
+
+            $push = new FirebasePushNotification();
+            //$push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', 'send');
+            //event(new PayementEvent($result['orderNumber']));
+
+            return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
 
         } catch (Exception $e) {
 
@@ -221,45 +278,37 @@ class CommandeController extends Controller
         }
     }
 
-    public function verif_paiement(Request $request){
-        try{
-            $uid= $request->input('uid');
+    public function verif_paiement(Request $request)
+    {
+        try {
+            $uid = $request->input('uid');
             $user = Auth()->user();
 
 
             $validator = Validator::make($request->all(), [
                 'uid' => 'required|string',
-
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST("Oups","Error",$validator->errors());
+                return ApiResponse::BAD_REQUEST("Oups", "Error", $validator->errors());
             }
 
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid))
-            ->where('status_id','>',1)
-            ->where('user_id', $user->id)->first();
-            if(! $commande){
-                return ApiResponse::BAD_REQUEST("Oups","Erreur","Erreur du paiement");
+                ->where('status_id', '>', 1)
+                ->where('user_id', $user->id)->first();
+            if (!$commande) {
+                return ApiResponse::BAD_REQUEST("Oups", "Erreur", "Erreur du paiement");
             }
 
-            $reference_paiement=$commande->reference_paiement;
-
-            if(!EasyPay::EASY_PAY_VERIF_TRANSACTION($reference_paiement)){
-                return ApiResponse::BAD_REQUEST("","","Erreur");
+            if($commande->status_id == 2){
+                return ApiResponse::SUCCESS_DATA("", "Success", "Merci pour votre confiance");
             }
 
 
-                $commande->status_id=2;
-                //envoyer la commande au restaurateur
-                $commande->paied_at=now()->format("Y-m-d H:i:s");
-                $commande->save();
+            return ApiResponse::SUCCESS_DATA("", "Success", "Commande déjà traitée");
 
-            return ApiResponse::SUCCESS_DATA("","Success","Merci pour votre confiance");
-
-        }
-        catch (Exception $e) {
+        } catch (Exception $e) {
 
             return ApiResponse::SERVER_ERROR($e);
         }
