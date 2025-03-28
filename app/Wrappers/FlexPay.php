@@ -10,7 +10,7 @@ class FlexPay
     const url="https://backend.flexpay.cd/api/rest/v1";
     public static function sendData(array $data){
         $formData=[
-            'merchant'=>env("FlEX_PAY_MERCHANT"),
+            'merchant'=>config('flexpay.merchant'),
             'type'=>"1",
             'amount'       => $data['amount'],
             'phone'=>$data['phone'],

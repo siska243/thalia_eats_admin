@@ -17,6 +17,7 @@ return [
     */
 
     'name' => env('APP_NAME', 'Laravel'),
+    'flex_pay_merchant' => env('FlEX_PAY_MERCHANT', ''),
 
     /*
     |--------------------------------------------------------------------------
