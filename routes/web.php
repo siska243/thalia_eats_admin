@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\Route;
     return view('welcome');
 }); */
 
-Route::get('/callback/{action}',[CallbackUrlController::class,'index'])->name('callback');
+Route::get('/callback/{action}',[CallbackUrlController::class,'index'])->name('callback-web');
 
-Route::post('/create-payment-intent',[CallbackUrlController::class,'index'])->name('payment-intent');
+Route::post('/create-payment-intent',[CallbackUrlController::class,'index'])->name('payment-intent-web');
 
 
 
