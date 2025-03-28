@@ -237,6 +237,8 @@ class CommandeController extends Controller
             //$error_url,
             //$cancle_url
 
+            Log::info(json_encode($result));
+
             Log::info(json_encode($data));
 
             if ($result['code'] != 0) {
