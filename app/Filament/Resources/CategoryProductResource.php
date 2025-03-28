@@ -7,6 +7,8 @@ use App\Filament\Resources\CategoryProductResource\RelationManagers;
 use App\Models\CategoryProduct;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Pages\Page;
+use Filament\Pages\SubNavigationPosition;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\{BulkActionGroup, CreateAction, DeleteAction, DeleteBulkAction, EditAction};
 use Filament\Tables\Columns\{TextColumn, ToggleColumn};
@@ -23,18 +25,19 @@ class CategoryProductResource extends Resource
 
     protected static ?string $navigationLabel = "Categorie";
     protected static ?string $navigationGroup = "Produits";
+
+
+    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Textarea::make('title')
-                    ->required()
-                    ->maxLength(65535)
-                    ->columnSpanFull(),
-                Forms\Components\Textinput::make('picture')
-                    ->maxLength(65535)
-                    ->columnSpanFull()
-                    ->type('file'),
+                Forms\Components\Section::make()->schema([
+                    Forms\Components\TextInput::make('title')
+                        ->required()
+                        ->maxLength(65535)
+                        ->columnSpanFull()
+                ])
             ])->columns(2);
     }
 
@@ -78,12 +81,23 @@ class CategoryProductResource extends Resource
         ];
     }
 
+
+    public static function getRecordSubNavigation(Page $page): array
+    {
+        return $page->generateNavigationItems([
+            // ...
+            Pages\EditCategoryProduct::class,
+            Pages\ManageProducts::class,
+
+        ]);
+    }
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListCategoryProducts::route('/'),
             'create' => Pages\CreateCategoryProduct::route('/create'),
             'edit' => Pages\EditCategoryProduct::route('/{record}/edit'),
+            'products'=>Pages\ManageProducts::route('/{record}/products'),
         ];
     }
 }

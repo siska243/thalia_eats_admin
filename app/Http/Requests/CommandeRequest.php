@@ -13,7 +13,8 @@ class CommandeRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return auth()->user()->hasRole('clients');
+        return true;
+        //return auth()->user()->hasRole('clients');
     }
 
     /**

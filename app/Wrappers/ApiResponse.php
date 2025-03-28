@@ -45,12 +45,12 @@ class ApiResponse{
     }
 
     public static function NOT_FOUND($title,$message){
-        throw new HttpResponseException(
-            response()->json([
-                'title' => $title,
-                'message' => $message
-            ], 404)
-        );
+
+        return response()->json([
+            'title' => $title,
+            'message' => $message,
+        ], 404);
+
     }
     public static function SUCCESS_DATA($data,$title='Crée',$message= 'La resource a été crée'){
         return response()->json([

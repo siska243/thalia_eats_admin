@@ -24,11 +24,12 @@ class EditUser extends EditRecord
 
         // Récupérez le nom du rôle depuis $data
         $data['slug'] = $slug;
-        $roleName = $data['role'] ?? '';
+        $roleName = $data['role_user'] ?? '';
 
-        unset($data['role']);
+        //unset($data['role']);
 
         if (!empty($roleName)) {
+
             $record->assignRole($roleName); // Utilisez la méthode pour attribuer le rôle à l'utilisateur
         }
         $record->update($data);

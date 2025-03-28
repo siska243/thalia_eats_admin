@@ -12,6 +12,7 @@ class Restaurant extends Model
     use HasFactory;
     protected $casts = [
         'openHours' => 'array',
+        'location'=>'array',
     ];
     public function user(): BelongsTo
     {
@@ -30,6 +31,6 @@ class Restaurant extends Model
 
     public function sub_categorie_product():BelongsTo
     {
- return $this->belongsTo(SubCategoryProduct::class);
+        return $this->belongsTo(SubCategoryProduct::class);
     }
 }

@@ -2,59 +2,99 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\Device;
+use App\Enums\MobilePermissions;
+use App\Enums\TypeUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginUserRequest;
 use App\Http\Requests\RegistrationRequest;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Wrappers\ApiResponse;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
 
-    public function register(RegistrationRequest $request){
+    public function register(RegistrationRequest $request)
+    {
         try {
             //code...
+            $check_user=User::query()->where('email',$request->email)->first();
 
-            $user=User::create([
-              'password'=> Hash::make($request->password),
-              'name'=>$request->name,
-              'last_name'=>$request->last_name,
-              'email'=>$request->email,
-              'phone'=>$request->phone,
-              'slug'=>Str::slug($request->name.'-'.time().'-'. $request->last_name)
-            ]
+            if($check_user){
+                return ApiResponse::BAD_REQUEST('Oups','Error email','You have account, please login');
+            }
+
+            $user = User::firstOrCreate(
+                [
+                    'password' => Hash::make($request->password),
+                    'name' => $request->name,
+                    'last_name' => $request->last_name,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                    'slug' => Str::slug($request->name . '-' . time() . '-' . $request->last_name),
+                    'mobile_permissions'=>[MobilePermissions::AddOrder->value],
+                    'devices'=>[Device::Mobile->value,Device::Web->value]
+                ]
             );
-            $user->assignRole('clients');
+            $user->type_user=TypeUser::Client->value;
+            $user->assignRole('client');
+
+
             $user->save();
-           return ApiResponse::SUCCESS_DATA($user,"Felicitations","Votre compte a été créer avec succès");
+
+            return ApiResponse::SUCCESS_DATA($user, "Felicitations", "Votre compte a été créer avec succès");
         } catch (Exception $e) {
             //throw $th;
             return ApiResponse::SERVER_ERROR($e);
         }
     }
 
-    public function login(LoginUserRequest $request){
+    public function login(LoginUserRequest $request)
+    {
         try {
             //code...
 
-                $credentials = $request->only('email', 'password');
+            $validator = Validator::make($request->all(), [
+                'email' => ['email', 'required', 'string'],
+                'password' => ['required', 'string'],
 
-                $token = Auth::guard('api')->attempt($credentials);
+            ]);
 
-                if(!$token) return ApiResponse::BAD_REQUEST('invalide credential','oups','erreur');
-                $user = Auth::guard('api')->user();
-                return ApiResponse::GET_DATA(
-                    [
-                    'user_role'=>$user->roles()->pluck('name'),
-                    'token'=>$token,
-                    'full_name'=>$user->name. ' '. $user->last_name
-                    ],
-                );
+            if ($validator->fails()) {
+                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', $validator->getMessageBag());
+            }
+            $credentials = $request->only('email', 'password');
+
+            $user = User::query()->where('email',  $credentials['email'])->first();
+
+            if (!$user) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Email incorrect');
+            }
+
+            if (!Hash::check($request->password, $user->password)) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Password incorrect');
+            }
+
+            $token=$user->createToken('api token')->plainTextToken;
+
+            $roles = $user->getRoleNames();
+
+            return ApiResponse::GET_DATA(
+                [
+                    'user' => new UserResource($user),
+                    'roles' => $roles,
+                    'token' => $token,
+
+                ],
+            );
 
             //return ApiResponse::BAD_REQUEST('Invalid credential','Oups','Erreur');
         } catch (Exception $e) {
@@ -63,19 +103,16 @@ class AuthController extends Controller
         }
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
-        try{
-            Auth::guard('api')->logout();
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Successfully logged out',
-            ]);
-        }
-        catch(Exception $e){
+        try {
+            $user = $request->user();
+            $user->currentAccessToken()->delete();
+
+            return ApiResponse::SUCCESS_DATA([]);
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
-
     }
 
 
