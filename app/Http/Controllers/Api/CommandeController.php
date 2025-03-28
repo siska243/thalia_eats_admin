@@ -237,6 +237,7 @@ class CommandeController extends Controller
             //$error_url,
             //$cancle_url
 
+            Log::info(json_encode($data));
 
             if ($result['code'] != 0) {
 
@@ -275,7 +276,7 @@ class CommandeController extends Controller
 
         } catch (Exception $e) {
 
-            Log::info($e);
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }
