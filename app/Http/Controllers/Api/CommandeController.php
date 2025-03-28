@@ -23,6 +23,7 @@ use Exception;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class CommandeController extends Controller
@@ -206,8 +207,8 @@ class CommandeController extends Controller
 
             if (!$commande) return ApiResponse::NOT_FOUND("Oups", "Cette commande est introuvable");
 
-            $user_name = auth()->user()->name;
-            $user_email = auth()->user()->email;
+            //$user_name = auth()->user()->name;
+            //$user_email = auth()->user()->email;
 
             $phone_check = new LibPhoneNumber($phone);
 
@@ -216,10 +217,11 @@ class CommandeController extends Controller
             }
 
             $amount = $commande->global_price + $commande->price_delivery + $commande->price_service;
+
             $data = [
-                'amount' => $amount,
-                'phone' => preg_replace('/[\s+]/', '', $phone),
-                'currency' => $pricing['currency']['code'],
+                'amount' => floatval($amount),
+                'phone' => $phone,
+                'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code']:"CDF",
                 'reference' => $commande->refernce,
                 'callback_url' => $callback_url,
             ];
@@ -238,7 +240,7 @@ class CommandeController extends Controller
 
             if ($result['code'] != 0) {
 
-                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', 'Erreur de validation paiement');
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', 'Erreur de demande paiement');
 
             }
 
@@ -273,6 +275,7 @@ class CommandeController extends Controller
 
         } catch (Exception $e) {
 
+            Log::info($e);
             return ApiResponse::SERVER_ERROR($e);
         }
     }

@@ -71,7 +71,6 @@ class PayementController extends Controller
                     "provider_reference"=>$provider_reference
                 ]);
 
-                $orderResource=new CommandeResource($order);
                 if($status_paiement->is_paied)
                 {
                     $order->status_id = 2;
@@ -106,7 +105,7 @@ class PayementController extends Controller
             return ApiResponse::SUCCESS_DATA('');
         }
         catch(Exception $e){
-            dd($e);
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }
