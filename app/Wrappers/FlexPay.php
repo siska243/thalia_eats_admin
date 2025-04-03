@@ -2,6 +2,7 @@
 
 namespace App\Wrappers;
 
+use App\Models\ConfigurationPayement;
 use Illuminate\Support\Facades\Http;
 
 class FlexPay
@@ -9,8 +10,9 @@ class FlexPay
 
     const url="https://backend.flexpay.cd/api/rest/v1";
     public static function sendData(array $data){
+
         $formData=[
-            'merchant'=>config('flexpay.merchant'),
+            'merchant'=>self::getConfig()?->token_key,
             'type'=>"1",
             'amount'       => $data['amount'],
             'phone'=>$data['phone'],
@@ -18,7 +20,7 @@ class FlexPay
             'reference'     => $data['reference'],
             'callbackUrl'=> $data['callback_url'],
         ];
-        $response = Http::withToken(env("FlEX_PAY_TOKEN"))
+        $response = Http::withToken(self::getConfig()?->token)
             ->timeout(120)
             ->post(self::url."/paymentService",$formData);
 
@@ -33,7 +35,7 @@ class FlexPay
     {
         try{
             $url=self::url."/check/".$orderNumber;
-            $response = Http::withToken(env("FlEX_PAY_TOKEN"))
+            $response = Http::withToken(self::getConfig()?->token)
                 ->timeout(120)
                 ->get($url);
 
@@ -46,5 +48,10 @@ class FlexPay
         catch (\Exception $exception){
             return $exception;
         }
+    }
+
+    public static function getConfig()
+    {
+        return ConfigurationPayement::query()->where('active',true)->first();
     }
 }

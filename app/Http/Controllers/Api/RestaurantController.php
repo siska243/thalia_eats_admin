@@ -94,7 +94,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
@@ -117,7 +117,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
@@ -140,7 +140,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
@@ -299,7 +299,7 @@ class RestaurantController extends Controller
 
                     $commande->accepted_at = now()->format('Y-m-d');
 
-                    $commande->time_restaurant = $time;
+                    $commande->time_restaurant =  Carbon::parse($time)->format('H:i:s');
 
                     $commande->status_id = 2;
 
@@ -312,6 +312,8 @@ class RestaurantController extends Controller
 
                     $commande->cancel_at = now()->format('Y-m-d');
                     $commande->status_id = 4;
+
+
                     //envoyer une notification au client
             }
 

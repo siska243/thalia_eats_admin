@@ -68,6 +68,7 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
        Route::get('/tracking','track');
+       Route::get("/swr-check-paiement/{orderNumber}","swr_check_paiement");
 
    });
 
@@ -84,7 +85,11 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
    Route::get('/delivery-current-order',[DeliveryController::class, 'currentOrderDelivery']);
    Route::get('/delivery-past-order',[DeliveryController::class, 'pastOrderRestaurant']);
    Route::post('/delivery-accept-order',[DeliveryController::class, 'confirmOrderRestaurant']);
+
+   //confirmation de la livraison de la commande
    Route::post('/delivery-confirm-delivery-order',[DeliveryController::class, 'confirmDeliveryRestaurant']);
+
+    //confirmation de la reception de la commande
    Route::post('/delivery-confirm-reception-order',[DeliveryController::class, 'confirmReceptionRestaurant']);
    Route::get('/delivery-dash',[DeliveryController::class, 'dashRestaurant']);
 
