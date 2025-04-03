@@ -24,6 +24,7 @@ class StatusResource extends JsonResource
     {
 
         return [
+            'id'=>$this->resource->id,
             'render' => Utils::getIcon($this->resource->icon, $this->resource->color),
             'name' => $this->resource->title,
             'color' => $this->resource->color,

@@ -42,9 +42,7 @@ class PayementController extends Controller
                 ->where('refernce',$reference)->first();
 
 
-
             $result=FlexPay::checkPaiement($orderNumber);
-
 
             if($result['code']!=0){
                 $push = new FirebasePushNotification();

@@ -41,11 +41,10 @@ class DeliveryController extends Controller
 
             $restaurant = $this->getCurrentDelivery();
 
-
-
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()
+            ->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->where('delivrery_driver_id',$restaurant->id)
                 //->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
@@ -70,7 +69,7 @@ class DeliveryController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereNull('delivrery_driver_id')
                 //->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
@@ -259,12 +258,12 @@ class DeliveryController extends Controller
             if (!$commande) return ApiResponse::BAD_REQUEST("Oups", "Commande not found","Code de confirmation est incorrecte");
 
 
-            $commande->time_delivery=$time;
+            $commande->time_delivery= Carbon::parse($time)->format('H:i:s');
 
             $commande->save();
 
 
-            return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
+            return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant),"Saved","Successfully confirmed commande");
 
         } catch (Exception $e) {
 
@@ -304,7 +303,7 @@ class DeliveryController extends Controller
             $commande->save();
 
 
-            return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
+            return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant),"Saved","Successfully delivery commande");
 
         } catch (Exception $e) {
 
@@ -320,6 +319,6 @@ class DeliveryController extends Controller
     public function getCurrentDelivery()
     {
 
-        return DelivreryDriver::where('user_id', $this->getUser()?->id)->first();
+        return DelivreryDriver::query()->where('user_id', $this->getUser()?->id)->first();
     }
 }

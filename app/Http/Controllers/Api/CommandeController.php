@@ -157,7 +157,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->where('status_id','>',1)->where('user_id', $user->id)->get();
+            $commande = Commande::with('product')->where('status_id', '>', 1)->where('user_id', $user->id)->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -186,6 +186,27 @@ class CommandeController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    public function swr_check_paiement($orderNumber)
+    {
+
+        try {
+            $result = FlexPay::checkPaiement($orderNumber);
+            if ($result['code'] != 0) {
+
+                return ApiResponse::BAD_REQUEST("Oups!!", $result['title'], $result['message']);
+            } else {
+
+                $status = $result['transaction']['status'];
+
+                $status_paiement = StatusPayement::query()->where('code', $status)->first();
+
+                return ApiResponse::GET_DATA($status_paiement);
+            }
+        } catch (\Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
     }
 
     public function valide(Request $request)
@@ -221,7 +242,7 @@ class CommandeController extends Controller
             $data = [
                 'amount' => floatval($amount),
                 'phone' => $phone,
-                'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code']:"CDF",
+                'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code'] : "CDF",
                 'reference' => $commande->refernce,
                 'callback_url' => $callback_url,
             ];
@@ -306,7 +327,7 @@ class CommandeController extends Controller
                 return ApiResponse::BAD_REQUEST("Oups", "Erreur", "Erreur du paiement");
             }
 
-            if($commande->status_id == 2){
+            if ($commande->status_id == 2) {
                 return ApiResponse::SUCCESS_DATA("", "Success", "Merci pour votre confiance");
             }
 
