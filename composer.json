@@ -22,6 +22,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.8",
         "pusher/pusher-php-server": "^7.2",
+        "rawilk/filament-password-input": "^2.0",
         "rupadana/filament-api-service": "^3.0",
         "saade/filament-laravel-log": "^3.0",
         "shuvroroy/filament-spatie-laravel-health": "^2.0",

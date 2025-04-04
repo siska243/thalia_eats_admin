@@ -16,6 +16,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Hash;
+use Rawilk\FilamentPasswordInput\Password;
 
 class UserResource extends Resource
 {
@@ -32,33 +34,33 @@ class UserResource extends Resource
                 Forms\Components\Section::make()
                     ->columns(2)
                     ->schema([
-                    Forms\Components\TextInput::make('name')
-                        ->required()
-                        ->maxLength(255),
-                    TextInput::make('last_name')->required(),
-                    TextInput::make('principal_adresse')->label('Principal adresse'),
-                    Select::make('town_id')->label('Commune')
-                        ->relationship('town', 'title')->searchable()->preload(),
-                    Forms\Components\TextInput::make('email')
-                        ->email()
-                        ->required()
-                        ->maxLength(255),
-                    Forms\Components\TextInput::make('password')
-                        ->password()
-                        ->required()
-                        ->maxLength(255)
-                        ->hidden(fn($operation) => $operation == "edit"),
-                    Forms\Components\Select::make('type_user')->label('Type de compte')
-                        ->options([
-                            'drivers' => 'Livreur',
-                            'restaurant' => 'Restaurant',
-                            'interne'=>"Interne"
-                        ])
-                        ->required(),
+                        Forms\Components\TextInput::make('name')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('last_name')->required(),
+                        TextInput::make('principal_adresse')->label('Principal adresse'),
+                        Select::make('town_id')->label('Commune')
+                            ->relationship('town', 'title')->searchable()->preload(),
+                        Forms\Components\TextInput::make('email')
+                            ->email()
+                            ->required()
+                            ->maxLength(255),
+                        Forms\Components\TextInput::make('password')
+                            ->password()
+                            ->required()
+                            ->maxLength(255)
+                            ->hidden(fn($operation) => $operation == "edit"),
+                        Forms\Components\Select::make('type_user')->label('Type de compte')
+                            ->options([
+                                'drivers' => 'Livreur',
+                                'restaurant' => 'Restaurant',
+                                'interne' => "Interne"
+                            ])
+                            ->required(fn($operation) => $operation == "create"),
 
-                    Forms\Components\TextInput::make('phone')
-                        ->tel()
-                        ->maxLength(255),
+                        Forms\Components\TextInput::make('phone')
+                            ->tel()
+                            ->maxLength(255),
                         Forms\Components\Fieldset::make('Permissions')
                             ->label(__('filament-shield::filament-shield.column.permissions'))
                             ->extraAttributes(['class' => 'text-primary-600', 'style' => 'border-color:var(--primary)'])
@@ -72,20 +74,44 @@ class UserResource extends Resource
                                     ->multiple()
                                     ->preload()
                                     ->extraAttributes(['class' => 'text-primary-600'])
-                                ->options(Device::getOptions())
+                                    ->options(Device::getOptions())
                                 ,
 
                                 Select::make('mobile_permissions')
                                     ->multiple()
                                     ->preload()
                                     ->extraAttributes(['class' => 'text-primary-600'])
-                                ->options(MobilePermissions::getOptions()),
+                                    ->options(MobilePermissions::getOptions()),
+
+                                Forms\Components\Toggle::make('changePassword')
+                                    ->label(__('Change password'))
+                                    ->columnSpan(1)
+                                    ->hiddenOn('create')
+                                    ->reactive(),
+
+                                // Password
+                                Password::make('password')
+                                    ->label(__('Password'))
+                                    ->password()
+                                    //->regex('/^(?=.*[A-Z])(?=.*[!@#$&*])(?=.*[0-9])(?=.*[a-z]).{8}/m')
+                                    ->confirmed()
+                                    ->autocomplete('password')
+                                    ->required(fn(\Filament\Forms\Get $get): bool => $get('changePassword'))
+                                    ->dehydrateStateUsing(function ($state) {
+                                        return Hash::make($state);
+                                    })
+                                    //->validationAttribute(__('password must contain at least 8 characters, have at least 1 uppercase, 1 lowercase, 1 number, 1 special character.'))
+                                    ->hidden(fn(\Filament\Forms\Get $get) => !$get('changePassword')),
+                                Password::make('password_confirmation')
+                                    ->label(__('Confirm Password'))
+                                    ->password()
+                                    ->hidden(fn(\Filament\Forms\Get $get) => !$get('changePassword'))
 
 
                             ])->columns(3),
 
 
-                ])
+                    ])
             ]);
 
     }
