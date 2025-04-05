@@ -215,11 +215,12 @@ class CommandeController extends Controller
 
 
             $success_url = $request->input('success_url');
-            $error_url = $request->input('success_url');
-            $cancle_url = $request->input('success_url');
+            $error_url = $request->input('error_url');
+            $cancle_url = $request->input('cancel_url');
             $callback_url = $request->input('callback_url');
             $pricing = $request->input('pricing');
             $phone = $request->input('phone');
+            $method = $request->input('method','mobile');
 
 
             $user = auth()->user();
@@ -228,25 +229,35 @@ class CommandeController extends Controller
 
             if (!$commande) return ApiResponse::NOT_FOUND("Oups", "Cette commande est introuvable");
 
-            //$user_name = auth()->user()->name;
-            //$user_email = auth()->user()->email;
+            $user_name = auth()->user()->name;
+            $user_email = auth()->user()->email;
 
-            $phone_check = new LibPhoneNumber($phone);
+            if($method!="cart"){
+                $phone_check = new LibPhoneNumber($phone);
 
-            if (!$phone_check->checkValidationNumber()) {
-                return ApiResponse::BAD_REQUEST("Oups", "Numéro de téléphone invalide", "Mpesa");
+                if (!$phone_check->checkValidationNumber()) {
+                    return ApiResponse::BAD_REQUEST("Oups", "Numéro de téléphone invalide", "Mpesa");
+                }
             }
+
 
             $amount = $commande->global_price + $commande->price_delivery + $commande->price_service;
 
             $data = [
                 'amount' => floatval($amount),
                 'phone' => $phone,
+                'name' => $user_name,
+                'email' => $user_email,
                 'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code'] : "CDF",
                 'reference' => $commande->refernce,
                 'callback_url' => $callback_url,
+                'approve_url' => $success_url,
+                'cancel_url' => $cancle_url,
+                "decline_url" => $error_url,
+                'language' => "fr",
+                'description' => "Paiement facture thalia eats",
             ];
-            $result = FlexPay::sendData($data);
+            $result = FlexPay::sendData($data,$method);
             //$result = EasyPay::SEND_DATA(
             //  $commande->refernce,
             //                 $commande->global_price + $commande->price_delivery + $commande->price_service,
@@ -264,7 +275,7 @@ class CommandeController extends Controller
 
             if ($result['code'] != 0) {
 
-                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', 'Erreur de demande paiement');
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result["message"]);
 
             }
 
