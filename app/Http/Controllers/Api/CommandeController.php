@@ -62,11 +62,11 @@ class CommandeController extends Controller
 
             $url = $request->url;
 
-            $town = Town::where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
+            $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
 
             $user = auth()->user();
-            $last_commande = Commande::orderBy('created_at', 'desc')->first();
-            $commande = Commande::where('status_id', 1)->where('user_id', $user->id)->first();
+            $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
+            $commande = Commande::query()->where('status_id', 1)->where('user_id', $user->id)->first();
 
 
             if (!$commande) {
@@ -93,8 +93,8 @@ class CommandeController extends Controller
 
             foreach ($products as $product) {
                 # code...
-                $product_id = Product::find(Cipher::Decrypt($product['uid']));
-                $commande_product = CommandeProduct::where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
+                $product_id = Product::query()->find(Cipher::Decrypt($product['uid']));
+                $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
                 if (!$commande_product) $commande_product = new CommandeProduct();
                 $commande_product->product_id = $product_id->id;
                 $commande_product->price = $product_id->price;
@@ -110,8 +110,27 @@ class CommandeController extends Controller
             $commande->global_price = $globale_price;
 
             $commande->save();
+
             return ApiResponse::SUCCESS_DATA(new CommandeResource($commande), 'Commande ajouter', 'La commande a été ajouter avec succès');
 
+        } catch (Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    public function cancel()
+    {
+        try {
+
+            $user = Auth()->user();
+            $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
+
+            if ($commande) {
+                $commande->status_id = 4;
+                $commande->save();
+            }
+
+            return ApiResponse::SUCCESS_DATA([]);
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
@@ -142,8 +161,25 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->where('status_id', 2)->where('user_id', $user->id)->get();
+            $commande = Commande::with(['product', 'delivery','status'])->whereIn('status_id', [2])->where('user_id', $user->id)->get();
 
+            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
+
+        } catch (Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    public function deleteProduct(Request $request)
+    {
+        try {
+
+            $user = Auth()->user();
+
+            $product_id= $request->input('product_id');
+            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+
+            CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id',Cipher::Decrypt($product_id))->delete();
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
         } catch (Exception $e) {
@@ -157,7 +193,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->where('status_id', '>', 1)->where('user_id', $user->id)->get();
+            $commande = Commande::with(['product', 'delivery','status'])->where('status_id', '>', 1)->where('user_id', $user->id)->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -168,7 +204,7 @@ class CommandeController extends Controller
 
     public function show($refernce)
     {
-        $commande = Commande::with('product')->where('refernce', $refernce)->first();
+        $commande = Commande::with(['product', 'delivery','status'])->where('refernce', $refernce)->first();
         return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
     }
 
@@ -220,7 +256,7 @@ class CommandeController extends Controller
             $callback_url = $request->input('callback_url');
             $pricing = $request->input('pricing');
             $phone = $request->input('phone');
-            $method = $request->input('method','mobile');
+            $method = $request->input('method', 'mobile');
 
 
             $user = auth()->user();
@@ -232,7 +268,7 @@ class CommandeController extends Controller
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
 
-            if($method!="cart"){
+            if ($method != "cart") {
                 $phone_check = new LibPhoneNumber($phone);
 
                 if (!$phone_check->checkValidationNumber()) {
@@ -257,7 +293,7 @@ class CommandeController extends Controller
                 'language' => "fr",
                 'description' => "Paiement facture thalia eats",
             ];
-            $result = FlexPay::sendData($data,$method);
+            $result = FlexPay::sendData($data, $method);
             //$result = EasyPay::SEND_DATA(
             //  $commande->refernce,
             //                 $commande->global_price + $commande->price_delivery + $commande->price_service,
