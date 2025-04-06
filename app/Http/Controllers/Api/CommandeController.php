@@ -161,7 +161,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with(['product', 'delivery','status'])->whereIn('status_id', [2])->where('user_id', $user->id)->get();
+            $commande = Commande::with(['product', 'delivrery_driver','status'])->whereIn('status_id', [2])->where('user_id', $user->id)->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -193,7 +193,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with(['product', 'delivery','status'])->where('status_id', '>', 1)->where('user_id', $user->id)->get();
+            $commande = Commande::with(['product', 'delivrery_driver','status'])->where('status_id', '>', 1)->where('user_id', $user->id)->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -204,7 +204,7 @@ class CommandeController extends Controller
 
     public function show($refernce)
     {
-        $commande = Commande::with(['product', 'delivery','status'])->where('refernce', $refernce)->first();
+        $commande = Commande::with(['product', 'delivrery_driver','status'])->where('refernce', $refernce)->first();
         return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
     }
 
