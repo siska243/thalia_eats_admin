@@ -20,9 +20,7 @@ use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
 use App\Wrappers\LibPhoneNumber;
 use Exception;
-use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
@@ -66,7 +64,7 @@ class CommandeController extends Controller
 
             $user = auth()->user();
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->where('status_id', 1)->where('user_id', $user->id)->first();
+            $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
 
 
             if (!$commande) {
@@ -114,6 +112,95 @@ class CommandeController extends Controller
             return ApiResponse::SUCCESS_DATA(new CommandeResource($commande), 'Commande ajouter', 'La commande a été ajouter avec succès');
 
         } catch (Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    public function addProduct(Request $request){
+
+        try{
+            $products=$request->input("products");
+
+            $user = auth()->user();
+            $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
+            $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
+
+
+            if (!$commande) {
+
+                $commande = new Commande();
+                $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
+                $commande->user_id = $user->id;
+                $commande->refernce = $refernce;
+                $commande->status_id = 1;
+
+            }
+
+            if(count($products)>0)
+            {
+                foreach ($products as $product) {
+
+
+                    $product_id = Product::query()->find(Cipher::Decrypt($product['product_id']));
+                    $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
+                    if (!$commande_product) $commande_product = new CommandeProduct();
+
+                    $commande_product->product_id = $product_id->id;
+                    $commande_product->price = $product_id->price;
+                    $commande_product->quantity = intval($product['quantity']);
+                    $commande_product->currency_id = $product['pricing'];
+                    $commande_product->commande_id = $commande->id;
+                    $commande_product->user_id = $user->id;
+
+                    $commande_product->save();
+                }
+            }
+
+
+
+            $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->get();
+            $sum=0;
+            collect($commande_product)->each(function ($commande_product) use (&$sum) {
+
+                $sum = $commande_product->price * $commande_product->quantity;
+            });
+
+            $commande->global_price = $sum;
+            $commande->save();
+
+            return $this->current();
+
+        }
+        catch(Exception $e){
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    public function updateDeliveryAddress(Request $request){
+        try{
+
+            $town_id=$request->input("town");
+            $reference=$request->input("reference");
+            $street=$request->input("street");
+            $number_street=$request->input("number_street");
+
+            $town_id=Town::query()->where('slug',$town_id)->first()?->id;
+            $user = Auth()->user();
+
+            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+
+            $commande->town_id = $town_id;
+            $commande->reference_adresse = $reference;
+            $commande->adresse_delivery = "{$street} {$number_street} {$reference}";
+            $commande->street = $street;
+            $commande->number_street = $number_street;
+
+            $commande->save();
+
+            return $this->current();
+        }
+        catch(Exception $e){
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -178,9 +265,9 @@ class CommandeController extends Controller
 
             $product_id= $request->input('product_id');
             $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
-
             CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id',Cipher::Decrypt($product_id))->delete();
-            return ApiResponse::GET_DATA(CommandeResource::collection($commande));
+
+            return $this->current();
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);

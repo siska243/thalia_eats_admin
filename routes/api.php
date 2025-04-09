@@ -69,8 +69,10 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
        Route::get('/tracking','track');
-       Route::get('/delete-product','deleteProduct');
+       Route::post('/delete-product','deleteProduct');
+       Route::post('/add-product','addProduct');
        Route::get("/swr-check-paiement/{orderNumber}","swr_check_paiement");
+       Route::post("/update-address-delivery","updateDeliveryAddress");
 
    });
 
