@@ -336,7 +336,6 @@ class CommandeController extends Controller
     {
         try {
 
-
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
@@ -363,8 +362,24 @@ class CommandeController extends Controller
                 }
             }
 
+            $commande_products=CommandeProduct::query()->where('commande_id', $commande->id)
+                ->with('product')
+                ->where('user_id',auth()->user()->id)
+                ->get();
 
-            $amount = $commande->global_price + $commande->price_delivery + $commande->price_service;
+
+            $global_price=0;
+
+            collect($commande_products)->each(function ($commande_product) use (&$global_price) {
+                $global_price += $commande_product->product->price * $commande_product->quantity;
+            });
+
+            $amount = $global_price + $commande->price_delivery + $commande->price_service;
+
+
+            if($amount<=2){
+                return ApiResponse::BAD_REQUEST(__('Oups'),__("Error paiement"),__("Pour le paiement par cart le montant minimum c'est 2USD"));
+            }
 
             $data = [
                 'amount' => floatval($amount),
@@ -381,20 +396,7 @@ class CommandeController extends Controller
                 'description' => "Paiement facture thalia eats",
             ];
             $result = FlexPay::sendData($data, $method);
-            //$result = EasyPay::SEND_DATA(
-            //  $commande->refernce,
-            //                 $commande->global_price + $commande->price_delivery + $commande->price_service,
-            //$pricing['currency']['code'],
-            //'commande',
-            //$user_name,
-            //$user_email,
-            //$success_url,
-            //$error_url,
-            //$cancle_url
 
-            Log::info(json_encode($result));
-
-            Log::info(json_encode($data));
 
             if ($result['code'] != 0) {
 

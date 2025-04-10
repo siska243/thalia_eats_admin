@@ -18,6 +18,7 @@ use App\Models\Status;
 use App\Models\SubCategoryProduct;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
+use App\Wrappers\FirebasePushNotification;
 use Exception;
 use Flowframe\Trend\Trend;
 use Illuminate\Http\Request;
@@ -201,7 +202,7 @@ class DeliveryController extends Controller
 
             $uid_order = $request->input('uid_order');
 
-            $check_have_cmd=Commande::where('status_id', 2)
+            $check_have_cmd=Commande::query()->where('status_id', 2)
             ->whereNotNull('accepted_at')
             ->where('delivrery_driver_id', $restaurant->id)->first();
 
@@ -262,6 +263,11 @@ class DeliveryController extends Controller
 
             $commande->save();
 
+
+            if($commande?->user->expo_push_token){
+                $push = new FirebasePushNotification();
+                $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.");
+            }
 
             return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant),"Saved","Successfully confirmed commande");
 

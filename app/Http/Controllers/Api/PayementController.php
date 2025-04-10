@@ -26,7 +26,7 @@ class PayementController extends Controller
             $payload = $request->all();
 
             // Log des données pour tester
-            Log::info('Webhook reçu:', $payload);
+          //  Log::info('Webhook reçu:', $payload);
 
             $reference=$request->input('reference');
             $amount=$request->input('amount');
@@ -85,8 +85,12 @@ class PayementController extends Controller
                             'action'=>'paiement-check',
                             'status'=>$status_paiement,
                         ];
-                        $push = new FirebasePushNotification();
-                        $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+
+                        if ($user->expo_push_token){
+                            $push = new FirebasePushNotification();
+                            $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+                        }
+
                     }
                 }
 
