@@ -34,7 +34,7 @@ class FirebasePushNotification
 
         $results = $messaging->validateRegistrationTokens($deviceTokens);
 
-        $validTokens = $results->valid();
+        $validTokens = $results["valid"];
         if (!empty($validTokens)) {
             $messaging->sendMulticast($message, $validTokens);
         }
