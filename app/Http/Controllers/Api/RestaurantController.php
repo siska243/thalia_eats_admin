@@ -358,7 +358,9 @@ class RestaurantController extends Controller
 
     public static function sendDeliveryNotification(Commande $commande)
     {
-        $deliveries=DelivreryDriver::query()->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]));
+        $deliveries=DelivreryDriver::query()
+            ->with("user")
+            ->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]));
 
         $tokens=[];
         collect($deliveries)->each(function ($delivery) use ($commande,&$tokens) {
