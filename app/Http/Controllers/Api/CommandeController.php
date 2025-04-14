@@ -91,10 +91,16 @@ class CommandeController extends Controller
             $commande->save();
             $globale_price = 0;
 
+            if(!empty($products)){
+                return ApiResponse::BAD_REQUEST(__('Oups'),__("Error"),__("Veuillez ajouter au moins un produits"));
+            }
+
             foreach ($products as $product) {
                 # code...
                 $product_id = Product::query()->find(Cipher::Decrypt($product['uid']));
-                $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
+                $commande_product = CommandeProduct::query()
+                    ->where("user_id",$user->id)
+                    ->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
                 if (!$commande_product) $commande_product = new CommandeProduct();
                 $commande_product->product_id = $product_id->id;
                 $commande_product->price = $product_id->price;
@@ -144,7 +150,9 @@ class CommandeController extends Controller
 
 
                     $product_id = Product::query()->find(Cipher::Decrypt($product['product_id']));
-                    $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
+                    $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)
+                        ->where("user_id",$user->id)
+                        ->where('commande_id', $commande->id)->first();
                     if (!$commande_product) $commande_product = new CommandeProduct();
 
                     $commande_product->product_id = $product_id->id;
@@ -155,6 +163,7 @@ class CommandeController extends Controller
                     $commande_product->user_id = $user->id;
 
                     $commande_product->save();
+                    $commande_product->refresh();
                 }
             }
 
@@ -491,6 +500,7 @@ class CommandeController extends Controller
                 return ApiResponse::SUCCESS_DATA("", "Success", "Merci pour votre confiance");
             }
 
+            
 
             return ApiResponse::SUCCESS_DATA("", "Success", "Commande déjà traitée");
 
