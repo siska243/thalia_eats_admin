@@ -360,7 +360,7 @@ class RestaurantController extends Controller
     {
         $deliveries=DelivreryDriver::query()
             ->with("user")
-            ->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]));
+            ->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]))->get();
 
         $tokens=[];
         collect($deliveries)->each(function ($delivery) use ($commande,&$tokens) {
