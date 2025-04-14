@@ -24,6 +24,7 @@ use Flowframe\Trend\Trend;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RestaurantController extends Controller
 {
@@ -313,8 +314,6 @@ class RestaurantController extends Controller
                         $push = new FirebasePushNotification();
                         $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
                     }
-
-
                     //notification au livreur
 
                     self::sendDeliveryNotification($commande);
@@ -332,8 +331,6 @@ class RestaurantController extends Controller
                         $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
                     }
 
-
-
                 break;
             }
 
@@ -342,6 +339,7 @@ class RestaurantController extends Controller
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
         } catch (Exception $e) {
 
+            Log::info(json_encode($e));
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -355,7 +353,7 @@ class RestaurantController extends Controller
     public function getCurrentRestaurant()
     {
 
-        return Restaurant::where('user_id', $this->getUser()?->id)->first();
+        return Restaurant::query()->where('user_id', $this->getUser()?->id)->first();
     }
 
     public static function sendDeliveryNotification(Commande $commande)
@@ -363,7 +361,7 @@ class RestaurantController extends Controller
         $deliveries=DelivreryDriver::query()->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]));
 
         $tokens=[];
-        collect($deliveries)->each(function ($delivery) use ($commande) {
+        collect($deliveries)->each(function ($delivery) use ($commande,&$tokens) {
 
             if($delivery?->user->expo_push_token){
               $tokens[]=$delivery?->user->expo_push_token;
