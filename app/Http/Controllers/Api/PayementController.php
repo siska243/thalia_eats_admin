@@ -72,7 +72,7 @@ class PayementController extends Controller
                 if($status_paiement->is_paied)
                 {
                     $order->status_id = 2;
-                    $order->reference_paiement;
+                    $order->reference_paiement=$provider_reference;
                     //envoyer la commande au restaurateur
                     $order->paied_at = now()->format("Y-m-d H:i:s");
                     $order->save();
@@ -98,6 +98,7 @@ class PayementController extends Controller
                     'action'=>'paiement-check',
                     'status'=>$status_paiement,
                 ];
+
                 $push = new FirebasePushNotification();
                 $push->sendPushNotification($order?->user->expo_push_token, $result['message'], json_encode($body));
             }

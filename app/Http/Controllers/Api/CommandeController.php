@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\CallBackEnum;
 use App\Events\PayementEvent;
+use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CommandeRequest;
 use App\Http\Resources\CommandeResource;
@@ -42,6 +43,7 @@ class CommandeController extends Controller
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
         } catch (Exception $e) {
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -63,9 +65,9 @@ class CommandeController extends Controller
             $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
 
             $user = auth()->user();
-            $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
 
+            $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
+            $commande = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user->id)->first();
 
             if (!$commande) {
 
@@ -116,14 +118,15 @@ class CommandeController extends Controller
         }
     }
 
-    public function addProduct(Request $request){
+    public function addProduct(Request $request)
+    {
 
-        try{
-            $products=$request->input("products");
+        try {
+            $products = $request->input("products");
 
             $user = auth()->user();
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user->id)->first();
+            $commande = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user->id)->first();
 
 
             if (!$commande) {
@@ -136,8 +139,7 @@ class CommandeController extends Controller
 
             }
 
-            if(count($products)>0)
-            {
+            if (count($products) > 0) {
                 foreach ($products as $product) {
 
 
@@ -157,9 +159,8 @@ class CommandeController extends Controller
             }
 
 
-
             $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->get();
-            $sum=0;
+            $sum = 0;
             collect($commande_product)->each(function ($commande_product) use (&$sum) {
 
                 $sum = $commande_product->price * $commande_product->quantity;
@@ -170,21 +171,21 @@ class CommandeController extends Controller
 
             return $this->current();
 
-        }
-        catch(Exception $e){
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }
 
-    public function updateDeliveryAddress(Request $request){
-        try{
+    public function updateDeliveryAddress(Request $request)
+    {
+        try {
 
-            $town_id=$request->input("town");
-            $reference=$request->input("reference");
-            $street=$request->input("street");
-            $number_street=$request->input("number_street");
+            $town_id = $request->input("town");
+            $reference = $request->input("reference");
+            $street = $request->input("street");
+            $number_street = $request->input("number_street");
 
-            $town_id=Town::query()->where('slug',$town_id)->first()?->id;
+            $town_id = Town::query()->where('slug', $town_id)->first()?->id;
             $user = Auth()->user();
 
             $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
@@ -198,8 +199,7 @@ class CommandeController extends Controller
             $commande->save();
 
             return $this->current();
-        }
-        catch(Exception $e){
+        } catch (Exception $e) {
 
             return ApiResponse::SERVER_ERROR($e);
         }
@@ -210,7 +210,7 @@ class CommandeController extends Controller
         try {
 
             $user = Auth()->user();
-            $commande = Commande::with('product')->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
+            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
 
             if ($commande) {
                 $commande->status_id = 4;
@@ -248,7 +248,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with(['product', 'delivrery_driver','status'])->whereIn('status_id', [2])->where('user_id', $user->id)->get();
+            $commande = Commande::with(['product', 'delivrery_driver', 'status'])->whereIn('status_id', [2])->where('user_id', $user->id)->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -263,9 +263,9 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $product_id= $request->input('product_id');
+            $product_id = $request->input('product_id');
             $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
-            CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id',Cipher::Decrypt($product_id))->delete();
+            CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id', Cipher::Decrypt($product_id))->delete();
 
             return $this->current();
 
@@ -280,7 +280,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with(['product', 'delivrery_driver','status'])->where('status_id', '>', 1)->where('user_id', $user->id)->get();
+            $commande = Commande::with(['product', 'delivrery_driver', 'status'])->where('status_id', '>', 1)->where('user_id', $user->id)->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -291,7 +291,7 @@ class CommandeController extends Controller
 
     public function show($refernce)
     {
-        $commande = Commande::with(['product', 'delivrery_driver','status'])->where('refernce', $refernce)->first();
+        $commande = Commande::with(['product', 'delivrery_driver', 'status'])->where('refernce', $refernce)->first();
         return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
     }
 
@@ -324,6 +324,30 @@ class CommandeController extends Controller
                 $status = $result['transaction']['status'];
 
                 $status_paiement = StatusPayement::query()->where('code', $status)->first();
+
+                if ($status_paiement?->is_paied) {
+
+                    $order = Commande::query()
+                        ->with('user')
+                        ->where('refernce', $result['transaction']['reference'])->first();
+
+                    $order->status_id = 2;
+                    $order->reference_paiement = $result['transaction']['provider_reference'];
+                    //envoyer la commande au restaurateur
+                    if (!$order->paied_at) {
+                        $order->paied_at = now()->format("Y-m-d H:i:s");
+
+                        $user = CurrentHelpers::getUserByOrder($order);
+
+                        if ($user->expo_push_token) {
+                            $push = new FirebasePushNotification();
+                            $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+                        }
+                    }
+
+                    $order->save();
+
+                }
 
                 return ApiResponse::GET_DATA($status_paiement);
             }
@@ -362,13 +386,13 @@ class CommandeController extends Controller
                 }
             }
 
-            $commande_products=CommandeProduct::query()->where('commande_id', $commande->id)
+            $commande_products = CommandeProduct::query()->where('commande_id', $commande->id)
                 ->with('product')
-                ->where('user_id',auth()->user()->id)
+                ->where('user_id', auth()->user()->id)
                 ->get();
 
 
-            $global_price=0;
+            $global_price = 0;
 
             collect($commande_products)->each(function ($commande_product) use (&$global_price) {
                 $global_price += $commande_product->product->price * $commande_product->quantity;
@@ -377,8 +401,8 @@ class CommandeController extends Controller
             $amount = $global_price + $commande->price_delivery + $commande->price_service;
 
 
-            if($amount<=2){
-                return ApiResponse::BAD_REQUEST(__('Oups'),__("Error paiement"),__("Pour le paiement par cart le montant minimum c'est 2USD"));
+            if ($amount <= 2) {
+                return ApiResponse::BAD_REQUEST(__('Oups'), __("Error paiement"), __("Pour le paiement par cart le montant minimum c'est 2USD"));
             }
 
             $data = [
