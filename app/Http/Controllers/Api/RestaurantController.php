@@ -339,7 +339,7 @@ class RestaurantController extends Controller
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
         } catch (Exception $e) {
 
-            Log::info(json_encode($e));
+            Log::info($e);
             return ApiResponse::SERVER_ERROR($e);
         }
     }
