@@ -325,7 +325,7 @@ class CommandeController extends Controller
 
                 $status_paiement = StatusPayement::query()->where('code', $status)->first();
 
-                if ($status_paiement?->is_paied) {
+                if ($status_paiement?->is_paid) {
 
                     $order = Commande::query()
                         ->with('user')

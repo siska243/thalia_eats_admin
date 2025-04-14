@@ -69,7 +69,7 @@ class PayementController extends Controller
                     "provider_reference"=>$provider_reference
                 ]);
 
-                if($status_paiement->is_paied)
+                if($status_paiement->is_paid)
                 {
                     $order->status_id = 2;
                     $order->reference_paiement=$provider_reference;
