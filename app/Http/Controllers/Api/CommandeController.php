@@ -408,7 +408,7 @@ class CommandeController extends Controller
             });
 
             $amount = $global_price + $commande->price_delivery + $commande->price_service;
-            
+
             if ($amount <= 2 && $method == "cart") {
                 return ApiResponse::BAD_REQUEST(__('Oups'), __("Error paiement"), __("Pour le paiement par cart le montant minimum c'est 2USD"));
             }

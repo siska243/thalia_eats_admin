@@ -56,7 +56,7 @@ class DeliveryController extends Controller
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
-        }:
+        }
     }
 
     public function waitAcceptOrderDelivrery()
@@ -75,7 +75,7 @@ class DeliveryController extends Controller
                 ->orderBy('updated_at','desc')
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
+            if ($commande->count()==0) return ApiResponse::GET_DATA([]);
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -102,7 +102,7 @@ class DeliveryController extends Controller
 
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA([]);
+            if ($commande->count()==0) return ApiResponse::GET_DATA([]);
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -317,7 +317,7 @@ class DeliveryController extends Controller
 
     public function getUser()
     {
-        return Auth()->user();
+        return auth()->user();
     }
 
     public function getCurrentDelivery()
