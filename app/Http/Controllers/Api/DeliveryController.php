@@ -30,11 +30,9 @@ class DeliveryController extends Controller
     //
     public function index()
     {
-        $restaurant = Restaurant::where('is_active', true)->get();
+        $restaurant = Restaurant::query()->where('is_active', true)->get();
         return RestaurantResource::collection($restaurant);
     }
-
-
 
     public function currentOrderDelivery()
     {
@@ -58,7 +56,7 @@ class DeliveryController extends Controller
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
-        }
+        }:
     }
 
     public function waitAcceptOrderDelivrery()

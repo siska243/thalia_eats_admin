@@ -500,7 +500,7 @@ class CommandeController extends Controller
                 return ApiResponse::SUCCESS_DATA("", "Success", "Merci pour votre confiance");
             }
 
-            
+
 
             return ApiResponse::SUCCESS_DATA("", "Success", "Commande déjà traitée");
 
