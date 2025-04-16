@@ -53,11 +53,11 @@ class UserAccountController extends Controller
         $user->save();
 
         FcmToken::query()->updateOrCreate([
-            'expo_token' => $request->input('expo_token'),
+            'token' => $request->input('expo_token'),
             'user_id' => $user->id
         ],
             [
-                'expo_token' => $request->input('expo_token'),
+                'token' => $request->input('expo_token'),
                 'user_id' => $user->id,
                 'is_current' => true,
             ]
