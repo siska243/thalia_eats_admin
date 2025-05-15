@@ -15,6 +15,7 @@ use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class PayementController extends Controller
@@ -98,6 +99,17 @@ class PayementController extends Controller
                     'action'=>'paiement-check',
                     'status'=>$status_paiement,
                 ];
+
+                $payement=Payement::query()->where('commande_id',$order?->id)
+                    ->whereNotNull('webhook_sse_url')
+                    ->first();
+
+                if($payement){
+                    $response=Http::post($payement->webhook_sse_url, [
+                        'payload'=>json_encode($body)
+                    ]);
+
+                }
 
                 $push = new FirebasePushNotification();
                 $push->sendPushNotification($order?->user->expo_push_token, $result['message'], json_encode($body));

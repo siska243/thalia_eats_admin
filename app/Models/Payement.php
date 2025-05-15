@@ -25,6 +25,7 @@ class Payement extends Model
         'amount_customer',
         'channel',
         'reference',
+        "webhook_sse_url"
     ];
 
     public function statusPayement():BelongsTo

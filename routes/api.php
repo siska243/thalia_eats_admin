@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\StatusPayement;
 use App\Http\Controllers\Api\{AuthController, CallbackUrlController, RestaurantController, CategorieProductController, CommandeController, DefaultDataController, DeliveryController, UserAccountController};
 use App\Wrappers\EasyPay;
 use App\Wrappers\Notification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -25,6 +27,22 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 
 
+
+Route::get("/test-sse",function (){
+
+    $status_paiement = StatusPayement::query()->where('code', 1)->first();
+
+    $body=[
+        'action'=>'paiement-check',
+        'status'=>$status_paiement,
+    ];
+
+    $response=Http::post("localhost:3000/api/events", [
+        'payload'=>json_encode($body)
+    ]);
+
+    dd($response->json());
+});
 Route::get('/notification',function(){
 
     $response=Notification::SEND_NOTIFICATION('test','test body');

@@ -373,6 +373,7 @@ class CommandeController extends Controller
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
             $callback_url = $request->input('callback_url');
+            $webhook_url = $request->input('webhook_sse_url');
             $pricing = $request->input('pricing');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
@@ -457,6 +458,7 @@ class CommandeController extends Controller
                 'status_payement_id' => $status_paiement?->id,
                 'amount' => $amount,
                 'amount_customer' => $amount,
+                'webhook_sse_url'=>$webhook_url
             ]);
 
             $push = new FirebasePushNotification();
