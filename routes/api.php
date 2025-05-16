@@ -26,23 +26,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 
-
-
-Route::get("/test-sse",function (){
-
-    $status_paiement = StatusPayement::query()->where('code', 1)->first();
-
-    $body=[
-        'action'=>'paiement-check',
-        'status'=>$status_paiement,
-    ];
-
-    $response=Http::post("localhost:3000/api/events", [
-        'payload'=>json_encode($body)
-    ]);
-
-    dd($response->json());
-});
 Route::get('/notification',function(){
 
     $response=Notification::SEND_NOTIFICATION('test','test body');
