@@ -31,7 +31,7 @@ class RestaurantController extends Controller
     //
     public function index()
     {
-        $restaurant = Restaurant::where('is_active', true)->get();
+        $restaurant = Restaurant::query()->where('is_active', true)->get();
         return RestaurantResource::collection($restaurant);
     }
 
@@ -43,15 +43,17 @@ class RestaurantController extends Controller
 
     public function categorie(Restaurant $restaurant)
     {
-        $restaurantId = $restaurant->id; // Remplacez par l'ID du restaurant souhaité
+        $restaurantId = $restaurant->id;
 
 
         $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
             $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
             });
-        }])->whereHas('sub_category_product.product', function ($query) use ($restaurantId) {
-            $query->where('restaurant_id', $restaurantId);
+        }])->whereHas('sub_category_product', function ($query) use ($restaurantId) {
+           return $query->whereHas('product', function ($subQuery) use ($restaurantId) {
+                $subQuery->where('restaurant_id', $restaurantId);
+            });
         })->get();
         return CategorieResource::collection($categories);
     }

@@ -65,13 +65,15 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
 
        Route::post('/add','store');
        Route::get('/current','current');
-       Route::get('/past','index');
-       Route::get('/cancel','cancel');
+       Route::get('/past','historique');
+       Route::post('/cancel','cancel');
        Route::post('/valide','valide');
        Route::post('/check-paiement','verif_paiement');
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
        Route::get('/tracking','track');
+       Route::post('/update-track','track_order');
+       Route::get('/get-track/{uid}','get_track_order');
        Route::post('/delete-product','deleteProduct');
        Route::post('/add-product','addProduct');
        Route::get("/swr-check-paiement/{orderNumber}","swr_check_paiement");

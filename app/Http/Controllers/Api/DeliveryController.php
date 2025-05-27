@@ -69,7 +69,8 @@ class DeliveryController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
 
-            $commande = Commande::query()->where('status_id', 2)
+            $commande = Commande::query()
+                ->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereNull('delivrery_driver_id')
                 ->whereHas('commande_products')
@@ -282,6 +283,7 @@ class DeliveryController extends Controller
             $uid_order = $request->input('uid_order');
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+
 
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))

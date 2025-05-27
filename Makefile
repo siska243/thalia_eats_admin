@@ -1,6 +1,6 @@
 #---php artisan-----#
 ARTISAN = php artisan
-PHP_ARTISAN_SERVE = $(ARTISAN) serve
+PHP_ARTISAN_SERVE = /usr/bin/php artisan serve
 MAKE_CONTROLLER=$(ARTISAN) make:controller
 MIGRATE = $(ARTISAN) migrate
 MODEL = $(ARTISAN) make:model -m

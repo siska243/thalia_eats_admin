@@ -33,6 +33,10 @@ class DelivreryPriceResource extends Resource
                 Forms\Components\TextInput::make('interval_pricing')
                     ->required()
                     ->numeric(),
+
+                Forms\Components\TextInput::make('interval_max_price')
+                    ->required()
+                    ->numeric(),
                 Forms\Components\TextInput::make('frais')->label('Frais Livraison')
                     ->required()
                     ->numeric(),
@@ -50,9 +54,17 @@ class DelivreryPriceResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('town.title')->label('Commune')
+                    ->badge()
+                    ->searchable()
                     ->numeric()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('interval_pricing')
+                    ->label('Interval prix minimum')
+                    ->numeric()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('interval_max_price')
+                    ->label('Interval prix maximum')
                     ->numeric()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('frais')->label('Frais livraison')
