@@ -223,8 +223,8 @@ class CommandeController extends Controller
             $user = Auth()->user();
             $commandId = $request->input("uid");
 
-            if(!$commandId){
-                return ApiResponse::BAD_REQUEST(__("Error"),__("Oups"),__("Commande is required"));
+            if (!$commandId) {
+                return ApiResponse::BAD_REQUEST(__("Error"), __("Oups"), __("Commande is required"));
             }
             $commande = Commande::with('product')->whereIn('status_id', [1, 5])
                 ->where('id', Cipher::Decrypt($commandId))
@@ -259,11 +259,11 @@ class CommandeController extends Controller
 
             $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
 
-            if(!$commande){
-                return ApiResponse::NOT_FOUND(__("Not found"),__('messages.commandes.not_found'));
+            if (!$commande) {
+                return ApiResponse::NOT_FOUND(__("Not found"), __('messages.commandes.not_found'));
             }
 
-            return ApiResponse::GET_DATA( new CommandeResource($commande));
+            return ApiResponse::GET_DATA(new CommandeResource($commande));
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -341,6 +341,18 @@ class CommandeController extends Controller
     public function show($refernce)
     {
         $commande = Commande::with(['product', 'delivrery_driver', 'status'])->where('refernce', $refernce)->first();
+        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
+    }
+
+    public function showOrder(string $uid)
+    {
+        $commande = Commande::with(['product', 'delivrery_driver', 'status'])
+            ->where('id', Cipher::Decrypt($uid))
+            ->first();
+
+        if(!$commande){
+            return ApiResponse::GET_DATA(Cipher::Decrypt($uid));
+        }
         return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
     }
 
@@ -471,34 +483,41 @@ class CommandeController extends Controller
 
             $user = auth()->user();
 
-            if(!$user){
+            if (!$user) {
                 return ApiResponse::NOT_AUTHORIZED();
             }
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+            $commande = Commande::query()->whereIn('status_id', [1])->where('user_id', $user?->id)->first();
 
             if ($commande) {
-                return ApiResponse::BAD_REQUEST(__(""), __("Oups"), __("Commande non valide"));
+                return ApiResponse::BAD_REQUEST(__(""), __("Oups"), __("Vous avez déjà de commande en cours, veuillez finaliser le paiement."));
             }
 
             $products = $request->input("products");
 
             $adresse = $request->input("address");
 
-            $town = Town::query()->where('slug', !empty($adresse['town']['slug']) ? $adresse['town']['slug']: null)->first();
+            $town = Town::query()->where('slug', !empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
 
 
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
 
-            $commande = new Commande();
-            $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
-            $commande->user_id = $user->id;
-            $commande->refernce = $refernce;
-            $commande->status_id = 5;
+            $getExistOrder = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+            $commande = $getExistOrder ?? new Commande();
 
-            $commande->price_delivery = $pricing['frais_livraison'];
-            $commande->price_service = $pricing['service_price'];
+            if(!$getExistOrder) {
+
+                $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
+                $commande->user_id = $user->id;
+                $commande->refernce = $refernce;
+                $commande->status_id = 5;
+
+
+            }
+
+               $commande->price_delivery = $pricing['frais_livraison'];
+                $commande->price_service = $pricing['service_price'];
 
             if ($total_price <= 2 && $method == "cart") {
                 return ApiResponse::BAD_REQUEST(__('Oups'), __("Error paiement"), __("Pour le paiement par cart le montant minimum c'est 2USD"));
@@ -563,6 +582,7 @@ class CommandeController extends Controller
 
             $result = FlexPay::sendData($data, $method);
 
+            Log::info(json_encode($result));
 
             if ($result['code'] != 0) {
 

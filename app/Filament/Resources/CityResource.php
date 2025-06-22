@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\TownResource\Pages;
-use App\Filament\Resources\TownResource\RelationManagers;
-use App\Models\Town;
+use App\Filament\Resources\CityResource\Pages;
+use App\Filament\Resources\CityResource\RelationManagers;
+use App\Models\City;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -13,35 +13,25 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
-class TownResource extends Resource
+class CityResource extends Resource
 {
-    protected static ?string $model = Town::class;
-
-    protected static ?string $navigationIcon = 'heroicon-o-flag';
-
-    protected static ?string $label = "Communes";
+    protected static ?string $model = City::class;
 
     protected static ?string $navigationGroup = "Parametre";
+
+    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Section::make()->
-                columns(2)
-                    ->
-                    schema([
-                        Forms\Components\TextInput::make('title')
-                            ->required()
-                            ->maxLength(255),
-                        Forms\Components\Select::make('city_id')
-                            ->required()
-                            ->searchable()
-                            ->preload()
-                            ->relationship('city', 'title'),
-                        Forms\Components\TextInput::make('zip')
-                            ->maxLength(255),
-                    ])
+                Forms\Components\Section::make()->schema([
+                    Forms\Components\TextInput::make('title')
+                        ->required()
+                        ->maxLength(255),
+                    Forms\Components\Toggle::make('is_active')
+                        ->required(),
+                ])->columns()
 
             ]);
     }
@@ -52,11 +42,14 @@ class TownResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('title')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('zip')
+                Tables\Columns\TextColumn::make('slug')
                     ->searchable(),
                 Tables\Columns\ToggleColumn::make('is_active')
-
-                ,
+             ,
+                Tables\Columns\TextColumn::make('deleted_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -76,9 +69,6 @@ class TownResource extends Resource
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ])
-            ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
             ]);
     }
 
@@ -92,9 +82,9 @@ class TownResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListTowns::route('/'),
-            'create' => Pages\CreateTown::route('/create'),
-            'edit' => Pages\EditTown::route('/{record}/edit'),
+            'index' => Pages\ListCities::route('/'),
+            'create' => Pages\CreateCity::route('/create'),
+            'edit' => Pages\EditCity::route('/{record}/edit'),
         ];
     }
 }

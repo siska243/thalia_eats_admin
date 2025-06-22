@@ -17,6 +17,8 @@ class StatusPayementResource extends Resource
 {
     protected static ?string $model = StatusPayement::class;
 
+    protected static ?string $navigationGroup = "Parametre";
+
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function form(Form $form): Form
