@@ -7,11 +7,31 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Product extends Model
 {
     use HasFactory;
     use SoftDeletes;
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function (Model $model) {
+
+            $value=Str::slug($model->title);
+            $md=uniqid();
+            $model->slug="{$value}-{$md}";
+        });
+
+        static::updating(function (Model $model) {
+            $value=Str::slug($model->title);
+            $md=uniqid();
+            $model->slug="{$value}-{$md}";
+        });
+    }
+
     public function restaurant():BelongsTo
     {
         return $this->belongsTo(Restaurant::class,'restaurant_id');

@@ -52,7 +52,7 @@ class CommandeResource extends JsonResource
             'date_time_restautant'=>$this->resource->time_restaurant ? self::customTime($this->resource->accepted_at,$this->resource->time_restaurant):null,
             'date_time_delivery'=>$this->resource->time_delivery ? self::customTime($this->resource->accepted_at,$this->resource->time_delivery):null,
             'products' => $this->whenLoaded('product', CommandeProductResource::collection($this->resource->product)),
-            'user_delivery_complet_adress'=>"{$this->resource->adresse_delivery}, {$this->resource->town?->title}",
+            'user_delivery_complet_adress'=>"{$this->resource->adresse_delivery}, {$this->resource->town?->title} {$this->resource->town?->city?->title}",
             "mask_address"=>Str::mask("{$this->resource->adresse_delivery}, {$this->resource->town?->title}","*",3)
         ];
     }

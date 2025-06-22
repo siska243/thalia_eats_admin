@@ -7,12 +7,11 @@ use App\Filament\Resources\RestaurantResource\RelationManagers;
 use App\Models\Restaurant;
 use Filament\Forms\Components\{DatePicker, FileUpload, KeyValue, TextInput, Textarea, MarkdownEditor, Repeater, RichEditor, Section, Select, TimePicker};
 use Filament\Forms\Form;
+use Filament\Pages\SubNavigationPosition;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
@@ -25,6 +24,7 @@ class RestaurantResource extends Resource
     protected static ?string $label = "Nos restaurants";
     protected static ?string $navigationGroup = "Thalia eats";
     protected static ?int $navigationSort = 2;
+    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
     public static function form(Form $form): Form
     {
         return $form
@@ -115,11 +115,23 @@ class RestaurantResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
+            ->headerActions([
+                Tables\Actions\CreateAction::make()
+            ])
             ->emptyStateActions([
                 Tables\Actions\CreateAction::make(),
             ]);
     }
 
+    public static function getRecordSubNavigation(\Filament\Pages\Page $page): array
+    {
+        return $page->generateNavigationItems([
+            // ...
+            Pages\EditRestaurant::class,
+            Pages\ManageProducts::class
+
+        ]);
+    }
     public static function getRelations(): array
     {
         return [
@@ -133,6 +145,7 @@ class RestaurantResource extends Resource
             'index' => Pages\ListRestaurants::route('/'),
             'create' => Pages\CreateRestaurant::route('/create'),
             'edit' => Pages\EditRestaurant::route('/{record}/edit'),
+            'manage' => Pages\ManageProducts::route('/{record}/manage'),
         ];
     }
 
