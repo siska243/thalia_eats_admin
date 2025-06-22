@@ -11,24 +11,27 @@ use App\Http\Resources\StatusResource;
 use App\Http\Resources\SubCategoryProductResource;
 use App\Models\CategoryProduct;
 use App\Models\Commande;
+use App\Models\DelivreryDriver;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Status;
 use App\Models\SubCategoryProduct;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
+use App\Wrappers\FirebasePushNotification;
 use Exception;
 use Flowframe\Trend\Trend;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class RestaurantController extends Controller
 {
     //
     public function index()
     {
-        $restaurant = Restaurant::where('is_active', true)->get();
+        $restaurant = Restaurant::query()->where('is_active', true)->get();
         return RestaurantResource::collection($restaurant);
     }
 
@@ -40,15 +43,17 @@ class RestaurantController extends Controller
 
     public function categorie(Restaurant $restaurant)
     {
-        $restaurantId = $restaurant->id; // Remplacez par l'ID du restaurant souhaité
+        $restaurantId = $restaurant->id;
 
 
         $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
             $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
             });
-        }])->whereHas('sub_category_product.product', function ($query) use ($restaurantId) {
-            $query->where('restaurant_id', $restaurantId);
+        }])->whereHas('sub_category_product', function ($query) use ($restaurantId) {
+           return $query->whereHas('product', function ($subQuery) use ($restaurantId) {
+                $subQuery->where('restaurant_id', $restaurantId);
+            });
         })->get();
         return CategorieResource::collection($categories);
     }
@@ -94,7 +99,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
@@ -117,7 +122,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
@@ -140,7 +145,7 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $commande = Commande::where('status_id', 2)
+            $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at','desc')
@@ -299,31 +304,44 @@ class RestaurantController extends Controller
 
                     $commande->accepted_at = now()->format('Y-m-d');
 
-                    $commande->time_restaurant = $time;
+                    $commande->time_restaurant =  Carbon::parse($time)->format('H:i:s');
 
                     $commande->status_id = 2;
 
                     $commande->reception = true;
 
                     //envoyer une notification au client et au livreur
+
+                    if($commande?->user->expo_push_token){
+                        $push = new FirebasePushNotification();
+                        $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
+                    }
+                    //notification au livreur
+
+                    self::sendDeliveryNotification($commande);
                     break;
 
                 case ActionOrderEnum::Decline->value:
 
                     $commande->cancel_at = now()->format('Y-m-d');
                     $commande->status_id = 4;
+
                     //envoyer une notification au client
+
+                    if($commande?->user->expo_push_token){
+                        $push = new FirebasePushNotification();
+                        $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
+                    }
+
+                break;
             }
 
-
-
             $commande->save();
-
-
 
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
         } catch (Exception $e) {
 
+            Log::info($e);
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -337,6 +355,28 @@ class RestaurantController extends Controller
     public function getCurrentRestaurant()
     {
 
-        return Restaurant::where('user_id', $this->getUser()?->id)->first();
+        return Restaurant::query()->where('user_id', $this->getUser()?->id)->first();
+    }
+
+    public static function sendDeliveryNotification(Commande $commande)
+    {
+        $deliveries=DelivreryDriver::query()
+            ->with("user")
+            ->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]))->get();
+
+        $tokens=[];
+        collect($deliveries)->each(function ($delivery) use ($commande,&$tokens) {
+
+            if($delivery?->user->expo_push_token){
+              $tokens[]=$delivery?->user->expo_push_token;
+            }
+
+        });
+
+        if(!empty($tokens)){
+            $push = new FirebasePushNotification();
+            $push->sendPushNotificationMultiUser($tokens, "Nouvelle commande", "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
+        }
+
     }
 }

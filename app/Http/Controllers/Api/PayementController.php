@@ -15,6 +15,7 @@ use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class PayementController extends Controller
@@ -26,7 +27,7 @@ class PayementController extends Controller
             $payload = $request->all();
 
             // Log des données pour tester
-            Log::info('Webhook reçu:', $payload);
+          //  Log::info('Webhook reçu:', $payload);
 
             $reference=$request->input('reference');
             $amount=$request->input('amount');
@@ -42,9 +43,7 @@ class PayementController extends Controller
                 ->where('refernce',$reference)->first();
 
 
-
             $result=FlexPay::checkPaiement($orderNumber);
-
 
             if($result['code']!=0){
                 $push = new FirebasePushNotification();
@@ -71,10 +70,10 @@ class PayementController extends Controller
                     "provider_reference"=>$provider_reference
                 ]);
 
-                if($status_paiement->is_paied)
+                if($status_paiement->is_paid)
                 {
                     $order->status_id = 2;
-                    $order->reference_paiement;
+                    $order->reference_paiement=$provider_reference;
                     //envoyer la commande au restaurateur
                     $order->paied_at = now()->format("Y-m-d H:i:s");
                     $order->save();
@@ -87,8 +86,12 @@ class PayementController extends Controller
                             'action'=>'paiement-check',
                             'status'=>$status_paiement,
                         ];
-                        $push = new FirebasePushNotification();
-                        $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+
+                        if ($user->expo_push_token){
+                            $push = new FirebasePushNotification();
+                            $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+                        }
+
                     }
                 }
 
@@ -96,6 +99,18 @@ class PayementController extends Controller
                     'action'=>'paiement-check',
                     'status'=>$status_paiement,
                 ];
+
+                $payement=Payement::query()->where('commande_id',$order?->id)
+                    ->whereNotNull('webhook_sse_url')
+                    ->first();
+
+                if($payement){
+                    $response=Http::post($payement->webhook_sse_url, [
+                        'payload'=>json_encode($body)
+                    ]);
+
+                }
+
                 $push = new FirebasePushNotification();
                 $push->sendPushNotification($order?->user->expo_push_token, $result['message'], json_encode($body));
             }

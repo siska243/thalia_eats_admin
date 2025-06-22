@@ -1,9 +1,11 @@
 <?php
 
+use App\Models\StatusPayement;
 use App\Http\Controllers\Api\{AuthController, CallbackUrlController, RestaurantController, CategorieProductController, CommandeController, DefaultDataController, DeliveryController, UserAccountController};
 use App\Wrappers\EasyPay;
 use App\Wrappers\Notification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -22,6 +24,7 @@ use Spatie\Permission\Models\Permission;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
 
 Route::get('/notification',function(){
 
@@ -62,12 +65,19 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
 
        Route::post('/add','store');
        Route::get('/current','current');
-       Route::get('/past','index');
+       Route::get('/past','historique');
+       Route::post('/cancel','cancel');
        Route::post('/valide','valide');
        Route::post('/check-paiement','verif_paiement');
        Route::get('/show/{commande:refernce}','show');
        Route::get('/traitement','traitement');
        Route::get('/tracking','track');
+       Route::post('/update-track','track_order');
+       Route::get('/get-track/{uid}','get_track_order');
+       Route::post('/delete-product','deleteProduct');
+       Route::post('/add-product','addProduct');
+       Route::get("/swr-check-paiement/{orderNumber}","swr_check_paiement");
+       Route::post("/update-address-delivery","updateDeliveryAddress");
 
    });
 
@@ -84,7 +94,11 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
    Route::get('/delivery-current-order',[DeliveryController::class, 'currentOrderDelivery']);
    Route::get('/delivery-past-order',[DeliveryController::class, 'pastOrderRestaurant']);
    Route::post('/delivery-accept-order',[DeliveryController::class, 'confirmOrderRestaurant']);
+
+   //confirmation de la livraison de la commande
    Route::post('/delivery-confirm-delivery-order',[DeliveryController::class, 'confirmDeliveryRestaurant']);
+
+    //confirmation de la reception de la commande
    Route::post('/delivery-confirm-reception-order',[DeliveryController::class, 'confirmReceptionRestaurant']);
    Route::get('/delivery-dash',[DeliveryController::class, 'dashRestaurant']);
 

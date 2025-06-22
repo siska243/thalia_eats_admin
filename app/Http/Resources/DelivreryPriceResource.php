@@ -24,6 +24,7 @@ class DelivreryPriceResource extends JsonResource
             'frais_livraison'=>$this->resource->frais,
             'service_price'=>$this->resource->service_price,
             'currency'=>$this->resource->currency,
+            'interval_max_price'=>$this->resource->interval_max_price,
             'town'=>$this->whenLoaded('town',new TownResource($this->resource->town))
         ];
     }

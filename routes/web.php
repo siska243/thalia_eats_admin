@@ -22,5 +22,9 @@ Route::get('/callback/{action}',[CallbackUrlController::class,'index'])->name('c
 
 Route::post('/create-payment-intent',[CallbackUrlController::class,'index'])->name('payment-intent-web');
 
+Route::get('/test-test',function (){
+    echo gethostbyname('backend.flexpay.cd');
+});
+
 
 

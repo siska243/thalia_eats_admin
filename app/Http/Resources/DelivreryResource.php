@@ -22,7 +22,6 @@ class DelivreryResource extends JsonResource
             'id_card'=>$this->resource->id_card,
             'birth_date'=>$this->resource->birth_date,
             'user'=>$this->whenLoaded('user',new UserResource($this->resource->user)),
-
         ];
     }
 }

@@ -69,7 +69,7 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', $validator->getMessageBag());
+                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', "Veuillez saisir un email correcte");
             }
             $credentials = $request->only('email', 'password');
 
@@ -96,7 +96,6 @@ class AuthController extends Controller
                 ],
             );
 
-            //return ApiResponse::BAD_REQUEST('Invalid credential','Oups','Erreur');
         } catch (Exception $e) {
             //throw $th;
             return ApiResponse::SERVER_ERROR($e);
