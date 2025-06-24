@@ -350,7 +350,7 @@ class CommandeController extends Controller
             ->where('id', Cipher::Decrypt($uid))
             ->first();
 
-        if(!$commande){
+        if (!$commande) {
             return ApiResponse::GET_DATA(Cipher::Decrypt($uid));
         }
         return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
@@ -488,7 +488,7 @@ class CommandeController extends Controller
             }
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1])->where('user_id', $user?->id)->first();
+            $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
 
             if ($commande) {
                 return ApiResponse::BAD_REQUEST(__(""), __("Oups"), __("Vous avez déjà de commande en cours, veuillez finaliser le paiement."));
@@ -506,7 +506,7 @@ class CommandeController extends Controller
             $getExistOrder = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
             $commande = $getExistOrder ?? new Commande();
 
-            if(!$getExistOrder) {
+            if (!$getExistOrder) {
 
                 $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
                 $commande->user_id = $user->id;
@@ -516,8 +516,8 @@ class CommandeController extends Controller
 
             }
 
-               $commande->price_delivery = $pricing['frais_livraison'];
-                $commande->price_service = $pricing['service_price'];
+            $commande->price_delivery = $pricing['frais_livraison'];
+            $commande->price_service = $pricing['service_price'];
 
             if ($total_price <= 2 && $method == "cart") {
                 return ApiResponse::BAD_REQUEST(__('Oups'), __("Error paiement"), __("Pour le paiement par cart le montant minimum c'est 2USD"));
@@ -618,9 +618,9 @@ class CommandeController extends Controller
                 'status' => $status_paiement,
             ];
 
-            //$push = new FirebasePushNotification();
-            //$push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', json_encode($body));
-            //event(new PayementEvent($result['orderNumber']));
+            $push = new FirebasePushNotification();
+            $push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', json_encode($body));
+            event(new PayementEvent($result['orderNumber']));
 
             return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
 
@@ -666,5 +666,101 @@ class CommandeController extends Controller
             return ApiResponse::SERVER_ERROR($e);
         }
 
+    }
+
+    public function paiement(Request $request, $uid)
+    {
+        try {
+            $order = Commande::query()->where('id', Cipher::Decrypt($uid))
+                ->where('status_id', 5)
+                ->first();
+            if (!$order) {
+                return ApiResponse::BAD_REQUEST(__("Oups"), __("Error"), __("Commande invalide déjà payer ou annuler"));
+            }
+
+            $success_url = $request->input('success_url');
+            $error_url = $request->input('error_url');
+            $cancle_url = $request->input('cancel_url');
+            $callback_url = $request->input('callback_url');
+            $webhook_url = $request->input('webhook_sse_url');
+            $phone = $request->input('phone');
+            $method = $request->input('method', 'mobile');
+
+
+            $user_name = auth()->user()->name;
+            $user_email = auth()->user()->email;
+
+            if ($method != "cart") {
+                $phone_check = new LibPhoneNumber($phone);
+
+                if (!$phone_check->checkValidationNumber()) {
+                    return ApiResponse::BAD_REQUEST("Oups", "Numéro de téléphone invalide", "Mpesa");
+                }
+            }
+
+
+            $data = [
+                'amount' => floatval($order->global_price),
+                'phone' => $phone,
+                'name' => $user_name,
+                'email' => $user_email,
+                'currency' => !empty($order->product) ? $order->product[0]->currency->code : "CDF",
+                'reference' => $order->refernce,
+                'callback_url' => $callback_url,
+                'approve_url' => $success_url,
+                'cancel_url' => $cancle_url,
+                "decline_url" => $error_url,
+                'language' => "fr",
+                'description' => "Paiement facture thalia eats",
+            ];
+
+            $result = FlexPay::sendData($data, $method);
+
+            Log::info(json_encode($result));
+
+            if ($result['code'] != 0) {
+
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result["message"]);
+
+            }
+
+            $order->reference_paiement = $result['orderNumber'];
+            $order->code_confirmation = rand(1000, 9999);
+            $order->code_confirmation_restaurant = rand(1000, 9999);
+            $order->save();
+
+
+            $status_paiement = StatusPayement::query()->where('is_default', true)->first();
+
+            Payement::query()->updateOrCreate([
+                'commande_id' => $order->id,
+                'phone' => preg_replace('/[\s+]/', '', $phone),
+                'channel' => "MPESA",
+            ], [
+                'code' => $result['code'],
+                'commande_id' => $order->id,
+                'phone' => preg_replace('/[\s+]/', '', $phone),
+                'channel' => "MPESA",
+                'status_payement_id' => $status_paiement?->id,
+                'amount' => $order->global_price,
+                'amount_customer' => $order->global_price,
+                'webhook_sse_url' => $webhook_url
+            ]);
+
+            $body = [
+                'action' => 'paiement-check',
+                'status' => $status_paiement,
+            ];
+
+            $push = new FirebasePushNotification();
+            $push->sendPushNotification(auth()->user()->expo_push_token, 'paiement', json_encode($body));
+            event(new PayementEvent($result['orderNumber']));
+
+            return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
+
+
+        } catch (\Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
     }
 }

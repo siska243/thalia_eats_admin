@@ -79,6 +79,7 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function(){
        Route::get("/swr-check-paiement/{orderNumber}","swr_check_paiement");
        Route::post("/update-address-delivery","updateDeliveryAddress");
        Route::get("/show-order/{uid}","showOrder");
+       Route::post("/paiement-order/{uid}","paiement");
 
    });
 
