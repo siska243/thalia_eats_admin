@@ -44,6 +44,7 @@ Route::get('/menu/{restaurant:slug}/{slug}',[RestaurantController::class, 'produ
 Route::get('/menu/{restaurant:slug}/{slug}',[RestaurantController::class, 'productRestaurant']);
 
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
+Route::post('/activation-account', [AuthController::class, 'activation'])->name('api.activation');
 Route::post('/login', [AuthController::class, 'login'])
 ->middleware('guest')
 ->name('api.login');

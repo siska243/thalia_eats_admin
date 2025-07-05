@@ -29,9 +29,14 @@ use Illuminate\Support\Facades\Log;
 class RestaurantController extends Controller
 {
     //
-    public function index()
+    public function index(Request $request)
     {
-        $restaurant = Restaurant::query()->where('is_active', true)->get();
+        $search = $request->input('search');
+        $restaurant = Restaurant::query()->where('is_active', true)
+            ->when($search, fn($query) => $query->where('name', 'like', '%' . $search . '%')
+                ->orWhere('description', 'like', '%' . $search . '%')
+            )
+            ->get();
         return RestaurantResource::collection($restaurant);
     }
 
@@ -51,7 +56,7 @@ class RestaurantController extends Controller
                 $subQuery->where('restaurant_id', $restaurantId);
             });
         }])->whereHas('sub_category_product', function ($query) use ($restaurantId) {
-           return $query->whereHas('product', function ($subQuery) use ($restaurantId) {
+            return $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
             });
         })->get();
@@ -102,7 +107,7 @@ class RestaurantController extends Controller
             $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-                ->orderBy('updated_at','desc')
+                ->orderBy('updated_at', 'desc')
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
@@ -125,7 +130,7 @@ class RestaurantController extends Controller
             $commande = Commande::query()->where('status_id', 2)
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-                ->orderBy('updated_at','desc')
+                ->orderBy('updated_at', 'desc')
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
@@ -148,7 +153,7 @@ class RestaurantController extends Controller
             $commande = Commande::query()->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-                ->orderBy('updated_at','desc')
+                ->orderBy('updated_at', 'desc')
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA(null);
@@ -168,14 +173,13 @@ class RestaurantController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
-            $status=Status::query()->where('id','>',2)->pluck('id');
+            $status = Status::query()->where('id', '>', 2)->pluck('id');
 
-            $commande = Commande::query()->whereIn('status_id',$status )
-            ->orderBy('updated_at','desc')
+            $commande = Commande::query()->whereIn('status_id', $status)
+                ->orderBy('updated_at', 'desc')
                 //->whereNotNull('accepted_at')
 
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
-
                 ->get();
 
             if (!$commande) return ApiResponse::GET_DATA([]);
@@ -203,8 +207,8 @@ class RestaurantController extends Controller
             $columns = ['global_price', 'price_delivery', 'price_service'];
 
             DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));");
-             // Totals per month
-             $trendDay = collect();
+            // Totals per month
+            $trendDay = collect();
 
             // Totals per month
             $trendMonth = collect();
@@ -213,13 +217,13 @@ class RestaurantController extends Controller
                 $trendMonth->put(
                     $column,
                     Trend::query($commande)
-                    ->between(
-                        start: now()->startOfYear(),
-                        end: now()->endOfYear(),
-                    )
+                        ->between(
+                            start: now()->startOfYear(),
+                            end: now()->endOfYear(),
+                        )
                         ->perMonth()
                         ->sum($column)
-                        //->count()
+                //->count()
                 );
             }
 
@@ -241,22 +245,22 @@ class RestaurantController extends Controller
 
             DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','ONLY_FULL_GROUP_BY'));");
 
-            $current_order=Commande::query()->where('status_id',2)->count();
-            $current_order_accepted=Commande::query()->where('status_id',2)->whereNot('accepted_at')->count();;
-            $order_cancelation= Commande::query()->where('status_id',4)->count();
-            $order_delivery=Commande::query()->where('status_id',3)->count();
-            $status=Status::query()->get();
+            $current_order = Commande::query()->where('status_id', 2)->count();
+            $current_order_accepted = Commande::query()->where('status_id', 2)->whereNot('accepted_at')->count();;
+            $order_cancelation = Commande::query()->where('status_id', 4)->count();
+            $order_delivery = Commande::query()->where('status_id', 3)->count();
+            $status = Status::query()->get();
 
             return ApiResponse::GET_DATA([
-                "order_per_year"=>$trendYear,
-                'order_per_month'=> $trendMonth,
-                'order_per_days'=> $trendDay,
-                'order'=>[
-                    'current'=>$current_order,
-                    'order_accepted'=>$current_order_accepted,
-                    'order_cancel'=>$order_cancelation,
-                    'order_delivery'=>$order_delivery,
-                    'status'=>StatusResource::collection($status),
+                "order_per_year" => $trendYear,
+                'order_per_month' => $trendMonth,
+                'order_per_days' => $trendDay,
+                'order' => [
+                    'current' => $current_order,
+                    'order_accepted' => $current_order_accepted,
+                    'order_cancel' => $order_cancelation,
+                    'order_delivery' => $order_delivery,
+                    'status' => StatusResource::collection($status),
                 ]
             ]);
 
@@ -289,7 +293,6 @@ class RestaurantController extends Controller
                     'commande_products',
                     fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id))
                 )
-
                 ->whereNull('accepted_at')
                 ->whereNull('cancel_at')->first();
 
@@ -304,7 +307,7 @@ class RestaurantController extends Controller
 
                     $commande->accepted_at = now()->format('Y-m-d');
 
-                    $commande->time_restaurant =  Carbon::parse($time)->format('H:i:s');
+                    $commande->time_restaurant = Carbon::parse($time)->format('H:i:s');
 
                     $commande->status_id = 2;
 
@@ -312,7 +315,7 @@ class RestaurantController extends Controller
 
                     //envoyer une notification au client et au livreur
 
-                    if($commande?->user->expo_push_token){
+                    if ($commande?->user->expo_push_token) {
                         $push = new FirebasePushNotification();
                         $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
                     }
@@ -328,12 +331,12 @@ class RestaurantController extends Controller
 
                     //envoyer une notification au client
 
-                    if($commande?->user->expo_push_token){
+                    if ($commande?->user->expo_push_token) {
                         $push = new FirebasePushNotification();
                         $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
                     }
 
-                break;
+                    break;
             }
 
             $commande->save();
@@ -360,20 +363,20 @@ class RestaurantController extends Controller
 
     public static function sendDeliveryNotification(Commande $commande)
     {
-        $deliveries=DelivreryDriver::query()
+        $deliveries = DelivreryDriver::query()
             ->with("user")
-            ->whereDoesntHave('commandes',fn($query)=>$query->whereIn('status_id',[3]))->get();
+            ->whereDoesntHave('commandes', fn($query) => $query->whereIn('status_id', [3]))->get();
 
-        $tokens=[];
-        collect($deliveries)->each(function ($delivery) use ($commande,&$tokens) {
+        $tokens = [];
+        collect($deliveries)->each(function ($delivery) use ($commande, &$tokens) {
 
-            if($delivery?->user->expo_push_token){
-              $tokens[]=$delivery?->user->expo_push_token;
+            if ($delivery?->user->expo_push_token) {
+                $tokens[] = $delivery?->user->expo_push_token;
             }
 
         });
 
-        if(!empty($tokens)){
+        if (!empty($tokens)) {
             $push = new FirebasePushNotification();
             $push->sendPushNotificationMultiUser($tokens, "Nouvelle commande", "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
         }
