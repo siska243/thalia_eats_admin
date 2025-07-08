@@ -26,14 +26,14 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::post('/ia-model-llama3',function (\Illuminate\Http\Request $request){
-    $response = Http::post('http://127.0.0.1:11434/api/generate', [
+    $response = Http::timeout(3600)->post('http://127.0.0.1:11434/api/generate', [
         'model' => 'llama3',
         'prompt' => $request->input('prompt'),
         'stream' => false,
     ]);
 
 
-    return json_decode($response['response'], true);
+    return \App\Wrappers\ApiResponse::GET_DATA($response->json());
 });
 
 
