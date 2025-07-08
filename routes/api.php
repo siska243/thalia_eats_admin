@@ -27,7 +27,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/ia-model-llama3',function (\Illuminate\Http\Request $request){
     $response = Http::timeout(3600)->post('http://127.0.0.1:11434/api/generate', [
-        'model' => 'llama3',
+        'model' => 'mistral',
         'prompt' => $request->input('prompt'),
         'stream' => false,
     ]);
