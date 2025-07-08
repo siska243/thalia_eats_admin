@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\CallbackUrlController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Http;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,6 +25,17 @@ Route::post('/create-payment-intent',[CallbackUrlController::class,'index'])->na
 
 Route::get('/test-test',function (){
     echo gethostbyname('backend.flexpay.cd');
+});
+
+Route::post('/ia-model-llama3',function (\Illuminate\Http\Request $request){
+    $response = Http::post('http://127.0.0.1:11434/api/generate', [
+        'model' => 'llama3',
+        'prompt' => $request->input('prompt'),
+        'stream' => false,
+    ]);
+
+
+    return json_decode($response['response'], true);
 });
 
 
