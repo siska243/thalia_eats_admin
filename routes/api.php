@@ -25,6 +25,17 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+Route::post('/ia-model-llama3',function (\Illuminate\Http\Request $request){
+    $response = Http::post('http://127.0.0.1:11434/api/generate', [
+        'model' => 'llama3',
+        'prompt' => $request->input('prompt'),
+        'stream' => false,
+    ]);
+
+
+    return json_decode($response['response'], true);
+});
+
 
 Route::get('/notification',function(){
 
