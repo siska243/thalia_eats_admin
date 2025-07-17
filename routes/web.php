@@ -27,7 +27,13 @@ Route::get('/test-test',function (){
     echo gethostbyname('backend.flexpay.cd');
 });
 
+Route::get('/remove-order',function (){
 
+    \App\Models\Commande::query()->forceDelete();
+    \App\Models\CommandeProduct::query()->forceDelete();
+    \App\Models\Payement::query()->forceDelete();
+    \App\Models\TrackOrder::query()->forceDelete();
+});
 
 
 
