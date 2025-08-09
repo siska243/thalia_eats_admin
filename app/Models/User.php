@@ -35,7 +35,9 @@ class User extends Authenticatable
         'api_token',
         'creation_token',
         'mobile_permissions',
-        'type_user'
+        'type_user',
+        "google_id",
+        "social_media_avatar"
     ];
 
 
@@ -43,12 +45,11 @@ class User extends Authenticatable
     {
 
 
-        if(auth()->user()->hasRole('super_admin')) return true;
+        if (auth()->user()->hasRole('super_admin')) return true;
 
 
         return false;
     }
-
 
 
     /**
@@ -69,34 +70,34 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
-        'devices'=>'array',
-        'mobile_permissions'=>'array'
+        'devices' => 'array',
+        'mobile_permissions' => 'array'
     ];
 
-    public function restaurant():HasMany
+    public function restaurant(): HasMany
     {
-      return $this->hasMany(Restaurant::class);
+        return $this->hasMany(Restaurant::class);
     }
 
-    public function commande():HasMany
+    public function commande(): HasMany
     {
         return $this->hasMany(Commande::class);
     }
 
-    public function town():BelongsTo
+    public function town(): BelongsTo
     {
         return $this->belongsTo(Town::class);
     }
 
 
-
-    public  function  delivrery_driver():hasMany
+    public function delivrery_driver(): hasMany
 
     {
-        return  $this->hasMany(DelivreryDriver::class);
+        return $this->hasMany(DelivreryDriver::class);
     }
 
-    public function fullName(){
-        return $this->first_name.' '.$this->name;
+    public function fullName()
+    {
+        return $this->first_name . ' ' . $this->name;
     }
 }

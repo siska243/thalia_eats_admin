@@ -27,6 +27,11 @@ Route::get('/test-test',function (){
     echo gethostbyname('backend.flexpay.cd');
 });
 
+
+Route::get('/auth/google', [\App\Http\Controllers\Api\GoogleAuthController::class, 'redirect']);
+Route::get('/auth/google/register', [\App\Http\Controllers\Api\GoogleAuthController::class, 'register']);
+Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthController::class, 'callback']);
+
 Route::get('/remove-order',function (){
 
     \App\Models\Commande::query()->forceDelete();
