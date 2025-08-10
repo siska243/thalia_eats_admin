@@ -20,6 +20,7 @@
         "kreait/laravel-firebase": "^6.0",
         "laravel/framework": "^12.3",
         "laravel/sanctum": "^4.0",
+        "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.8",
         "opcodesio/log-viewer": "^3.17",
         "pusher/pusher-php-server": "^7.2",

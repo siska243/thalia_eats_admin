@@ -176,4 +176,11 @@ class AuthController extends Controller
             ]
         ]);
     }
+
+    public function notlogin(){
+        return response()->json([
+            'status' => 'error',
+            'title'=>'Not login',
+        ]);
+    }
 }

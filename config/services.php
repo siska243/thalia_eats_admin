@@ -24,6 +24,16 @@ return [
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT'),
+    ],
+    'redirect_uris' => [
+        'mobile_register' => env('REDIRECT_URI_MOBILE_REGISTER'),
+        'mobile_login' => env('REDIRECT_URI_MOBILE_LOGIN'),
+        'prod' => env('REDIRECT_URI_PROD'),
+    ],
 
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),

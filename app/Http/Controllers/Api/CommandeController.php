@@ -480,8 +480,10 @@ class CommandeController extends Controller
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
             $total_price = $request->input('total_price');
+            $mobile=$request->input('mobile');
 
             $user = auth()->user();
+            $user->phone = $mobile;
 
             if (!$user) {
                 return ApiResponse::NOT_AUTHORIZED();
@@ -582,9 +584,8 @@ class CommandeController extends Controller
 
             $result = FlexPay::sendData($data, $method);
 
-            Log::info(json_encode($result));
 
-            if ($result['code'] != 0) {
+            if (!empty($result['code']) && $result['code'] != 0) {
 
                 return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result["message"]);
 
@@ -685,10 +686,14 @@ class CommandeController extends Controller
             $webhook_url = $request->input('webhook_sse_url');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
+            $mobile=$request->input('mobile');
 
 
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
+            $user = auth()->user();
+            $user->phone = $mobile;
+            $user->save();
 
             if ($method != "cart") {
                 $phone_check = new LibPhoneNumber($phone);
@@ -716,9 +721,8 @@ class CommandeController extends Controller
 
             $result = FlexPay::sendData($data, $method);
 
-            Log::info(json_encode($result));
 
-            if ($result['code'] != 0) {
+            if (!empty($result['code']) && $result['code'] != 0) {
 
                 return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result["message"]);
 
