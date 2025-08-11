@@ -6,6 +6,7 @@ use App\Enums\ActionOrderEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CategorieResource;
 use App\Http\Resources\CommandeResource;
+use App\Http\Resources\ProductResource;
 use App\Http\Resources\RestaurantResource;
 use App\Http\Resources\StatusResource;
 use App\Http\Resources\SubCategoryProductResource;
@@ -38,6 +39,17 @@ class RestaurantController extends Controller
             )
             ->get();
         return RestaurantResource::collection($restaurant);
+    }
+
+    public function product(string $slug){
+        try{
+            $product = Product::with(['restaurant',"currency","sub_category_product"])
+                ->where('slug', $slug)->first();
+            return new ProductResource($product);
+        }
+        catch (\Exception $e){
+            return ApiResponse::SERVER_ERROR($e);
+        }
     }
 
     public function show(Restaurant $restaurant)
