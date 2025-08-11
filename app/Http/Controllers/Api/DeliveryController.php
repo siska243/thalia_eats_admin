@@ -264,6 +264,8 @@ class DeliveryController extends Controller
             if ($commande?->user->expo_push_token) {
                 $push = new FirebasePushNotification();
                 $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.");
+
+                FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.");
             }
 
             return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant), "Saved", "Successfully confirmed commande");
