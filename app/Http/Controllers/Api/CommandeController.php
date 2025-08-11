@@ -450,9 +450,16 @@ class CommandeController extends Controller
 
                         $user = CurrentHelpers::getUserByOrder($order);
 
+                        $body = [
+                            'action' => 'new-order',
+                            'status' => $status_paiement,
+                        ];
+
                         if ($user->expo_push_token) {
                             $push = new FirebasePushNotification();
                             $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+
+                            FirebasePushNotification::sendNotification($user->expo_push_token, "Thalia eats commande", "Nouvelle commande");
                         }
                     }
 
@@ -619,9 +626,15 @@ class CommandeController extends Controller
                 'status' => $status_paiement,
             ];
 
-            $push = new FirebasePushNotification();
-            $push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', json_encode($body));
-            event(new PayementEvent($result['orderNumber']));
+            $user=auth()->user();
+            if($user->expo_push_token){
+                $push = new FirebasePushNotification();
+                $push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', json_encode($body));
+                event(new PayementEvent($result['orderNumber']));
+
+                FirebasePushNotification::sendNotification($user->expo_push_token,"Paiment", $result['message']);;
+            }
+
 
             return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
 
@@ -756,9 +769,16 @@ class CommandeController extends Controller
                 'status' => $status_paiement,
             ];
 
-            $push = new FirebasePushNotification();
-            $push->sendPushNotification(auth()->user()->expo_push_token, 'paiement', json_encode($body));
-            event(new PayementEvent($result['orderNumber']));
+            $user=auth()->user();
+            if($user->expo_push_token){
+
+                $push = new FirebasePushNotification();
+                $push->sendPushNotification(auth()->user()->expo_push_token, 'paiement', json_encode($body));
+                event(new PayementEvent($result['orderNumber']));
+
+                FirebasePushNotification::sendNotification($user->expo_push_token,"Paiement",$result['message']);
+            }
+
 
             return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
 

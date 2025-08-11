@@ -41,13 +41,13 @@ class RestaurantController extends Controller
         return RestaurantResource::collection($restaurant);
     }
 
-    public function product(string $slug){
-        try{
-            $product = Product::with(['restaurant',"currency","sub_category_product"])
+    public function product(string $slug)
+    {
+        try {
+            $product = Product::with(['restaurant', "currency", "sub_category_product"])
                 ->where('slug', $slug)->first();
             return new ProductResource($product);
-        }
-        catch (\Exception $e){
+        } catch (\Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -330,6 +330,8 @@ class RestaurantController extends Controller
                     if ($commande?->user->expo_push_token) {
                         $push = new FirebasePushNotification();
                         $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
+
+                        FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
                     }
                     //notification au livreur
 
@@ -346,6 +348,8 @@ class RestaurantController extends Controller
                     if ($commande?->user->expo_push_token) {
                         $push = new FirebasePushNotification();
                         $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
+
+                        FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
                     }
 
                     break;
@@ -391,6 +395,8 @@ class RestaurantController extends Controller
         if (!empty($tokens)) {
             $push = new FirebasePushNotification();
             $push->sendPushNotificationMultiUser($tokens, "Nouvelle commande", "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
+
+            FirebasePushNotification::sendMultiNotification($tokens, "Nouvelle commande", "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
         }
 
     }
