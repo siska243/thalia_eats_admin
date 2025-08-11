@@ -59,7 +59,7 @@ Route::prefix('/list-restaurant')->controller(RestaurantController::class)->grou
 
 Route::get('/categorie-restaurant/{restaurant:slug}', [RestaurantController::class, 'categorie']);
 Route::get('/menu/{restaurant:slug}/{slug}', [RestaurantController::class, 'productRestaurant']);
-Route::get('/menu/{restaurant:slug}/{slug}', [RestaurantController::class, 'productRestaurant']);
+Route::get('/product/{slug}', [RestaurantController::class, 'product']);
 
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
 Route::post('/activation-account', [AuthController::class, 'activation'])->name('api.activation');
