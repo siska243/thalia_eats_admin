@@ -13,16 +13,14 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\{ImageColumn, TextColumn, ToggleColumn};
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Filament\Tables\Actions\{ActionGroup,
     BulkActionGroup,
     DeleteBulkAction,
     EditAction,
     CreateAction,
     DeleteAction,
-    ViewAction};
+    ViewAction
+};
 
 class ProductResource extends Resource
 {
@@ -34,6 +32,7 @@ class ProductResource extends Resource
 
     public static function form(Form $form): Form
     {
+
         return $form
             ->schema(
                 [
@@ -46,19 +45,22 @@ class ProductResource extends Resource
                                         ->maxLength(65535),
                                     Select::make('restaurant_id')
                                         ->required()
+                                        ->default(fn() => request()->query('record'))
                                         ->relationship('restaurant', 'name')
-                                        ->options(Restaurant::where('is_active', true)->pluck('name', 'id'))
+                                        ->options(Restaurant::query()
+                                            ->where('is_active', true)
+                                            ->pluck('name', 'id'))
                                         ->searchable()
                                     ,
                                     Select::make('sub_category_product_id')
                                         ->required()
                                         ->relationship('sub_category_product', 'title')
-                                        ->options(SubCategoryProduct::where('is_active', true)->pluck('title', 'id'))
+                                        ->options(SubCategoryProduct::query()->where('is_active', true)->pluck('title', 'id'))
                                         ->searchable()
                                     ,
                                     Select::make('currency_id')
                                         ->relationship('currency', 'title')->label('Devise')->required()
-                                        ->options(Currency::where('is_active', 1)->pluck('title', 'id'))
+                                        ->options(Currency::query()->where('is_active', 1)->pluck('title', 'id'))
                                 ])->columns(2),
 
                             Section::make('Information complementaire')

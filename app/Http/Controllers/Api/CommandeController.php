@@ -500,7 +500,7 @@ class CommandeController extends Controller
             $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
 
             if ($commande) {
-                return ApiResponse::BAD_REQUEST(__(""), __("Oups"), __("Vous avez déjà de commande en cours, veuillez finaliser le paiement."));
+                return ApiResponse::BAD_REQUEST(__(""), __("Oups"), __("Une commande est déjà en cours. Accédez à Historique des commandes pour la payer ou l’annuler."));
             }
 
             $products = $request->input("products");
