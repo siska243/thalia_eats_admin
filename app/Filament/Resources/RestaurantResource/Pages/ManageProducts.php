@@ -3,8 +3,10 @@
 namespace App\Filament\Resources\RestaurantResource\Pages;
 
 use App\Filament\Resources\CommandeResource;
+use App\Filament\Resources\ProductResource;
 use App\Filament\Resources\RestaurantResource;
 use App\Models\Currency;
+use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\SubCategoryProduct;
 use Filament\Actions;
@@ -61,7 +63,7 @@ class ManageProducts extends ManageRelatedRecords
                                         ->relationship('restaurant', 'name')
                                         ->options(Restaurant::query()->where('is_active', true)->pluck('name', 'id'))
                                         ->disabled()
-                                        ->default(fn()=>$this->record->id)
+                                        ->default(fn() => $this->record->id)
                                         ->searchable()
                                     ,
                                     Select::make('sub_category_product_id')
@@ -127,11 +129,11 @@ class ManageProducts extends ManageRelatedRecords
                 //
             ])
             ->actions([
-                ActionGroup::make([
-                    EditAction::make(),
-                    ViewAction::make(),
-                    DeleteAction::make(),
-                ])
+
+                Tables\Actions\Action::make("edit")->url(fn(Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))->label(__("Edit")),
+                ViewAction::make(),
+                DeleteAction::make(),
+
 
             ])
             ->bulkActions([
@@ -141,6 +143,10 @@ class ManageProducts extends ManageRelatedRecords
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
+                ->label(__("Create Product"))
+                ->url(fn(): string => ProductResource::getUrl('create', ['record' => $this->record->id]))
+                ->icon('heroicon-o-plus')
+                ->openUrlInNewTab(),
             ])
             ->emptyStateActions([
                 CreateAction::make(),
