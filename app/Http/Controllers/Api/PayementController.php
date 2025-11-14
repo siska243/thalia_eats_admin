@@ -28,7 +28,7 @@ class PayementController extends Controller
             $payload = $request->all();
 
             // Log des données pour tester
-            //  Log::info('Webhook reçu:', $payload);
+             Log::info('Webhook reçu:', $payload);
 
             $reference = $request->input('reference');
             $amount = $request->input('amount');
@@ -133,6 +133,7 @@ class PayementController extends Controller
             return ApiResponse::SUCCESS_DATA('');
         } catch (Exception $e) {
 
+            Log::info('Webhook error reçu:', $e);
             return ApiResponse::SERVER_ERROR($e);
         }
     }

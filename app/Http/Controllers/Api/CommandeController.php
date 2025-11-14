@@ -770,6 +770,7 @@ class CommandeController extends Controller
             ];
 
             $user=auth()->user();
+            
             if($user->expo_push_token){
 
                 $push = new FirebasePushNotification();

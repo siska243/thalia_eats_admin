@@ -33,7 +33,7 @@ class DelivreryDriverResource extends Resource
                     ->schema(
                         [
                             Select::make('user_id')
-                                ->relationship('user', 'name', modifyQueryUsing: fn($query) => $query->whereRelation('delivrery_driver', 'type_user', 'drivers'))
+                                ->relationship('user', 'name')
                                 ->preload()
                                 ->searchable(),
                             Forms\Components\DatePicker::make('birth_date'),
@@ -110,7 +110,7 @@ class DelivreryDriverResource extends Resource
             'index' => Pages\ListDelivreryDrivers::route('/'),
             'create' => Pages\CreateDelivreryDriver::route('/create'),
             'edit' => Pages\EditDelivreryDriver::route('/{record}/edit'),
-            'commande'=>Pages\ManageCommandeProducts::route('/{record}/commandes'),
+            'commande' => Pages\ManageCommandeProducts::route('/{record}/commandes'),
         ];
     }
 }
