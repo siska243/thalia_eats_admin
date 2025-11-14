@@ -7,6 +7,7 @@ use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+
 class EditUser extends EditRecord
 {
     protected static string $resource = UserResource::class;
@@ -18,7 +19,7 @@ class EditUser extends EditRecord
         ];
     }
 
-    public function handleRecordUpdate(Model $record,array $data):Model
+    public function handleRecordUpdate(Model $record, array $data): Model
     {
         $slug = Str::slug($data['name'] . '-' . time() . '-' . $data['last_name']);
 
@@ -26,9 +27,12 @@ class EditUser extends EditRecord
         $data['slug'] = $slug;
         $roleName = $data['role_user'] ?? '';
 
-        if(!empty($data['changePassword'])){
+        if (!empty($data['changePassword'])) {
             unset($data['changePassword']);
             unset($data['password_confirmation']);
+        }
+        if (isset($data['changePassword'])) {
+            unset($data['changePassword']);
         }
 
         //unset($data['role']);
