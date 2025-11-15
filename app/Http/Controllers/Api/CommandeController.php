@@ -581,7 +581,7 @@ class CommandeController extends Controller
                 'email' => $user_email,
                 'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code'] : "CDF",
                 'reference' => $commande->refernce,
-                'callback_url' => $callback_url,
+                'callback_url' => "https://app.thaliaeats.com/api/webhook-paiement-flexpay",
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
                 "decline_url" => $error_url,
@@ -770,7 +770,7 @@ class CommandeController extends Controller
             ];
 
             $user=auth()->user();
-            
+
             if($user->expo_push_token){
 
                 $push = new FirebasePushNotification();

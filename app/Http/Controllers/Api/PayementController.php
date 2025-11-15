@@ -28,7 +28,7 @@ class PayementController extends Controller
             $payload = $request->all();
 
             // Log des données pour tester
-             Log::info('Webhook reçu:', $payload);
+            Log::info('Webhook reçu:', $payload);
 
             $reference = $request->input('reference');
             $amount = $request->input('amount');
@@ -43,8 +43,13 @@ class PayementController extends Controller
                 ->with('user')
                 ->where('refernce', $reference)->first();
 
+            try {
+                $result = FlexPay::checkPaiement($orderNumber);
+            } catch (\Exception $e) {
 
-            $result = FlexPay::checkPaiement($orderNumber);
+                return ApiResponse::SERVER_ERROR($e);
+            }
+
 
             if ($result['code'] != 0) {
 
@@ -118,11 +123,13 @@ class PayementController extends Controller
 
                 }
 
-                if($order?->user?->expo_push_token){
+                if ($order?->user?->expo_push_token) {
+                    
                     $push = new FirebasePushNotification();
+
                     $push->sendPushNotification($order?->user->expo_push_token, $result['message'], json_encode($body));
 
-                    FirebasePushNotification::sendNotification($order?->user->expo_push_token,"Etat commande thalia", $result['message']);
+                    FirebasePushNotification::sendNotification($order?->user->expo_push_token, "État commande thalia", $result['message']);
                 }
 
 
