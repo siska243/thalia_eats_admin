@@ -244,7 +244,9 @@ class DeliveryController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
 
-            $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
+
+            $commande = Commande::query()
+                ->where('id', Cipher::Decrypt($uid_order))
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->where('code_confirmation_restaurant', $code)
                 //->where('status_id', 2)

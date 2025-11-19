@@ -10,19 +10,17 @@ class CurrentHelpers
 {
     public static function getUserByOrder(Commande $order): User|Model|null
     {
-        $orders = Commande::query()->with(
+        $order = $order->loadMissing(
             [
                 'commande_products',
                 'commande_products.product',
                 'commande_products.product.restaurant',
                 'commande_products.product.restaurant.user'
             ]
-        )
-            ->where('id', $order)
-            ->first();
+        );
 
-        if($orders->commande_products->count() > 0){
-            $cmd=$orders->commande_products->first();
+        if ($order->commande_products->count() > 0) {
+            $cmd = $order->commande_products->first();
             return $cmd?->product?->restaurant?->user;
         }
 
