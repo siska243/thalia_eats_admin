@@ -46,11 +46,11 @@ class CommandeResource extends Resource
                         Forms\Components\TextInput::make('delivrery_driver_id')
                             ->numeric(),
                         Forms\Components\TextInput::make('adresse_delivery')
-                            ,
+                        ,
                         Forms\Components\TextInput::make('street')
-                            ,
+                        ,
                         Forms\Components\TextInput::make('number_street')
-                            ,
+                        ,
 
                         Forms\Components\Select::make('town_id')
                             ->relationship('town', 'title'),
@@ -97,7 +97,7 @@ class CommandeResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('delivrery_driver')
                     ->label(__("Livreur"))
-                    ->formatState(fn($record) => $record->delivrery_driver ? "{$record->delivrery_driver->user->last_name} {$record->delivrery_driver->user->name}" : '-')
+                    ->formatState(fn($record) => $record?->delivrery_driver ? "{$record->delivrery_driver?->user?->last_name} {$record?->delivrery_driver?->user?->name}" : '-')
                     ->numeric()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('adresse_delivery')
