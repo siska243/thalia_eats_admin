@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\ActionOrderEnum;
+use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CategorieResource;
 use App\Http\Resources\CommandeResource;
@@ -246,7 +247,7 @@ class DeliveryController extends Controller
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->where('code_confirmation_restaurant', $code)
-                ->where('status_id', 2)
+                //->where('status_id', 2)
                 ->first();
 
             if (!$time) return ApiResponse::BAD_REQUEST('', 'Oups!!', "L'heure de livraison de la commande est obligatoire");
@@ -286,12 +287,10 @@ class DeliveryController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
-
-
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->where('code_confirmation', $code)
-                ->where('status_id', 2)
+                //->where('status_id', 2)
                 ->first();
 
 
@@ -300,6 +299,18 @@ class DeliveryController extends Controller
             if (!$commande) return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
 
 
+            $user = CurrentHelpers::getUserByOrder($commande);
+
+            if ($user) {
+
+
+                if ($user?->expo_push_token) {
+
+                    $ref = $commande->refernce;
+                    FirebasePushNotification::sendNotification($user->expo_push_token, "Thalia eats commande", "La commande {$ref} à été livrée");
+                }
+
+            }
             $commande->status_id = 3;
 
             $commande->delivery_at = Carbon::now();

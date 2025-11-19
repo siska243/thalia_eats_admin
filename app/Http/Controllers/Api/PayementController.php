@@ -124,7 +124,7 @@ class PayementController extends Controller
                 }
 
                 if ($order?->user?->expo_push_token) {
-                    
+
                     $push = new FirebasePushNotification();
 
                     $push->sendPushNotification($order?->user->expo_push_token, $result['message'], json_encode($body));
