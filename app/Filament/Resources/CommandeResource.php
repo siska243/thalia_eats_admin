@@ -98,7 +98,7 @@ class CommandeResource extends Resource
                 Tables\Columns\TextColumn::make('delivrery_driver')
                     ->label(__("Livreur"))
                     ->formatState(fn($record) => $record?->delivrery_driver ? "{$record->delivrery_driver?->user?->last_name} {$record?->delivrery_driver?->user?->name}" : '-')
-                    ->sortable(),
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('adresse_delivery')
                     ->sortable(),
 
