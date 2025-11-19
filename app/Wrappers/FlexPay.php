@@ -30,12 +30,12 @@ class FlexPay
             "decline_url" => $data['decline_url'],
             'language' => "fr",
             'description' => !empty($data['description']) ? $data['description'] : "",
-            'name'=>$data['name'],
-            'email'=>$data['email'],
+            'name' => $data['name'],
+            'email' => $data['email'],
         ];
 
-        if($method != 'mobile'){
-            $token=self::getConfig()?->token;
+        if ($method != 'mobile') {
+            $token = self::getConfig()?->token;
             $formData["authorization"] = "Bearer {$token}";
         }
 
@@ -50,7 +50,7 @@ class FlexPay
 
     }
 
-    public static function checkPaiement(string $orderNumber)
+    public static function checkPaiement(?string $orderNumber)
     {
         try {
             $url = self::url . "/check/" . $orderNumber;

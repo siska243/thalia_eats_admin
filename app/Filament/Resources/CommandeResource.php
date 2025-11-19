@@ -78,6 +78,14 @@ class CommandeResource extends Resource
                 Tables\Columns\TextColumn::make('refernce')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
+
+                Tables\Columns\TextColumn::make('code_confirmation')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('code_confirmation_restaurant')
+                    ->toggleable(isToggledHiddenByDefault: true)
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('global_price')
                     ->numeric()
                     ->sortable(),
