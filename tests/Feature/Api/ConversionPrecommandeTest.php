@@ -155,7 +155,7 @@ class ConversionPrecommandeTest extends TestCase
             'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
         ], 200)]);
 
-        $this->postJson('/api/webhook-paiement-flexpay', [
+        $response = $this->postJson('/api/webhook-paiement-flexpay', [
             'reference' => '4242',
             'orderNumber' => 'ORD-1',
             'amount' => 7000,
@@ -166,8 +166,133 @@ class ConversionPrecommandeTest extends TestCase
             'provider_reference' => 'PROV-1',
         ]);
 
+        // L'enveloppe de succes attendue : sans elle, un garde qui renvoie
+        // toujours "reference inconnue" (par ex. `if (true)` a la place du
+        // garde reel) passerait quand meme sur le seul critere de comptage.
+        $response->assertStatus(201);
+        $response->assertJson(['title' => 'Crée', 'message' => 'La resource a été crée']);
+
+        // Une ligne payements a bien ete ecrite pour CETTE commande : preuve
+        // que le chemin Payement::updateOrCreate($order->id, ...) a ete
+        // atteint, et non court-circuite par le nouveau garde.
+        $this->assertDatabaseHas('payements', ['commande_id' => $commande->id]);
+
         // Aucune Commande supplémentaire n'a été créée par l'extension.
         $this->assertSame(1, Commande::query()->count());
         $this->assertSame('4242', Commande::query()->first()->refernce);
+    }
+
+    public function test_le_webhook_d_une_commande_ordinaire_payee_met_a_jour_son_statut(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $commande = Commande::query()->create([
+            'refernce' => '4243',
+            'user_id' => \App\Models\User::factory()->create()->id,
+            'status_id' => 5,
+            'global_price' => 7000,
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => '4243',
+            'orderNumber' => 'ORD-2',
+            'amount' => 7000,
+            'amountCustomer' => 7000,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000001',
+            'provider_reference' => 'PROV-2',
+        ]);
+
+        $commande->refresh();
+
+        $this->assertSame(2, (int) $commande->status_id);
+        $this->assertNotNull($commande->paied_at);
+    }
+
+    public function test_le_webhook_convertit_une_precommande_payee(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-P1',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000002',
+            'provider_reference' => 'PROV-P1',
+        ]);
+
+        $this->assertSame(1, Commande::query()->count());
+        $commande = Commande::query()->first();
+        $this->assertDatabaseHas('payements', ['commande_id' => $commande->id]);
+
+        // La meme livraison rejouee : le webhook ne trouve plus de
+        // pre-commande en_attente (elle est deja payee) et ne cree pas de
+        // seconde Commande.
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-P1',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000002',
+            'provider_reference' => 'PROV-P1',
+        ]);
+
+        $this->assertSame(1, Commande::query()->count());
+    }
+
+    public function test_le_webhook_ne_convertit_pas_une_precommande_non_payee(): void
+    {
+        // code 2 : "Paiement en attente", non paye — c'est le cas majoritaire
+        // d'un paiement mobile money lance mais pas encore confirme par le
+        // client sur son telephone. Convertir ici encaisserait rien et
+        // ferait cuisiner un repas non paye.
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '2'],
+            ['name' => 'Paiement en attente', 'is_paid' => false, 'is_default' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '2'],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-P2',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000003',
+            'provider_reference' => 'PROV-P2',
+        ]);
+
+        $this->assertSame(0, Commande::query()->count());
+
+        $precommande->refresh();
+        $this->assertSame(Precommande::STATUT_EN_ATTENTE, $precommande->status);
     }
 }

@@ -72,11 +72,22 @@ class PayementController extends Controller
                 // n'est donc null ici que pour une référence qui n'a jamais été une
                 // commande : le chemin Commande ci-dessus est rigoureusement inchangé.
                 if (! $order) {
-                    $order = app(\App\Services\ConversionPrecommande::class)
-                        ->convertirSiPossible($reference);
+                    // $result['code'] dit que l'appel de verification a abouti, PAS
+                    // que le client a paye. C'est transaction.status, resolu en
+                    // StatusPayement.is_paid, qui le dit — et c'est deja ce que
+                    // teste le code existant plus bas. Convertir avant ce test
+                    // ferait cuisiner un repas non paye, et brulerait la
+                    // pre-commande pour le vrai paiement arrivant ensuite.
+                    if ($status_paiement?->is_paid) {
+                        $order = app(\App\Services\ConversionPrecommande::class)
+                            ->convertirSiPossible($reference);
+                    }
 
                     if (! $order) {
-                        Log::warning('webhook: reference inconnue', ['reference' => $reference]);
+                        Log::warning('webhook: aucune commande pour cette reference', [
+                            'reference' => $reference,
+                            'paye' => (bool) $status_paiement?->is_paid,
+                        ]);
 
                         return ApiResponse::GET_DATA(['message' => 'Référence inconnue']);
                     }
