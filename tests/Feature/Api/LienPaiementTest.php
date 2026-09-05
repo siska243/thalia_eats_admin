@@ -1,0 +1,148 @@
+<?php
+
+namespace Tests\Feature\Api;
+
+use App\Models\Precommande;
+use App\Wrappers\Cipher;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\URL;
+use Tests\TestCase;
+
+class LienPaiementTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Http::fake(['*' => Http::response([
+            'code' => 0, 'orderNumber' => 'TEST-ORDER-1', 'message' => 'Transaction initiee',
+        ], 200)]);
+    }
+
+    private function lien(Precommande $p, ?\DateTimeInterface $expiration = null): string
+    {
+        return URL::temporarySignedRoute(
+            'precommande.paiement',
+            $expiration ?: $p->expires_at,
+            ['uid' => Cipher::Encrypt($p->id)],
+        );
+    }
+
+    public function test_un_lien_valide_affiche_le_recapitulatif(): void
+    {
+        $p = Precommande::factory()->create();
+
+        $this->get($this->lien($p))->assertStatus(200)->assertSee($p->refernce);
+    }
+
+    public function test_un_lien_sans_signature_est_refuse(): void
+    {
+        $p = Precommande::factory()->create();
+
+        $this->get('/paiement/precommande/'.Cipher::Encrypt($p->id))->assertStatus(403);
+    }
+
+    public function test_un_lien_dont_la_signature_est_alteree_est_refuse(): void
+    {
+        $p = Precommande::factory()->create();
+
+        $this->get($this->lien($p).'X')->assertStatus(403);
+    }
+
+    public function test_un_lien_vers_une_precommande_expiree_ne_paie_rien(): void
+    {
+        $p = Precommande::factory()->expiree()->create();
+
+        // Signature encore valable, mais la pré-commande ne l'est plus :
+        // la signature seule ne suffit jamais.
+        $this->get($this->lien($p, now()->addHour()))
+            ->assertStatus(410)
+            ->assertSee('expir', false);
+    }
+
+    public function test_un_lien_rejoue_apres_paiement_ne_paie_rien(): void
+    {
+        $p = Precommande::factory()->payee()->create();
+
+        $this->get($this->lien($p, now()->addHour()))->assertStatus(410);
+    }
+
+    public function test_l_initiation_enregistre_la_reference_de_paiement(): void
+    {
+        $p = Precommande::factory()->create();
+
+        $this->post(route('precommande.paiement.initier', ['uid' => Cipher::Encrypt($p->id)]), [
+            'phone' => '+243810000000',
+        ])->assertRedirect();
+
+        $this->assertSame('TEST-ORDER-1', $p->fresh()->reference_paiement);
+    }
+
+    public function test_l_initiation_envoie_le_total_fige_a_flexpay(): void
+    {
+        $p = Precommande::factory()->create(['total' => 5500]);
+
+        $this->post(route('precommande.paiement.initier', ['uid' => Cipher::Encrypt($p->id)]), [
+            'phone' => '+243810000000',
+        ]);
+
+        Http::assertSent(fn ($request) => (float) $request['amount'] === 5500.0);
+    }
+
+    public function test_l_initiation_sur_une_precommande_expiree_est_refusee(): void
+    {
+        $p = Precommande::factory()->expiree()->create();
+
+        $this->post(route('precommande.paiement.initier', ['uid' => Cipher::Encrypt($p->id)]), [
+            'phone' => '+243810000000',
+        ])->assertStatus(410);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_l_application_peut_initier_le_paiement_sans_lien(): void
+    {
+        $moi = \App\Models\User::factory()->create();
+        \Laravel\Sanctum\Sanctum::actingAs($moi, ['*']);
+
+        $p = Precommande::factory()->create(['user_id' => $moi->id, 'total' => 5500]);
+
+        $this->postJson('/api/precommandes/'.Cipher::Encrypt($p->id).'/paiement', [
+            'phone' => '+243810000000',
+        ])->assertStatus(200);
+
+        $this->assertSame('TEST-ORDER-1', $p->fresh()->reference_paiement);
+    }
+
+    public function test_l_application_ne_paie_pas_la_precommande_d_un_autre(): void
+    {
+        \Laravel\Sanctum\Sanctum::actingAs(\App\Models\User::factory()->create(), ['*']);
+
+        $p = Precommande::factory()->create();
+
+        $this->postJson('/api/precommandes/'.Cipher::Encrypt($p->id).'/paiement', [
+            'phone' => '+243810000000',
+        ])->assertStatus(404);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_un_assistant_ne_peut_pas_declencher_un_paiement(): void
+    {
+        // L'ability n'existe pas : le lien de paiement EST la confirmation
+        // humaine, un agent ne doit jamais engager d'argent seul.
+        $moi = \App\Models\User::factory()->create();
+        \Laravel\Sanctum\Sanctum::actingAs($moi, \App\Enums\TokenAbility::agent());
+
+        $p = Precommande::factory()->create(['user_id' => $moi->id]);
+
+        $this->postJson('/api/precommandes/'.Cipher::Encrypt($p->id).'/paiement', [
+            'phone' => '+243810000000',
+        ])->assertStatus(403);
+
+        Http::assertNothingSent();
+    }
+}

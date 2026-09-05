@@ -172,6 +172,10 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
+Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecriture'])->group(function () {
+    Route::post('/precommandes/{uid}/paiement', [\App\Http\Controllers\Api\PrecommandeController::class, 'payer']);
+});
+
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
     Route::get('/', 'index');
     Route::get('/preview', 'preview');

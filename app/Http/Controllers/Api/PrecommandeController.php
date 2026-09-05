@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\PrecommandeRefusee;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\PaiementPrecommandeController;
 use App\Http\Requests\PrecommandeRequest;
 use App\Http\Resources\PrecommandeResource;
 use App\Models\Precommande;
@@ -12,6 +13,7 @@ use App\Models\Town;
 use App\Services\PrecommandeService;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
+use App\Wrappers\LibPhoneNumber;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -96,6 +98,37 @@ class PrecommandeController extends Controller
                 ['lien_paiement' => $precommande->estValide() ? $this->lienDePaiement($precommande) : null],
             ),
         ]);
+    }
+
+    public function payer(Request $request, string $uid): JsonResponse
+    {
+        $precommande = $this->sienne($request, $uid);
+
+        if (! $precommande) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette pré-commande est introuvable');
+        }
+
+        if (! $precommande->estValide()) {
+            return ApiResponse::BAD_REQUEST(
+                'precommande_indisponible',
+                'Oups',
+                'Cette pré-commande a expiré ou a déjà été payée.'
+            );
+        }
+
+        $phone = (string) $request->input('phone');
+
+        if (! (new LibPhoneNumber($phone))->checkValidationNumber()) {
+            return ApiResponse::BAD_REQUEST('telephone_invalide', 'Oups', 'Numéro de téléphone invalide.');
+        }
+
+        $result = app(PaiementPrecommandeController::class)->initierFlexPay($precommande, $phone);
+
+        if (! empty($result['code']) && $result['code'] != 0) {
+            return ApiResponse::BAD_REQUEST('paiement_refuse', 'Oups', $result['message'] ?? 'Paiement impossible.');
+        }
+
+        return ApiResponse::GET_DATA($result);
     }
 
     /**
