@@ -134,6 +134,10 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
 
 });
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/quote', [\App\Http\Controllers\Api\QuotationController::class, 'quote']);
+});
+
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
     Route::get('/', 'index');
     Route::get('/preview', 'preview');
