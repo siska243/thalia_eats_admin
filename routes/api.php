@@ -145,9 +145,14 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
 });
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/quote', [\App\Http\Controllers\Api\QuotationController::class, 'quote']);
-    Route::get('/products/search', [\App\Http\Controllers\Api\ProductSearchController::class, 'index']);
-    Route::post('/budget-suggestions', [\App\Http\Controllers\Api\QuotationController::class, 'budgetSuggestions']);
+    Route::middleware('ability:catalogue:lire')->group(function () {
+        Route::get('/products/search', [\App\Http\Controllers\Api\ProductSearchController::class, 'index']);
+    });
+
+    Route::middleware('ability:devis:calculer')->group(function () {
+        Route::post('/quote', [\App\Http\Controllers\Api\QuotationController::class, 'quote']);
+        Route::post('/budget-suggestions', [\App\Http\Controllers\Api\QuotationController::class, 'budgetSuggestions']);
+    });
 });
 
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
