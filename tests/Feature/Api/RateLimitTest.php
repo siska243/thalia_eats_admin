@@ -92,6 +92,31 @@ class RateLimitTest extends TestCase
             ->assertStatus(200);
     }
 
+    public function test_deux_appareils_du_meme_client_partagent_un_seul_seau(): void
+    {
+        // L'invariant que le terme tokenCan('*') protege. Sans lui, le
+        // limiteur api compterait par jeton pour TOUT le monde et deux
+        // telephones du meme client obtiendraient 60 requetes chacun au lieu
+        // de 60 a eux deux : un assouplissement silencieux du quota de
+        // production, exactement la regression que ce correctif ne doit pas
+        // introduire.
+        $user = User::factory()->create();
+
+        $telephone = $user->createToken('telephone', ['*'])->plainTextToken;
+        $tablette = $user->createToken('tablette', ['*'])->plainTextToken;
+
+        for ($i = 0; $i < 60; $i++) {
+            $this->withHeader('Authorization', 'Bearer '.$telephone)->getJson('/api/user');
+        }
+
+        Auth::forgetGuards();
+
+        // Le second appareil trouve le seau deja vide : c'est bien le meme.
+        $this->withHeader('Authorization', 'Bearer '.$tablette)
+            ->getJson('/api/user')
+            ->assertStatus(429);
+    }
+
     public function test_l_emission_de_jetons_est_severement_limitee(): void
     {
         Sanctum::actingAs(User::factory()->create(), ['*']);
