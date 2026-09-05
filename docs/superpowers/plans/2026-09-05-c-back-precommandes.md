@@ -1313,6 +1313,10 @@ Expected: PASS, 6 tests.
 Les deux nouvelles tables doivent entrer dans le dump, sans quoi un clone neuf ne les aura pas.
 
 ```bash
+# schema:dump lit la connexion PAR DEFAUT, pas celle de --env=testing : sans ce
+# premier migrate sur la base de developpement, le dump manquerait les nouvelles
+# tables et un clone neuf ne les aurait pas.
+php artisan migrate
 php artisan migrate --env=testing
 php artisan schema:dump
 php artisan db:wipe --force --env=testing && php artisan migrate --force --env=testing
