@@ -81,6 +81,18 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Integrite du paiement : incoherences relevees par le webhook FlexPay.
+        // Separe de « quotation » (canal de la fonctionnalite agent) pour qu'une
+        // alerte de paiement ne s'y noie pas — la securite residuelle du mode
+        // ouvert repose entierement sur le fait que ce journal soit lu.
+        'paiement' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/paiement.log'),
+            'level' => 'debug',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
