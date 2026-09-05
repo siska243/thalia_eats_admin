@@ -82,36 +82,53 @@ Aucun test réel n'existe (`tests/` ne contient que les `ExampleTest`) et aucune
   `Product::factory()`, `DelivreryPrice::factory()`, `Status::factory()`.
   États nommés : `Restaurant::factory()->inactive()`, `Restaurant::factory()->located(float $lat, float $lng)`, `Product::factory()->inactive()`, `DelivreryPrice::factory()->inactive()`.
 
-- [ ] **Step 1: Créer la base de test MySQL**
+- [ ] **Step 1: Vérifier la base de test MySQL**
 
-SQLite n'est pas une option : l'index `FULLTEXT` de la tâche 6 est spécifique à MySQL et ferait échouer les migrations.
+Elle a déjà été créée pendant la préparation. Le client `mysql` en ligne de
+commande refuse `root` sans mot de passe sur cette machine : passer par Laravel,
+qui dispose des identifiants du `.env`.
 
 ```bash
-mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS thalia_eats_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+php artisan tinker --execute="DB::statement('CREATE DATABASE IF NOT EXISTS thalia_eats_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'); echo 'ok';"
 ```
 
-- [ ] **Step 2: Créer `.env.testing`**
+Expected: `ok`. La commande est idempotente.
 
-Copier `.env` puis remplacer la section base de données. `APP_KEY` doit être identique à celui de `.env` — `Cipher` n'en dépend pas, mais Laravel refuse de démarrer sans.
+SQLite n'est pas une option : l'index `FULLTEXT` de la tâche 4 est spécifique à
+MySQL et ferait échouer les migrations.
+
+- [ ] **Step 2: Créer `.env.testing`**
 
 ```bash
 cp .env .env.testing
 ```
 
-Puis éditer `.env.testing` pour que ces lignes valent exactement :
+**Attention : les lignes de ce `.env` sont indentées** (elles commencent par des
+espaces). Laravel les tolère ; il faut donc éditer les lignes existantes en
+place plutôt que d'en ajouter de nouvelles en début de ligne, sinon la clé se
+retrouve en double et c'est la première lue qui gagne.
+
+Après édition, `.env.testing` doit contenir exactement ces valeurs (l'indentation
+d'origine peut être conservée) :
 
 ```
 APP_ENV=testing
 DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
 DB_DATABASE=thalia_eats_test
-DB_USERNAME=root
-DB_PASSWORD=
 QUOTATION_AUTHORITATIVE=false
 ```
 
-Adapter `DB_USERNAME` / `DB_PASSWORD` à l'installation locale.
+`DB_HOST`, `DB_PORT`, `DB_USERNAME` et `DB_PASSWORD` sont repris du `.env` sans
+modification — ils pointent déjà sur le bon serveur. `APP_KEY` doit rester
+identique à celui du `.env`.
+
+Vérifier ensuite :
+
+```bash
+php artisan tinker --env=testing --execute="echo config('database.connections.mysql.database');"
+```
+
+Expected: `thalia_eats_test`
 
 - [ ] **Step 3: Vérifier que `.env.testing` est ignoré par git**
 
@@ -134,7 +151,55 @@ Dans `phpunit.xml`, supprimer ces deux lignes :
         <!-- <env name="DB_DATABASE" value=":memory:"/> -->
 ```
 
-- [ ] **Step 5: Écrire le test d'infrastructure (il doit échouer)**
+- [ ] **Step 5: Générer le dump de schéma**
+
+**L'historique des migrations de ce dépôt n'est pas rejouable à zéro.** Vérifié :
+un `migrate` sur une base vide échoue sur trois migrations successives —
+
+1. `2023_11_01_201908_currencies_to_product_column.php` : `Duplicate column name 'currency_id'`, elle fait doublon avec `2023_11_01_193157_currency_to_product_column.php` ;
+2. `2023_11_08_102129_rename_table_roles.php` : `Table 'roles_user' doesn't exist` ;
+3. `2023_11_08_121208_create_permission_tables.php` : `Table 'roles' already exists`.
+
+`RefreshDatabase` est donc inutilisable en l'état. **Ne pas corriger ces trois
+migrations** : elles sont déjà enregistrées comme exécutées en production, les
+toucher ne réparerait rien là-bas et risquerait d'en casser le rejeu. La réponse
+prévue par Laravel pour exactement ce cas est le dump de schéma : `migrate` le
+charge quand la table `migrations` est vide, puis n'applique que les migrations
+postérieures.
+
+```bash
+php artisan schema:dump
+```
+
+Expected: `Database schema dumped successfully.` et un fichier
+`database/schema/mysql-schema.sql` d'environ 43 Ko.
+
+Le dump est généré depuis la base de développement (`thalia_eats`), qui est la
+référence réelle du schéma. Il ne contient **aucune donnée métier** — seulement
+la structure et les lignes de la table `migrations`.
+
+Vérifier que le rejeu à zéro fonctionne désormais :
+
+```bash
+php artisan db:wipe --force --env=testing && php artisan migrate --force --env=testing
+```
+
+Expected: aucune erreur, puis `Nothing to migrate.` sur un second appel.
+
+Vérifier enfin le nombre de tables et une colonne dont le fichier de migration
+diverge de la base :
+
+```bash
+php artisan tinker --env=testing --execute="echo count(DB::select('SHOW TABLES')).' tables; category_product_id: '.(Schema::hasColumn('sub_category_products','category_product_id')?'OK':'ABSENTE');"
+```
+
+Expected: `40 tables; category_product_id: OK`
+
+**Ce dump n'a aucun effet sur la production.** `script-run.sh` lance
+`migrate --force` sur une base dont la table `migrations` est pleine : le dump
+n'est chargé que lorsqu'elle est vide.
+
+- [ ] **Step 6: Écrire le test d'infrastructure (il doit échouer)**
 
 Créer `tests/Feature/InfrastructureTest.php` :
 
@@ -181,12 +246,12 @@ class InfrastructureTest extends TestCase
 }
 ```
 
-- [ ] **Step 6: Lancer le test pour vérifier qu'il échoue**
+- [ ] **Step 7: Lancer le test pour vérifier qu'il échoue**
 
 Run: `php artisan test tests/Feature/InfrastructureTest.php`
 Expected: FAIL — `Call to undefined method App\Models\Product::factory()` ou `Class "Database\Factories\ProductFactory" not found`.
 
-- [ ] **Step 7: Créer les factories**
+- [ ] **Step 8: Créer les factories**
 
 `database/factories/CurrencyFactory.php` :
 
@@ -360,8 +425,9 @@ class SubCategoryProductFactory extends Factory
             'slug' => Str::slug($title).'-'.Str::random(8),
             'picture' => null,
             'is_active' => true,
-            // La migration cree bien « category_id », pas « category_product_id ».
-            'category_id' => CategoryProduct::factory(),
+            // Colonne verifiee sur la base reelle : category_product_id.
+            // Le fichier de migration, qui dit « category_id », est perime.
+            'category_product_id' => CategoryProduct::factory(),
         ];
     }
 }
@@ -473,29 +539,37 @@ class StatusFactory extends Factory
 }
 ```
 
-- [ ] **Step 8: Lancer le test pour vérifier qu'il passe**
+- [ ] **Step 9: Lancer le test pour vérifier qu'il passe**
 
 Run: `php artisan test tests/Feature/InfrastructureTest.php`
 Expected: PASS, 3 tests.
 
 Si `RefreshDatabase` échoue sur une migration, corriger la factory concernée avant de continuer — toutes les tâches suivantes en dépendent.
 
-- [ ] **Step 9: Vérifier que la base de développement n'a pas été touchée**
+- [ ] **Step 10: Vérifier que la base de développement n'a pas été touchée**
 
 Run: `php artisan test tests/Feature/InfrastructureTest.php && grep '^DB_DATABASE' .env`
 Expected: le test passe ET `DB_DATABASE` du `.env` de développement est inchangé. La suite doit avoir tourné exclusivement sur `thalia_eats_test`.
 
-- [ ] **Step 10: Formater et committer**
+- [ ] **Step 11: Formater et committer**
 
 ```bash
 ./vendor/bin/pint
-git add phpunit.xml database/factories tests/Feature/InfrastructureTest.php
-git commit -m "test: base MySQL dediee et factories du catalogue
+git add phpunit.xml database/schema/mysql-schema.sql database/factories tests/Feature/InfrastructureTest.php
+git commit -m "test: base MySQL dediee, dump de schema et factories
 
 Les tests tapaient jusqu'ici la base du .env. Bascule sur une base
-thalia_eats_test via .env.testing, et ajout des factories manquantes
-pour Currency, Town, Restaurant, CategoryProduct, SubCategoryProduct,
-Product, DelivreryPrice et Status.
+thalia_eats_test via .env.testing.
+
+L'historique des migrations n'est pas rejouable a zero : doublon de
+currency_id sur products, rename d'une table roles_user inexistante,
+et collision entre la table roles du projet et celle de spatie.
+RefreshDatabase etait donc inutilisable. Le dump de schema est la
+reponse prevue par Laravel : migrate le charge quand la table
+migrations est vide. Aucun effet en production, ou elle est pleine.
+
+Ajout des factories manquantes pour Currency, Town, Restaurant,
+CategoryProduct, SubCategoryProduct, Product, DelivreryPrice et Status.
 
 SQLite n'est pas utilisable : l'index FULLTEXT a venir est specifique
 a MySQL."
@@ -1528,16 +1602,21 @@ Les deux fichiers appartiennent à des dépôts distincts : ce sont bien deux co
 
 Aucune recherche de produit n'existe aujourd'hui : `RestaurantController::index()` ne cherche que dans `restaurants.name` et `description`, et renvoie tout le parc sans pagination. Cette tâche apporte la première recherche catalogue, utile à l'agent mais aussi au web et au mobile.
 
-**Filtre catégorie volontairement absent.** Le schéma et le code se contredisent sur la clé étrangère des sous-catégories :
+**Contradiction schéma / code, tranchée.** Le fichier de migration
+`2023_10_31_115717_create_sub_category_products_table.php` crée
+`foreignIdFor(CategoryProduct::class, 'category_id')`, alors que
+`SubCategoryProduct::category_product()` et
+`app/Filament/Resources/SubCategoryProductResource.php:39` référencent
+`category_product_id`.
 
-- `database/migrations/2023_10_31_115717_create_sub_category_products_table.php` crée `foreignIdFor(CategoryProduct::class, 'category_id')` — donc une colonne **`category_id`** ;
-- `app/Models/SubCategoryProduct::category_product()` déclare `belongsTo(CategoryProduct::class, 'category_product_id')` ;
-- `app/Filament/Resources/SubCategoryProductResource.php:39` utilise également `category_product_id`.
+**Vérification faite sur la base réelle** (`Schema::hasColumn`) : la colonne est
+**`category_product_id`**. C'est le fichier de migration qui est périmé — la base
+a dérivé de son historique. Le modèle et l'écran admin sont corrects.
 
-Les deux ne peuvent pas être vrais en même temps : soit la base de production a dérivé du fichier de migration, soit la relation et l'écran admin sont cassés. On ne construit pas un filtre public sur cette relation tant que la question n'est pas tranchée. La recherche expose donc `sub_category` — qui s'appuie sur `products.sub_category_product_id`, dont l'existence est certaine — et pas `category`. Le plein texte couvre l'essentiel du besoin en attendant.
-
-À trancher séparément, avec un accès à la base de production :
-`SHOW COLUMNS FROM sub_category_products LIKE '%categ%';`
+Conséquences : la factory utilise `category_product_id`, le filtre `category`
+s'appuie sans risque sur la relation `sub_category_product.category_product`, et
+le fichier de migration périmé n'est **pas** corrigé ici (le dump de schéma de la
+tâche 1 gouverne désormais les installations neuves, ce qui le rend inoffensif).
 
 **Files:**
 - Create: `database/migrations/2026_09_05_120000_add_fulltext_index_to_products_table.php`
@@ -1554,7 +1633,7 @@ Les deux ne peuvent pas être vrais en même temps : soit la base de production 
 - Consumes: les factories de la tâche 1.
 - Produces:
   - `App\Services\RestaurantGeo` — statique : `coordinates(?array $location): ?array` renvoyant `['lat' => float, 'lng' => float]` ou `null` ; `distanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float`.
-  - `App\Services\ProductSearchService::search(array $filters): array` — renvoie `['paginator' => LengthAwarePaginator, 'distances' => array<int, float|null>]`, les distances étant indexées par `restaurant_id`. Clés de `$filters` : `q`, `sub_category`, `price_min`, `price_max`, `currency_id`, `town_id`, `lat`, `lng`, `radius`, `sort` (`prix`|`distance`), `per_page`.
+  - `App\Services\ProductSearchService::search(array $filters): array` — renvoie `['paginator' => LengthAwarePaginator, 'distances' => array<int, float|null>]`, les distances étant indexées par `restaurant_id`. Clés de `$filters` : `q`, `category`, `sub_category`, `price_min`, `price_max`, `currency_id`, `town_id`, `lat`, `lng`, `radius`, `sort` (`prix`|`distance`), `per_page`.
   - `ProductSearchService::eligibleRestaurants(array $filters): array` — renvoie `['ids' => array<int, int> ordonnés, 'distances' => array<int, float|null>]`. Réutilisé par la tâche 5.
 
 - [ ] **Step 1: Écrire les tests unitaires de la géo**
@@ -2120,8 +2199,13 @@ class ProductSearchService
             $query->whereHas('sub_category_product', fn (Builder $q) => $q->where('slug', $filters['sub_category']));
         }
 
-        // Pas de filtre par catégorie de premier niveau : voir « Filtre catégorie
-        // volontairement absent » en tête de cette tâche.
+        if (! empty($filters['category'])) {
+            // sub_category_products.category_product_id, verifie sur la base reelle.
+            $query->whereHas(
+                'sub_category_product.category_product',
+                fn (Builder $q) => $q->where('slug', $filters['category'])
+            );
+        }
     }
 
     /**
@@ -2167,6 +2251,7 @@ class ProductSearchController extends Controller
     {
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:120'],
+            'category' => ['nullable', 'string'],
             'sub_category' => ['nullable', 'string'],
             'price_min' => ['nullable', 'numeric', 'min:0'],
             'price_max' => ['nullable', 'numeric', 'min:0'],
@@ -2479,7 +2564,7 @@ class BudgetSuggestionService
     ) {}
 
     /**
-     * @param  array<string, mixed>  $filters  q, sub_category, lat, lng, radius
+     * @param  array<string, mixed>  $filters  q, category, sub_category, lat, lng, radius
      * @return array{suggestions: array<int, array<string, mixed>>, disponible: bool, raison: ?string, option_la_moins_chere: ?array<string, mixed>}
      */
     public function suggest(float $budget, Currency $currency, Town $town, array $filters = []): array
@@ -2758,6 +2843,7 @@ class BudgetSuggestionRequest extends FormRequest
             'currency' => ['required', 'string'],
             'town' => ['required', 'string'],
             'q' => ['nullable', 'string', 'max:120'],
+            'category' => ['nullable', 'string'],
             'sub_category' => ['nullable', 'string'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'numeric', 'between:-180,180'],
@@ -2815,7 +2901,7 @@ Méthode à ajouter après `quote()` :
             (float) $request->input('budget'),
             $currency,
             $town,
-            $request->only(['q', 'sub_category', 'lat', 'lng', 'radius'])
+            $request->only(['q', 'category', 'sub_category', 'lat', 'lng', 'radius'])
         );
 
         return ApiResponse::GET_DATA(array_merge($result, [
