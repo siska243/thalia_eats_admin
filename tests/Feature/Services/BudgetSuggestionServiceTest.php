@@ -155,4 +155,102 @@ class BudgetSuggestionServiceTest extends TestCase
         $this->assertCount(1, $result['suggestions']);
         $this->assertSame('Poulet moambe', $result['suggestions'][0]['produit']['title']);
     }
+
+    public function test_un_budget_exactement_atteint_est_accepte(): void
+    {
+        // Somme à trois termes non arrondie : en flottant, 0.1 + 0.2 vaut
+        // 0.30000000000000004 > 0.3, alors que l'écart réel est nul. La
+        // comparaison budget/total doit se faire à la précision monétaire.
+        DelivreryPrice::query()->delete();
+        DelivreryPrice::factory()->create([
+            'town_id' => $this->town->id,
+            'currency_id' => $this->currency->id,
+            'interval_pricing' => 0,
+            'interval_max_price' => 100000,
+            'frais' => 0.1,
+            'service_price' => 0.2,
+        ]);
+        $this->plat('Gratuit', 0.0);
+
+        $result = $this->service->suggest(0.3, $this->currency, $this->town);
+
+        $this->assertTrue($result['disponible']);
+        $this->assertCount(1, $result['suggestions']);
+    }
+
+    public function test_il_signale_quand_le_filtre_texte_n_a_aucune_correspondance(): void
+    {
+        $this->plat('Salade verte', 1000);   // tient largement dans le budget
+
+        $result = $this->service->suggest(5000.0, $this->currency, $this->town, ['q' => 'poulet']);
+
+        $this->assertFalse($result['disponible']);
+        $this->assertSame('aucun_produit_correspondant', $result['raison']);
+        $this->assertNull($result['option_la_moins_chere']);
+    }
+
+    public function test_il_signale_l_absence_de_restaurant_dans_la_zone(): void
+    {
+        // Une autre ville, sans aucun restaurant qui lui soit rattaché : le
+        // restaurant de setUp() a un town_id explicite, donc n'est pas éligible.
+        $autre_ville = Town::factory()->create();
+
+        $result = $this->service->suggest(5000.0, $this->currency, $autre_ville);
+
+        $this->assertFalse($result['disponible']);
+        $this->assertSame('aucun_restaurant_dans_cette_zone', $result['raison']);
+        $this->assertNull($result['option_la_moins_chere']);
+    }
+
+    public function test_il_signale_l_absence_de_produit_actif_quand_des_restaurants_existent(): void
+    {
+        // Le restaurant existe et est éligible, mais aucun de ses produits
+        // n'est actif : ni le budget, ni la devise, ni le texte ne sont en cause.
+        Product::factory()->inactive()->create([
+            'title' => 'Plat retire du menu',
+            'restaurant_id' => $this->restaurant->id,
+            'currency_id' => $this->currency->id,
+        ]);
+
+        $result = $this->service->suggest(5000.0, $this->currency, $this->town);
+
+        $this->assertFalse($result['disponible']);
+        $this->assertSame('aucun_produit_disponible', $result['raison']);
+        $this->assertNull($result['option_la_moins_chere']);
+    }
+
+    public function test_il_choisit_l_option_la_moins_chere_par_total_et_non_par_prix_du_plat(): void
+    {
+        // Deux tranches où les frais DÉCROISSENT avec le sous-total : rien ne
+        // garantit la monotonie en production (delivrery_prices est éditable
+        // en admin). Le plat le moins cher (500) totalise 9500 ; le plus cher
+        // (1500) totalise 1500. La bonne option est celle au total minimal.
+        DelivreryPrice::query()->delete();
+        DelivreryPrice::factory()->create([
+            'town_id' => $this->town->id,
+            'currency_id' => $this->currency->id,
+            'interval_pricing' => 0,
+            'interval_max_price' => 1000,
+            'frais' => 9000,
+            'service_price' => 0,
+        ]);
+        DelivreryPrice::factory()->create([
+            'town_id' => $this->town->id,
+            'currency_id' => $this->currency->id,
+            'interval_pricing' => 1001,
+            'interval_max_price' => 2000,
+            'frais' => 0,
+            'service_price' => 0,
+        ]);
+        $this->plat('Petit', 500);    // total 9500
+        $this->plat('Grand', 1500);   // total 1500
+
+        $result = $this->service->suggest(1000.0, $this->currency, $this->town);
+
+        $this->assertFalse($result['disponible']);
+        $this->assertSame('budget_insuffisant', $result['raison']);
+        $this->assertSame('Grand', $result['option_la_moins_chere']['produit']['title']);
+        $this->assertSame(1500.0, $result['option_la_moins_chere']['total']);
+        $this->assertSame(500.0, $result['option_la_moins_chere']['manque']);
+    }
 }
