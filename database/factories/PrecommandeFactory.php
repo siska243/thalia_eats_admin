@@ -43,6 +43,22 @@ class PrecommandeFactory extends Factory
         ];
     }
 
+    /**
+     * L'assistant ne collecte que la commune : une pre-commande naît sans
+     * coordonnees de livraison, le client les saisit sur la page de paiement.
+     */
+    public function sansCoordonnees(): static
+    {
+        return $this->state(fn () => [
+            'adresse_delivery' => null,
+            'street' => null,
+            'number_street' => null,
+            'reference_adresse' => null,
+            'recipient_name' => null,
+            'recipient_phone' => null,
+        ]);
+    }
+
     public function expiree(): static
     {
         return $this->state(fn () => ['expires_at' => now()->subMinute()]);

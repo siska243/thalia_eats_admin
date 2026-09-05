@@ -72,6 +72,19 @@ class Precommande extends Model
     }
 
     /**
+     * L'assistant ne collecte que la commune : les coordonnées de livraison
+     * sont saisies par le client sur la page de paiement. Cette méthode dit si
+     * elles le sont déjà — elle décide ce que le formulaire affiche, et
+     * interdit d'écraser des coordonnées figées.
+     */
+    public function coordonneesCompletes(): bool
+    {
+        return filled($this->adresse_delivery)
+            && filled($this->recipient_name)
+            && filled($this->recipient_phone);
+    }
+
+    /**
      * @param  Builder<Precommande>  $query
      */
     public function scopeValides(Builder $query): void

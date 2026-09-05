@@ -41,15 +41,11 @@ class PrecommandeController extends Controller
             );
         }
 
-        $valide = $request->validated();
-
         try {
             $precommande = $this->precommandes->creer(
                 $request->user(),
                 $lines,
                 $town,
-                $valide['adresse'],
-                $valide['destinataire'],
             );
         } catch (PrecommandeRefusee $e) {
             return ApiResponse::BAD_REQUEST(
@@ -122,7 +118,7 @@ class PrecommandeController extends Controller
             return ApiResponse::BAD_REQUEST('telephone_invalide', 'Oups', 'Numéro de téléphone invalide.');
         }
 
-        $result = app(PaiementPrecommandeController::class)->initierFlexPay($precommande, $phone);
+        $result = app(PaiementPrecommandeController::class)->initierFlexPay($precommande, $phone, 'mobile');
 
         if (! empty($result['code']) && $result['code'] != 0) {
             return ApiResponse::BAD_REQUEST('paiement_refuse', 'Oups', $result['message'] ?? 'Paiement impossible.');

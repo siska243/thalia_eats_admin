@@ -51,16 +51,6 @@ class PrecommandeCreationTest extends TestCase
         return [
             'town' => $town->slug,
             'products' => [['uid' => Cipher::Encrypt($product->id), 'quantity' => $quantite]],
-            'adresse' => [
-                'adresse' => 'Avenue Test',
-                'street' => 'Rue Test',
-                'number_street' => '12',
-                'reference' => 'En face du marche',
-            ],
-            'destinataire' => [
-                'name' => 'Amie du client',
-                'phone' => '+243810000000',
-            ],
         ];
     }
 
@@ -108,8 +98,11 @@ class PrecommandeCreationTest extends TestCase
         $this->assertSame(5500.0, (float) Precommande::query()->first()->total);
     }
 
-    public function test_le_destinataire_peut_etre_quelqu_un_d_autre(): void
+    public function test_une_precommande_se_cree_avec_la_seule_commune(): void
     {
+        // L'assistant ne collecte plus ni adresse ni destinataire : une adresse
+        // dictee a une machine est une adresse mal recopiee. Le client les
+        // saisira lui-meme sur la page du lien de paiement.
         Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
         [$town, , $product] = $this->contexte();
 
@@ -117,19 +110,32 @@ class PrecommandeCreationTest extends TestCase
 
         $precommande = Precommande::query()->first();
 
-        $this->assertSame('Amie du client', $precommande->recipient_name);
-        $this->assertSame('+243810000000', $precommande->recipient_phone);
+        $this->assertNull($precommande->adresse_delivery);
+        $this->assertNull($precommande->recipient_name);
+        $this->assertNull($precommande->recipient_phone);
+        $this->assertSame($town->id, $precommande->town_id);
+        $this->assertFalse($precommande->coordonneesCompletes());
     }
 
-    public function test_le_destinataire_est_obligatoire(): void
+    public function test_une_adresse_envoyee_par_l_assistant_est_ignoree(): void
     {
+        // La signature ne les accepte plus : rien ne doit se glisser en base
+        // par une cle de requete restee dans un ancien client.
         Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
         [$town, , $product] = $this->contexte();
 
         $payload = $this->payload($town, $product);
-        unset($payload['destinataire']);
+        $payload['adresse'] = ['adresse' => 'Avenue dictee de travers'];
+        $payload['destinataire'] = ['name' => 'Inconnu', 'phone' => '+243810000000'];
+        $payload['adresse_delivery'] = 'Avenue dictee de travers';
+        $payload['recipient_name'] = 'Inconnu';
 
-        $this->postJson('/api/precommandes', $payload)->assertStatus(422);
+        $this->postJson('/api/precommandes', $payload)->assertStatus(201);
+
+        $precommande = Precommande::query()->first();
+
+        $this->assertNull($precommande->adresse_delivery);
+        $this->assertNull($precommande->recipient_name);
     }
 
     public function test_une_town_sans_tarif_actif_est_refusee(): void

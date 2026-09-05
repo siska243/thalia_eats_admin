@@ -14,13 +14,15 @@ class PrecommandeService
     public function __construct(private readonly QuotationService $quotations) {}
 
     /**
+     * L'assistant ne collecte que la commune. Les coordonnées de livraison
+     * (adresse, nom et téléphone du destinataire) restent nulles : le client
+     * les saisit lui-même sur la page du lien de paiement.
+     *
      * @param  array<int, array{product: \App\Models\Product, quantity: int|float}>  $lines
-     * @param  array{adresse: string, street: ?string, number_street: ?string, reference: ?string}  $adresse
-     * @param  array{name: string, phone: string}  $destinataire
      *
      * @throws PrecommandeRefusee
      */
-    public function creer(User $user, array $lines, Town $town, array $adresse, array $destinataire): Precommande
+    public function creer(User $user, array $lines, Town $town): Precommande
     {
         $quotation = $this->quotations->quote($lines, $town);
 
@@ -45,18 +47,19 @@ class PrecommandeService
 
         $premier = $lines[array_key_first($lines)]['product'];
 
-        return DB::transaction(function () use ($user, $lines, $town, $adresse, $destinataire, $quotation, $premier) {
+        return DB::transaction(function () use ($user, $lines, $town, $quotation, $premier) {
             $precommande = Precommande::query()->create([
                 'refernce' => $this->reference(),
                 'user_id' => $user->id,
                 'restaurant_id' => $premier->restaurant_id,
                 'town_id' => $town->id,
-                'adresse_delivery' => $adresse['adresse'],
-                'street' => $adresse['street'] ?? null,
-                'number_street' => $adresse['number_street'] ?? null,
-                'reference_adresse' => $adresse['reference'] ?? null,
-                'recipient_name' => $destinataire['name'],
-                'recipient_phone' => $destinataire['phone'],
+                // Renseignées plus tard, par le client, sur la page de paiement.
+                'adresse_delivery' => null,
+                'street' => null,
+                'number_street' => null,
+                'reference_adresse' => null,
+                'recipient_name' => null,
+                'recipient_phone' => null,
                 'sous_total' => $quotation->sous_total,
                 'frais_livraison' => $quotation->frais_livraison,
                 'service_price' => $quotation->service_price,
