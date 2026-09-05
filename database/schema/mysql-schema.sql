@@ -78,6 +78,10 @@ CREATE TABLE `commandes` (
   `reference_paiement` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `street` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `number_street` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lat` double DEFAULT NULL,
+  `long` double DEFAULT NULL,
+  `recipient_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `recipient_phone` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `time_restaurant` time DEFAULT NULL,
   `time_delivery` time DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -409,6 +413,57 @@ CREATE TABLE `personal_access_tokens` (
   KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `precommande_products`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `precommande_products` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `precommande_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `quantity` double NOT NULL,
+  `price` double NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `precommande_products_precommande_id_foreign` (`precommande_id`),
+  CONSTRAINT `precommande_products_precommande_id_foreign` FOREIGN KEY (`precommande_id`) REFERENCES `precommandes` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `precommandes`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `precommandes` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `refernce` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `restaurant_id` bigint unsigned NOT NULL,
+  `town_id` bigint unsigned NOT NULL,
+  `adresse_delivery` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `street` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `number_street` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reference_adresse` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lat` double DEFAULT NULL,
+  `long` double DEFAULT NULL,
+  `recipient_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient_phone` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sous_total` double NOT NULL,
+  `frais_livraison` double NOT NULL,
+  `service_price` double NOT NULL,
+  `total` double NOT NULL,
+  `currency_id` bigint unsigned NOT NULL,
+  `delivrery_price_id` bigint unsigned DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `status` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'en_attente',
+  `reference_paiement` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `commande_id` bigint unsigned DEFAULT NULL,
+  `paied_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `precommandes_refernce_unique` (`refernce`),
+  KEY `precommandes_user_id_status_index` (`user_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `products`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -431,7 +486,8 @@ CREATE TABLE `products` (
   `currency_id` bigint unsigned NOT NULL,
   `preview` tinyint(1) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `products_slug_unique` (`slug`)
+  UNIQUE KEY `products_slug_unique` (`slug`),
+  FULLTEXT KEY `products_fulltext` (`title`,`description`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `request_deliveries`;
@@ -626,8 +682,12 @@ DROP TABLE IF EXISTS `user_adresses`;
 CREATE TABLE `user_adresses` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `user_id` bigint unsigned NOT NULL,
+  `town_id` bigint unsigned DEFAULT NULL,
   `adresse` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `reference` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `street` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `number_street` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reference` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `label` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `slug` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `is_main` tinyint(1) NOT NULL DEFAULT '0',
   `lat` double(8,2) DEFAULT NULL,
@@ -765,3 +825,7 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (68,'2025_06_22_184
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (69,'2025_06_22_185012_create_expo_push_tokens_table',40);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (70,'2025_07_05_185114_add_otp',41);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (71,'2025_08_09_205307_add_google_id',42);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (72,'2026_09_05_120000_add_fulltext_index_to_products_table',43);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (73,'2026_09_05_150000_add_recipient_and_coordinates_to_commandes',43);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (74,'2026_09_05_150100_add_context_to_user_adresses',43);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (75,'2026_09_05_170000_create_precommandes_table',44);
