@@ -130,6 +130,52 @@ class AuthController extends Controller
         }
     }
 
+    /**
+     * Renvoie un code d'activation.
+     *
+     * Les codes expirent au bout de trente minutes. Sans ce point d'entree,
+     * un compte dont le code a expire ne pourrait plus jamais etre active.
+     *
+     * Comme pour la reinitialisation, la reponse ne dit pas si le compte
+     * existe, ni s'il est deja active.
+     */
+    public function resendActivation(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => ['required', 'email', 'string'],
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
+            }
+
+            $user = User::query()
+                ->where('email', $request->email)
+                ->whereNull('email_verified_at')
+                ->first();
+
+            if ($user) {
+                $user->otp = self::generateOtp();
+                $user->otp_expire_at = now()->addMinutes(30);
+                $user->save();
+
+                Mail::to($user->email)->send(new WelcomeOtpMail([
+                    'full_name' => "{$user->last_name} {$user->name}",
+                    'otp_valide_at' => $user->otp_expire_at->format('Y-m-d H:i:s'),
+                    'otp' => $user->otp,
+                ]));
+            }
+
+            return ApiResponse::GET_DATA([
+                'title' => 'Code renvoyé',
+                'message' => "Si ce compte existe et n'est pas encore activé, un nouveau code vient d'être envoyé.",
+            ]);
+        } catch (Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
     public function login(LoginUserRequest $request)
     {
         try {

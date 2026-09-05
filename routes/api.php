@@ -71,6 +71,7 @@ Route::get('/not-auth', [AuthController::class, 'notlogin'])
     ->middleware('guest')
     ->name('login');
 
+Route::post('/resend-activation', [AuthController::class, 'resendActivation'])->name('api.resend-activation');
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.forgot-password');
 Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('api.reset-password');
 
