@@ -270,10 +270,28 @@ class RestaurantController extends Controller
 
             DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','ONLY_FULL_GROUP_BY'));");
 
-            $current_order = Commande::query()->where('status_id', 2)->count();
-            $current_order_accepted = Commande::query()->where('status_id', 2)->whereNot('accepted_at')->count();;
-            $order_cancelation = Commande::query()->where('status_id', 4)->count();
-            $order_delivery = Commande::query()->where('status_id', 3)->count();
+            /*
+             * Ces quatre compteurs interrogeaient Commande sans aucune
+             * contrainte de restaurant : chaque restaurateur voyait donc le
+             * total de la plateforme, celui de ses concurrents compris.
+             *
+             * whereNot('accepted_at') etait par ailleurs un usage errone —
+             * whereNot attend une colonne, un operateur et une valeur, ou une
+             * closure. L'intention etait whereNotNull.
+             */
+            $pourCeRestaurant = fn () => Commande::query()
+                ->whereHas('commande_products', fn ($q) => $q->whereHas(
+                    'product',
+                    fn ($q) => $q->where('restaurant_id', $restaurant->id)
+                ));
+
+            $current_order = $pourCeRestaurant()->where('status_id', 2)->count();
+            $current_order_accepted = $pourCeRestaurant()
+                ->where('status_id', 2)
+                ->whereNotNull('accepted_at')
+                ->count();
+            $order_cancelation = $pourCeRestaurant()->where('status_id', 4)->count();
+            $order_delivery = $pourCeRestaurant()->where('status_id', 3)->count();
             $status = Status::query()->get();
 
             return ApiResponse::GET_DATA([
