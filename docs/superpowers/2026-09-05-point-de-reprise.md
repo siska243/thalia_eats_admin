@@ -48,18 +48,34 @@ référence annoncée à celle de la transaction vérifiée. Adresse et destinat
 la page signée. Un jeton d'assistant n'épuise plus le quota API de son client. Un canal de
 journal `paiement` séparé, avec des capteurs.
 
-### En cours au moment de l'arrêt
+**Le changement de flux** — terminé après l'arrêt, trois commits : `6a93438` (l'assistant
+ne collecte plus que la commune), `bb96576` (coordonnées saisies par le client, paiement par
+carte) et `5e8dd2a` (la case « même numéro » survit à une erreur de saisie). Suite complète
+254 passés, un seul échec préexistant et sans rapport (`ExampleTest`, `GET /` en 404 : il n'y
+a pas de route racine). `LienPaiementTest` passe de 20 à 34 tests.
 
-**Le changement de flux.** Deux commits posés : `6a93438` (l'assistant ne collecte plus que
-la commune) et `bb96576` (coordonnées saisies par le client, paiement par carte).
-Un agent finissait de peaufiner `resources/views/precommande/paiement.blade.php` et
-`tests/Feature/Api/LienPaiementTest.php` — ces deux fichiers peuvent être non committés au
-redémarrage. **Vérifier `git status` et `git diff` avant toute chose**, puis lancer
-`tests/Feature/Api/LienPaiementTest.php` pour savoir où ça en est.
+**Rien n'est en vol. L'arbre ne contient plus que le travail de la session parallèle**
+(voir §6). Cahier des charges de la tâche :
+`.superpowers/sdd/2026-09-05-c-back-precommandes/task-flux-brief.md` — dossier ignoré par
+git, il peut disparaître.
 
-**Cahier des charges de cette tâche** :
-`.superpowers/sdd/2026-09-05-c-back-precommandes/task-flux-brief.md` — attention, ce dossier
-est ignoré par git, il peut disparaître.
+### À reprendre en premier demain
+
+**Un trou ouvert par ce changement, à trancher avant d'aller plus loin.**
+`POST /api/precommandes/{uid}/paiement` — le paiement depuis l'application, sans passer par
+le lien — peut désormais payer une pré-commande **sans coordonnées de livraison**. Rendre
+les colonnes nullables était nécessaire au nouveau flux, mais ce second point d'entrée n'a
+pas reçu le formulaire qui les remplit. FlexPay recevrait `name => null` et la conversion
+produirait une `Commande` sans adresse — donc une commande que personne ne peut livrer,
+déjà payée.
+
+Trois options : exiger que la pré-commande soit complète avant d'accepter ce paiement (le
+plus sûr, et cohérent avec « refuser sur du code neuf ») ; faire porter les coordonnées par
+cette requête ; ou renvoyer l'application vers le lien signé. **Ne pas laisser en l'état.**
+
+Deux autres points, plus petits : `Api\PrecommandeController::payer()` garde son appel
+`LibPhoneNumber` non protégé — même piège `TypeError` que celui corrigé côté web, un
+numéro mal tapé y rend un 500. Et le changement n'a pas encore été relu par un tiers.
 
 ### Pas commencé
 
@@ -121,6 +137,10 @@ authentifiée par session contourne donc toutes les protections d'assistant.
 **L'historique des migrations n'est pas rejouable depuis zéro.** Il y a un dump de schéma
 dans `database/schema/mysql-schema.sql`. Et `schema:dump` lit la connexion **par défaut**,
 pas celle de `--env=testing`.
+
+**`Http::fake()` empile les stubs.** Un `fake()` posé dans `setUp()` masque celui qu'un test
+pose ensuite, et le test passe pour la mauvaise raison. Rencontré aujourd'hui sur les
+réponses carte de FlexPay : le test était vert alors qu'il ne testait rien.
 
 **Les index FULLTEXT sont invisibles dans une transaction non validée** — `MATCH() AGAINST()`
 ne trouve rien sous `RefreshDatabase`. Utiliser `DatabaseTruncation`.
@@ -200,3 +220,47 @@ défaut partagé et documenté.
 **Sur un chemin de production vivant : observer, ne pas refuser.** Sur du code neuf sans
 trafic : refuser. C'est la doctrine appliquée partout dans la vague de sécurité, et elle a
 été validée par le propriétaire.
+
+---
+
+## 8. Session mobile — interface livreur et lot des annulations
+
+**Rien de cette section n'est committé.** L'arbre backend contient ces modifications ; le dépôt mobile (`front end/thalia-delivery`) aussi. Le propriétaire n'a pas encore tranché sur le commit.
+
+### Backend touché
+
+`CommandeController`, `DeliveryController`, `RestaurantController`, `CommandeResource`, `Commande`, `ApiResponse`, `config/sse.php` (nouveau), et quatre classes de test : `AccesCommandeTest`, `AnnulationCoherenteTest`, `CourseLivreurTest`, `DriverCodeLockoutTest`.
+
+### Ce qui est structurant
+
+**Une seule définition, pas N lectures.** Deux bugs de production sont nés du même motif, et les deux correctifs suivent la même forme.
+
+- « Course en cours » était écrite dans `currentOrderDelivery` **et** dans le contrôle d'acceptation, avec des critères différents. Assainir la première a enfermé le livreur dans un écran vide sans sortie : il était refusé à l'acceptation par une commande que l'écran n'affichait plus. Fusionnées en `courseEnCours()`.
+- « Commande annulée » était supposée par six lectures (`status_id` seul), alors que le formulaire Filament expose `status_id`, `cancel_at` et `delivery_at` comme trois champs indépendants. Un administrateur pose la date sans toucher au statut. Correctif : scope `nonAnnulee()` **et** garantie au niveau du modèle (`Commande::booted()`, hook `saving`), pour que la septième lecture n'hérite pas du défaut.
+
+Ajouter la clause manquante à un seul appelant aurait donné un vert le jour même et le même bug plus tard sur un site pas encore écrit.
+
+### Deux fautes de frappe qui masquaient des bugs
+
+- `CommandeResource` lisait `$this->resource->delivrery_at` : attribut inexistant, donc `delivery_at` partait **à null dans toutes les réponses depuis toujours**. Invisible tant qu'un écran retombait sur `created_at`. Seule la lecture était fautive, la clé de réponse est correcte et ne bouge pas.
+- `DeliveryController::dashRestaurant` appelait `getCurrentRestaurant()`, défini uniquement dans `RestaurantController`. Un appel de méthode inexistante lève une `Error`, que `catch (Exception)` ne rattrape pas : `GET /api/user/delivery-dash` répondait **500 à chaque appel**, depuis toujours, sans que personne le sache — aucun client ne l'utilisait. Reconstruit en tableau de bord livreur, borné à ses propres courses.
+
+Dans le code neuf, viser `catch (\Throwable)`.
+
+### Sécurité
+
+Verrou anti-force-brute sur les codes de confirmation : trois codes refusés bloquent la saisie 25 minutes, **côté serveur** (`DeliveryController`, cache, clé livreur + commande + étape). Une coupure réseau ne consomme aucune tentative. Le verrou côté application n'est qu'un confort.
+
+Ce verrou n'a de sens qu'avec le correctif de `CommandeResource` : le livreur recevait les **deux** codes dans sa propre réponse et pouvait donc confirmer retrait et livraison sans rencontrer personne.
+
+### Piège de domaine, à connaître avant de toucher au flux livreur
+
+Une commande porte **deux codes distincts** : `code_confirmation` est celui du **client** (remise finale), `code_confirmation_restaurant` celui du **restaurant** (retrait). L'étape en cours se lit sur `time_delivery` : nul = retrait à faire. Saisir le mauvais donne « code incorrect » sans autre explication — l'écran nomme désormais l'interlocuteur.
+
+### Décisions de données en attente
+
+Voir la section 3. S'y ajoutent : la commande 14 (affectée, en cours, **sans aucune ligne `commande_products`** — invisible partout et impossible à terminer) et la commande 41 / réf 1040 (porte **à la fois** `cancel_at` et `delivery_at`).
+
+### Suite prévue
+
+Refonte de l'interface restaurant. `app/(restaurant)/` est encore largement le gabarit Expo : `home.tsx` affiche « Welcome! », les onglets sont en anglais, et les quatre écrans `[slug]` sont des coquilles de sept lignes.
