@@ -44,6 +44,7 @@ class DeliveryController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
             $commande = Commande::query()
+                ->with(['user', 'status', 'town', 'product.product.restaurant', 'product.currency'])
                 ->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->where('delivrery_driver_id', $restaurant->id)
@@ -71,6 +72,18 @@ class DeliveryController extends Controller
 
 
             $commande = Commande::query()
+                ->with([
+                    // Sans ce prechargement, CommandeResource declenche une
+                    // rafale de requetes par ligne : la ressource lit product
+                    // et user via whenLoaded dont la valeur par defaut est
+                    // evaluee immediatement, ce qui charge la relation au lieu
+                    // de l'omettre.
+                    'user',
+                    'status',
+                    'town',
+                    'product.product.restaurant',
+                    'product.currency',
+                ])
                 ->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereNull('delivrery_driver_id')
@@ -98,7 +111,9 @@ class DeliveryController extends Controller
 
             $status = Status::query()->where('id', '>', 2)->pluck('id');
 
-            $commande = Commande::query()->whereIn('status_id', $status)
+            $commande = Commande::query()
+                ->with(['user', 'status', 'town', 'product.product.restaurant', 'product.currency'])
+                ->whereIn('status_id', $status)
                 ->orderBy('updated_at', 'desc')
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->whereHas('commande_products')
