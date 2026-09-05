@@ -3058,6 +3058,29 @@ class ConversionPrecommandeTest extends TestCase
         $this->assertNotNull($precommande->paied_at);
     }
 
+    public function test_un_produit_present_deux_fois_donne_une_seule_ligne(): void
+    {
+        $precommande = Precommande::factory()->create(['total' => 5500]);
+        $produit = Product::factory()->create(['price' => 1500]);
+
+        // Le meme uid poste deux fois : deux lignes de precommande.
+        foreach ([2, 3] as $quantite) {
+            $precommande->products()->create([
+                'product_id' => $produit->id,
+                'quantity' => $quantite,
+                'price' => 1500,
+            ]);
+        }
+
+        $commande = app(ConversionPrecommande::class)->convertir($precommande->fresh('products'));
+
+        $lignes = $commande->product;
+
+        $this->assertCount(1, $lignes);
+        $this->assertSame(5.0, (float) $lignes->first()->quantity);
+        $this->assertSame(1500.0, (float) $lignes->first()->price);
+    }
+
     public function test_la_reference_de_la_commande_est_un_entier_nu(): void
     {
         // Sinon elle entrerait en collision avec l'espace des pré-commandes.
@@ -3167,14 +3190,28 @@ class ConversionPrecommande
             $commande->paied_at = now()->format('Y-m-d H:i:s');
             $commande->save();
 
-            foreach ($precommande->products as $ligne) {
+            // Un meme uid poste deux fois cree deux lignes de precommande pour
+            // un seul produit : les totaux restent justes, mais le restaurant
+            // verrait le meme plat deux fois sur son bon. On regroupe ici, au
+            // moment ou la commande devient reelle.
+            $regroupees = $precommande->products
+                ->groupBy('product_id')
+                ->map(fn ($lignes) => [
+                    'product_id' => $lignes->first()->product_id,
+                    'quantity' => $lignes->sum('quantity'),
+                    // Toutes les lignes d'un meme produit portent le prix du
+                    // meme devis : prendre la premiere est sans ambiguite.
+                    'price' => $lignes->first()->price,
+                ]);
+
+            foreach ($regroupees as $ligne) {
                 $commande_product = new CommandeProduct;
                 $commande_product->commande_id = $commande->id;
-                $commande_product->product_id = $ligne->product_id;
+                $commande_product->product_id = $ligne['product_id'];
                 $commande_product->user_id = $precommande->user_id;
-                $commande_product->quantity = $ligne->quantity;
+                $commande_product->quantity = $ligne['quantity'];
                 // Le prix du devis, pas celui du produit aujourd'hui.
-                $commande_product->price = $ligne->price;
+                $commande_product->price = $ligne['price'];
                 $commande_product->currency_id = $precommande->currency_id;
                 $commande_product->save();
             }
