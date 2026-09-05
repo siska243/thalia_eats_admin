@@ -198,25 +198,71 @@ class CommandeController extends Controller
         }
     }
 
+    /**
+     * Change l'adresse de livraison d'une commande non encore livree.
+     *
+     * Trois defauts corriges ici :
+     *
+     * - la commande etait retrouvee par « la premiere en attente de cet
+     *   utilisateur », sans identifiant : un client ayant deux commandes en
+     *   attente voyait la mauvaise etre modifiee. Le uid est desormais
+     *   accepte, l'ancien comportement restant le repli pour les versions
+     *   deja installees ;
+     * - aucune verification d'existence : sans commande en attente, l'appel
+     *   ecrivait sur null et repondait 500 ;
+     * - les coordonnees n'etaient pas prises en compte, alors que le livreur
+     *   s'en sert desormais.
+     */
     public function updateDeliveryAddress(Request $request)
     {
         try {
+            $validator = Validator::make($request->all(), [
+                'town' => ['required', 'string', 'exists:towns,slug'],
+                'street' => ['nullable', 'string', 'max:255'],
+                'number_street' => ['nullable', 'string', 'max:50'],
+                'reference' => ['nullable', 'string', 'max:255'],
+                'adresse' => ['nullable', 'string', 'max:255'],
+                'lat' => ['nullable', 'numeric', 'between:-90,90'],
+                'long' => ['nullable', 'numeric', 'between:-180,180'],
+            ]);
 
-            $town_id = $request->input("town");
-            $reference = $request->input("reference");
-            $street = $request->input("street");
-            $number_street = $request->input("number_street");
+            if ($validator->fails()) {
+                return ApiResponse::BAD_REQUEST(
+                    $validator->errors(),
+                    'Oups',
+                    "Indiquez une adresse et une commune desservie"
+                );
+            }
 
-            $town_id = Town::query()->where('slug', $town_id)->first()?->id;
             $user = Auth()->user();
+            $uid = $request->input('uid');
 
-            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+            $commande = Commande::query()
+                ->with('product')
+                ->where('user_id', $user?->id)
+                ->whereIn('status_id', [1, 5])
+                ->when($uid, fn ($query) => $query->where('id', Cipher::Decrypt($uid)))
+                ->first();
 
-            $commande->town_id = $town_id;
+            if (!$commande) {
+                return ApiResponse::NOT_FOUND(
+                    'Oups',
+                    "Aucune commande en attente ne correspond"
+                );
+            }
+
+            $street = $request->input('street');
+            $number_street = $request->input('number_street');
+            $reference = $request->input('reference');
+
+            $commande->town_id = Town::query()->where('slug', $request->input('town'))->first()?->id;
             $commande->reference_adresse = $reference;
-            $commande->adresse_delivery = "{$street} {$number_street} {$reference}";
+            $commande->adresse_delivery = $request->input('adresse')
+                ?: trim("{$street} {$number_street} {$reference}");
             $commande->street = $street;
             $commande->number_street = $number_street;
+            $commande->lat = $request->input('lat');
+            $commande->long = $request->input('long');
 
             $commande->save();
 
