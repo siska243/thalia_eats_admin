@@ -31,7 +31,12 @@
     <div class="ligne"><span>Service</span><span>{{ $precommande->service_price }}</span></div>
     <div class="ligne total"><span>Total</span><span>{{ $precommande->total }} {{ $precommande->currency?->code }}</span></div>
 
-    <p>Livraison à {{ $precommande->adresse_delivery }}, pour {{ $precommande->recipient_name }}.</p>
+    {{-- Ce lien signe peut avoir ete transfere, journalise par un proxy ou
+         laisse dans un historique de navigation. Le client reconnait sa
+         propre adresse aux premiers caracteres ; un tiers n'apprend ni ou ni
+         chez qui livrer. Les plats et le total restent lisibles : le payeur
+         doit savoir ce qu'il paie. --}}
+    <p>Livraison à {{ \Illuminate\Support\Str::mask((string) $precommande->adresse_delivery, '*', 3) }}, pour {{ \Illuminate\Support\Str::mask((string) $precommande->recipient_name, '*', 3) }}.</p>
 
     @foreach ($errors->all() as $erreur)
         <p class="erreur">{{ $erreur }}</p>

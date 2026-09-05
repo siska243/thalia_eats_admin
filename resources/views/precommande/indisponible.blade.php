@@ -17,7 +17,10 @@
     @else
         <p>Cette pré-commande a expiré. Demandez à votre assistant de vous en refaire une, à l'identique.</p>
     @endif
-    <p>Référence {{ $precommande->refernce }}.</p>
+    {{-- Apres expiration, la page n'a plus rien a prouver au porteur du
+         lien : la reference complete n'y sert qu'a l'identifier aupres du
+         support. --}}
+    <p>Référence {{ \Illuminate\Support\Str::mask((string) $precommande->refernce, '*', 3) }}.</p>
 </div>
 </body>
 </html>

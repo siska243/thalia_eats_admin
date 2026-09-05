@@ -47,6 +47,41 @@ class LienPaiementTest extends TestCase
         $this->get($this->lien($p))->assertStatus(200)->assertSee($p->refernce);
     }
 
+    public function test_le_recapitulatif_masque_l_adresse_et_le_destinataire(): void
+    {
+        // Le lien signe peut avoir ete transfere ou journalise : le porteur
+        // ne doit pas y apprendre ou et chez qui livrer.
+        $p = Precommande::factory()->create([
+            'adresse_delivery' => 'Avenue Kasa-Vubu 45, Ibanda',
+            'recipient_name' => 'Josephine Mukendi',
+        ]);
+
+        $reponse = $this->get($this->lien($p))->assertStatus(200);
+
+        $reponse->assertDontSee('Avenue Kasa-Vubu 45, Ibanda', false);
+        $reponse->assertDontSee('Josephine Mukendi', false);
+
+        $reponse->assertSee(\Illuminate\Support\Str::mask('Avenue Kasa-Vubu 45, Ibanda', '*', 3), false);
+        $reponse->assertSee(\Illuminate\Support\Str::mask('Josephine Mukendi', '*', 3), false);
+    }
+
+    public function test_le_recapitulatif_montre_toujours_les_plats_et_le_total(): void
+    {
+        // Masquer ne doit pas empecher le payeur de savoir ce qu'il paie.
+        $p = Precommande::factory()->create(['total' => 5500]);
+
+        $this->get($this->lien($p))->assertStatus(200)->assertSee('5500', false);
+    }
+
+    public function test_la_page_d_indisponibilite_ne_livre_pas_la_reference_entiere(): void
+    {
+        $p = Precommande::factory()->expiree()->create();
+
+        $this->get($this->lien($p, now()->addHour()))
+            ->assertStatus(410)
+            ->assertDontSee($p->refernce, false);
+    }
+
     public function test_un_lien_sans_signature_est_refuse(): void
     {
         $p = Precommande::factory()->create();
