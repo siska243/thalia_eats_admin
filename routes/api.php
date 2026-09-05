@@ -141,6 +141,13 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
     Route::post('/delivery-confirm-reception-order', [DeliveryController::class, 'confirmReceptionRestaurant']);
     Route::get('/delivery-dash', [DeliveryController::class, 'dashRestaurant']);
 
+    Route::middleware('assistant.emetteur')->prefix('/assistants')
+        ->controller(\App\Http\Controllers\Api\AssistantTokenController::class)
+        ->group(function () {
+            Route::post('/', 'store');
+            Route::get('/', 'index');
+            Route::delete('/{uid}', 'destroy');
+        });
 
 });
 
