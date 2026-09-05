@@ -32,7 +32,15 @@ class PrecommandeService
         // web, qui facture alors 0 de livraison. Une pré-commande créée par une
         // machine ne doit pas promettre une livraison gratuite par accident.
         if ($quotation->bracket === null) {
-            throw PrecommandeRefusee::pour(PrecommandeRefusee::AUCUN_TARIF_LIVRAISON);
+            // Deux causes tres differentes pour un meme bracket null : la town
+            // n'est pas desservie, ou elle l'est mais le panier sort de toutes
+            // les tranches. Les confondre ferait dire a un assistant qu'on ne
+            // livre pas chez un client qu'on livre.
+            throw PrecommandeRefusee::pour(
+                in_array(QuotationService::WARNING_HORS_TRANCHE, $quotation->warnings, true)
+                    ? PrecommandeRefusee::PANIER_HORS_TRANCHE
+                    : PrecommandeRefusee::AUCUN_TARIF_LIVRAISON
+            );
         }
 
         $premier = $lines[array_key_first($lines)]['product'];
@@ -68,7 +76,7 @@ class PrecommandeService
                 ]);
             }
 
-            return $precommande->load('products');
+            return $precommande->load(['products.product', 'currency', 'restaurant']);
         });
     }
 
@@ -78,10 +86,14 @@ class PrecommandeService
      */
     private function reference(): string
     {
-        do {
+        for ($i = 0; $i < 5; $i++) {
             $reference = 'P-'.Str::upper(Str::random(12));
-        } while (Precommande::query()->where('refernce', $reference)->exists());
 
-        return $reference;
+            if (! Precommande::query()->where('refernce', $reference)->exists()) {
+                return $reference;
+            }
+        }
+
+        throw PrecommandeRefusee::pour(PrecommandeRefusee::REFERENCE_INDISPONIBLE);
     }
 }

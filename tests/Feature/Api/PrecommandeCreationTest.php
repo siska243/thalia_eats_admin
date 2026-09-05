@@ -199,4 +199,51 @@ class PrecommandeCreationTest extends TestCase
 
         $this->postJson('/api/precommandes', $payload)->assertStatus(422);
     }
+
+    public function test_une_quantite_fractionnaire_est_refusee(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+        [$town, , $product] = $this->contexte();
+
+        $payload = $this->payload($town, $product);
+        $payload['products'][0]['quantity'] = 2.5;
+
+        $this->postJson('/api/precommandes', $payload)->assertStatus(422);
+    }
+
+    public function test_une_quantite_au_dela_de_cinquante_est_refusee(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+        [$town, , $product] = $this->contexte();
+
+        $payload = $this->payload($town, $product);
+        $payload['products'][0]['quantity'] = 51;
+
+        $this->postJson('/api/precommandes', $payload)->assertStatus(422);
+    }
+
+    public function test_un_panier_hors_tranche_est_distingue_d_une_town_non_desservie(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+
+        $town = Town::factory()->create();
+        $currency = Currency::factory()->create();
+        $restaurant = Restaurant::factory()->create(['town_id' => $town->id]);
+
+        DelivreryPrice::factory()->create([
+            'town_id' => $town->id, 'currency_id' => $currency->id,
+            'interval_pricing' => 0, 'interval_max_price' => 5000,
+            'frais' => 2000, 'service_price' => 500,
+        ]);
+
+        $product = Product::factory()->create([
+            'restaurant_id' => $restaurant->id,
+            'currency_id' => $currency->id,
+            'price' => 50000,
+        ]);
+
+        $this->postJson('/api/precommandes', $this->payload($town, $product, 1))
+            ->assertStatus(400)
+            ->assertJson(['error' => 'panier_hors_tranche']);
+    }
 }

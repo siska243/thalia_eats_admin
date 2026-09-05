@@ -20,7 +20,7 @@ class PrecommandeRequest extends FormRequest
             'town' => ['required', 'string'],
             'products' => ['required', 'array', 'min:1', 'max:100'],
             'products.*.uid' => ['required', 'string'],
-            'products.*.quantity' => ['required', 'numeric', 'min:1'],
+            'products.*.quantity' => ['required', 'integer', 'min:1', 'max:50'],
 
             'adresse' => ['required', 'array'],
             'adresse.adresse' => ['required', 'string', 'max:255'],
@@ -43,6 +43,8 @@ class PrecommandeRequest extends FormRequest
             'town.required' => 'La ville de livraison est obligatoire.',
             'products.required' => 'Veuillez indiquer au moins un produit.',
             'products.max' => 'Une commande ne peut pas dépasser 100 produits différents.',
+            'products.*.quantity.integer' => 'La quantité doit être un nombre entier.',
+            'products.*.quantity.max' => 'La quantité ne peut pas dépasser 50 par produit.',
             'adresse.adresse.required' => 'L\'adresse de livraison est obligatoire.',
             'destinataire.required' => 'Veuillez indiquer qui doit être livré.',
             'destinataire.name.required' => 'Le nom de la personne à livrer est obligatoire.',

@@ -37,13 +37,15 @@ class PrecommandeController extends Controller
             );
         }
 
+        $valide = $request->validated();
+
         try {
             $precommande = $this->precommandes->creer(
                 $request->user(),
                 $lines,
                 $town,
-                $request->input('adresse'),
-                $request->input('destinataire'),
+                $valide['adresse'],
+                $valide['destinataire'],
             );
         } catch (PrecommandeRefusee $e) {
             return ApiResponse::BAD_REQUEST(
@@ -76,6 +78,8 @@ class PrecommandeController extends Controller
     {
         return match ($raison) {
             PrecommandeRefusee::AUCUN_TARIF_LIVRAISON => 'Nous ne livrons pas encore dans cette zone.',
+            PrecommandeRefusee::PANIER_HORS_TRANCHE => 'Ce panier dépasse nos tranches de livraison. Réduisez la commande ou passez par l\'application.',
+            PrecommandeRefusee::REFERENCE_INDISPONIBLE => 'Une erreur technique empêche la création de la pré-commande, réessayez.',
             'multi_restaurant' => 'Une commande ne peut contenir que des plats d\'un seul restaurant.',
             'devises_melangees' => 'Tous les plats doivent être dans la même devise.',
             'panier_vide' => 'Veuillez indiquer au moins un produit.',
