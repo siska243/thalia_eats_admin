@@ -155,7 +155,10 @@ de Sanctum est enregistré dans `Kernel.php` et appliqué aux routes livrées en
 ### 5.1 Schéma
 
 **`precommandes`** — `user_id`, `restaurant_id`, `town_id`, l'adresse recopiée
-(`adresse_delivery`, `street`, `number_street`, `reference_adresse`, `lat`, `long`),
+(`adresse_delivery`, `street`, `number_street`, `reference_adresse`), les coordonnées
+`lat` et `long` **nullables** — un agent conversationnel n'en a pas, et rien dans ce
+sous-projet ne géocode ; elles existent pour que la conversion vers `Commande` reste
+symétrique et pour un remplissage ultérieur,
 le destinataire (`recipient_name`, `recipient_phone`), le chiffrage figé
 (`sous_total`, `frais_livraison`, `service_price`, `total`, `currency_id`), la
 tranche retenue (`delivrery_price_id`, pour l'audit), `expires_at`, `status`,
@@ -164,14 +167,23 @@ tranche retenue (`delivrery_price_id`, pour l'audit), `expires_at`, `status`,
 **`precommande_products`** — `precommande_id`, `product_id`, `quantity`, et le
 `price` **au moment du devis**. C'est ce qui rend le prix figé réel.
 
-Statuts : `en_attente`, `payee`, `expiree`, `annulee`.
+Statuts : `en_attente`, `payee`, `expiree`.
+
+Pas de statut « annulée » : rien ne peut annuler une pré-commande, puisqu'aucun
+endpoint ne la modifie. Une pré-commande dont on ne veut plus expire d'elle-même en
+12 heures. Ajouter un statut que rien ne produit inviterait quelqu'un à écrire le
+chemin qui le produit.
+
+`expiree` n'est pas davantage écrit par un processus : c'est une lecture dérivée de
+`expires_at`, constatée à la lecture. Aucun balayage n'en dépend.
 
 ### 5.2 Immuabilité
 
 Aucun endpoint de mise à jour ni de suppression, pour personne. Une pré-commande
 expirée n'est pas effacée : son statut devient inerte à la lecture. Elle reste
-visible plusieurs jours côté API, pour qu'un agent puisse dire « ta commande d'hier
-a expiré, je te la refais à l'identique ? ».
+visible **30 jours** côté API, pour qu'un agent puisse dire « ta commande d'hier
+a expiré, je te la refais à l'identique ? ». Au-delà, elle sort des listes
+mais **n'est jamais supprimée** : elle reste accessible par son identifiant.
 
 ### 5.3 Création
 
