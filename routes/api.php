@@ -141,7 +141,7 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
     Route::post('/delivery-confirm-reception-order', [DeliveryController::class, 'confirmReceptionRestaurant']);
     Route::get('/delivery-dash', [DeliveryController::class, 'dashRestaurant']);
 
-    Route::middleware('assistant.emetteur')->prefix('/assistants')
+    Route::middleware(['assistant.emetteur', 'throttle:assistants'])->prefix('/assistants')
         ->controller(\App\Http\Controllers\Api\AssistantTokenController::class)
         ->group(function () {
             Route::post('/', 'store');
@@ -152,11 +152,11 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
 });
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::middleware('ability:catalogue:lire')->group(function () {
+    Route::middleware(['ability:catalogue:lire', 'throttle:agent-lecture'])->group(function () {
         Route::get('/products/search', [\App\Http\Controllers\Api\ProductSearchController::class, 'index']);
     });
 
-    Route::middleware('ability:devis:calculer')->group(function () {
+    Route::middleware(['ability:devis:calculer', 'throttle:agent-devis'])->group(function () {
         Route::post('/quote', [\App\Http\Controllers\Api\QuotationController::class, 'quote']);
         Route::post('/budget-suggestions', [\App\Http\Controllers\Api\QuotationController::class, 'budgetSuggestions']);
     });
