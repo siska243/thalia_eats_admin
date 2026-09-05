@@ -2395,12 +2395,16 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Town;
 use App\Services\BudgetSuggestionService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Tests\TestCase;
 
 class BudgetSuggestionServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    // DatabaseTruncation, PAS RefreshDatabase : un index FULLTEXT InnoDB n'est
+    // pas visible depuis MATCH() ... AGAINST() à l'intérieur de la transaction
+    // non validée dans laquelle RefreshDatabase enferme chaque test. Le test
+    // du filtre texte verrait alors zéro ligne. Constaté en tâche 4.
+    use DatabaseTruncation;
 
     private BudgetSuggestionService $service;
 
@@ -2705,13 +2709,15 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Town;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class BudgetSuggestionEndpointTest extends TestCase
 {
-    use RefreshDatabase;
+    // Même raison qu'au-dessus : ce endpoint peut emprunter le chemin FULLTEXT
+    // dès qu'un `q` est fourni.
+    use DatabaseTruncation;
 
     private function contexte(): array
     {
