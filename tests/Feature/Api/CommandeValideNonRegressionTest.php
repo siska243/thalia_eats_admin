@@ -225,6 +225,32 @@ class CommandeValideNonRegressionTest extends TestCase
         $this->assertDatabaseHas('commandes', ['global_price' => 4000]);
     }
 
+    public function test_quotation_conforme_avec_warnings_est_journalise_hors_tranche(): void
+    {
+        config(['quotation.authoritative' => false]);
+        Sanctum::actingAs(User::factory()->create());
+
+        [$town, $currency, $product] = $this->contexte();
+
+        // 1500 x 100 = 150000, au dessus de interval_max_price (100000) de la
+        // seule tranche de la town : le moteur retombe hors tranche, frais et
+        // service a zero, total = sous_total. Le client annonce ce meme total :
+        // les deux calculs concordent, mais tous deux a zero de frais - la
+        // fuite de donnees delivrery_prices, pas un bug du moteur.
+        $payload = $this->payload($town, $currency, $product, 150000);
+        $payload['products'] = [
+            ['uid' => Cipher::Encrypt($product->id), 'quantity' => 100],
+        ];
+
+        $this->postJson('/api/user/commande/valide', $payload)->assertStatus(201);
+
+        $this->assertFileExists($this->log_path);
+        $contenu = file_get_contents($this->log_path);
+
+        $this->assertStringContainsString('quotation_conforme_avec_warnings', $contenu);
+        $this->assertStringNotContainsString('ecart_quotation', $contenu);
+    }
+
     public function test_une_observation_impossible_ne_casse_pas_la_commande(): void
     {
         config(['quotation.authoritative' => false]);

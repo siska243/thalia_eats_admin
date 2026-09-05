@@ -545,12 +545,30 @@ class CommandeController extends Controller
             $quotation = null;
 
             try {
-                $quotation_lines = [];
+                $ids = [];
 
                 foreach ($products as $entry) {
-                    $observed = Product::query()
-                        ->with('currency')
-                        ->find(Cipher::Decrypt($entry['uid']));
+                    $decrypted = Cipher::Decrypt($entry['uid']);
+
+                    if ($decrypted !== false && $decrypted !== '' && ctype_digit((string) $decrypted)) {
+                        $ids[] = (int) $decrypted;
+                    }
+                }
+
+                $observes = Product::query()
+                    ->with('currency')
+                    ->whereIn('id', $ids)
+                    ->get()
+                    ->keyBy('id');
+
+                $quotation_lines = [];
+                $unresolved = false;
+
+                foreach ($products as $entry) {
+                    $decrypted = Cipher::Decrypt($entry['uid']);
+                    $observed = ($decrypted !== false && $decrypted !== '' && ctype_digit((string) $decrypted))
+                        ? $observes->get((int) $decrypted)
+                        : null;
 
                     if ($observed) {
                         // Quantité numérique, PAS (int) : calculePrice.js fait
@@ -561,10 +579,20 @@ class CommandeController extends Controller
                             'product' => $observed,
                             'quantity' => $entry['quantity'],
                         ];
+                    } else {
+                        $unresolved = true;
                     }
                 }
 
-                if ($town && $quotation_lines !== []) {
+                if ($unresolved) {
+                    // Une ligne non résolue chiffrerait un panier partiel : le
+                    // moteur crierait à l'écart sur un panier qu'il n'a jamais
+                    // vraiment vu. On ne chiffre pas, on journalise la raison.
+                    Log::channel('quotation')->error('observation_impossible', [
+                        'commande' => $commande->refernce,
+                        'message' => 'un ou plusieurs uid de produits ne resolvent a aucun produit',
+                    ]);
+                } elseif ($town && $quotation_lines !== []) {
                     $quotation = app(QuotationService::class)->quote($quotation_lines, $town);
 
                     if (! $quotation->disponible) {
@@ -601,10 +629,17 @@ class CommandeController extends Controller
                     }
                 }
             } catch (\Throwable $e) {
-                Log::channel('quotation')->error('observation_impossible', [
-                    'commande' => $commande->refernce,
-                    'message' => $e->getMessage(),
-                ]);
+                // Le canal « quotation » est peut-être précisément ce qui vient
+                // d'échouer : ne jamais laisser la récupération relever.
+                try {
+                    Log::channel('quotation')->error('observation_impossible', [
+                        'commande' => $commande->refernce,
+                        'message' => $e->getMessage(),
+                    ]);
+                } catch (\Throwable) {
+                    // Rien à faire : une commande ne peut pas échouer à cause
+                    // de la mesure.
+                }
             }
 
             $montant_facture = (config('quotation.authoritative') && $quotation !== null && $quotation->disponible)
