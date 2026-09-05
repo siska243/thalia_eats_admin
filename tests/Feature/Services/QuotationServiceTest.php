@@ -9,6 +9,7 @@ use App\Models\Restaurant;
 use App\Models\Town;
 use App\Services\QuotationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class QuotationServiceTest extends TestCase
@@ -310,5 +311,94 @@ class QuotationServiceTest extends TestCase
         $this->assertTrue($quotation->disponible);
         $this->assertSame(8700.0, $quotation->total);
         $this->assertContains(QuotationService::WARNING_DEVISE_TRANCHE_DIFFERENTE, $quotation->warnings);
+    }
+
+    public function test_le_total_n_est_pas_arrondi_par_le_service(): void
+    {
+        [$town, $product, $currency] = $this->contexte(1000);
+
+        DelivreryPrice::factory()->create([
+            'town_id' => $town->id, 'currency_id' => $currency->id,
+            'interval_pricing' => 0, 'interval_max_price' => 100000,
+            'frais' => 3000, 'service_price' => 700,
+        ]);
+
+        $quotation = $this->service->quote($this->lines([[$product, 1]]), $town);
+
+        // total() côté client n'applique aucun arrondi : sous_price + service + livraison bruts.
+        $this->assertSame(4700.0, $quotation->total);
+    }
+
+    /**
+     * @return array<string, array{0: float, 1: float}>
+     */
+    public static function valeursCharniereProvider(): array
+    {
+        // round() de PHP diverge de toFixed(2) du JS sur ces valeurs binaires
+        // charnières ; sprintf('%.2F', ...) reproduit le comportement JS.
+        return [
+            '8.165 -> 8.16' => [8.165, 8.16],
+            '1.005 -> 1.00' => [1.005, 1.00],
+            '2.675 -> 2.67' => [2.675, 2.67],
+        ];
+    }
+
+    #[DataProvider('valeursCharniereProvider')]
+    public function test_le_sous_total_reproduit_to_fixed_et_non_round(float $prix, float $attendu): void
+    {
+        $town = Town::factory()->create();
+        $currency = Currency::factory()->create();
+
+        DelivreryPrice::factory()->create([
+            'town_id' => $town->id, 'currency_id' => $currency->id,
+            'interval_pricing' => 0, 'interval_max_price' => 100000,
+            'frais' => 0, 'service_price' => 0,
+        ]);
+
+        $product = Product::factory()->create([
+            'currency_id' => $currency->id,
+            'price' => $prix,
+        ]);
+
+        $quotation = $this->service->quote($this->lines([[$product, 1]]), $town);
+
+        $this->assertSame($attendu, $quotation->sous_total);
+    }
+
+    public function test_une_quantite_fractionnaire_multiplie_sans_troncature(): void
+    {
+        $town = Town::factory()->create();
+        $currency = Currency::factory()->create();
+
+        DelivreryPrice::factory()->create([
+            'town_id' => $town->id, 'currency_id' => $currency->id,
+            'interval_pricing' => 0, 'interval_max_price' => 100000,
+            'frais' => 0, 'service_price' => 0,
+        ]);
+
+        $product = Product::factory()->create([
+            'currency_id' => $currency->id,
+            'price' => 1000,
+        ]);
+
+        $quotation = $this->service->quote($this->lines([[$product, 2.5]]), $town);
+
+        $this->assertSame(2500.0, $quotation->sous_total);
+    }
+
+    public function test_une_tranche_avec_service_price_nul_donne_zero(): void
+    {
+        [$town, $product, $currency] = $this->contexte(5000);
+
+        DelivreryPrice::factory()->create([
+            'town_id' => $town->id, 'currency_id' => $currency->id,
+            'interval_pricing' => 0, 'interval_max_price' => 100000,
+            'frais' => 3000, 'service_price' => null,
+        ]);
+
+        $quotation = $this->service->quote($this->lines([[$product, 1]]), $town);
+
+        $this->assertSame(0.0, $quotation->service_price);
+        $this->assertSame(8000.0, $quotation->total);
     }
 }

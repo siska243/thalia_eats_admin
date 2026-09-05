@@ -36,7 +36,9 @@ class QuotationService
     private array $brackets_cache = [];
 
     /**
-     * @param  array<int, array{product: Product, quantity: int}>  $lines
+     * @param  array<int, array{product: Product, quantity: int|float}>  $lines  la quantité arrive
+     *                                                                           du client sans validation d'entier garantie côté service : l'intégrité relève de
+     *                                                                           la validation de l'appelant (le FormRequest de l'endpoint la valide déjà en integer)
      * @param  Town  $town  town de l'adresse de LIVRAISON, jamais celle du restaurant
      */
     public function quote(array $lines, Town $town, ?int $expected_restaurant_id = null): Quotation
@@ -51,7 +53,9 @@ class QuotationService
 
         foreach ($lines as $line) {
             $product = $line['product'];
-            $quantity = (int) $line['quantity'];
+            // Le JS ne coerce jamais la quantité (`item.quantity * item.price`) :
+            // garder la valeur numérique brute plutôt que de tronquer un int.
+            $quantity = (float) $line['quantity'];
 
             if ($quantity < 1) {
                 return Quotation::refus(self::RAISON_QUANTITE_INVALIDE);
@@ -65,8 +69,10 @@ class QuotationService
             $sous_total += (float) $product->price * $quantity;
         }
 
-        // calcul_price() applique toFixed(2) côté client.
-        $sous_total = round($sous_total, 2);
+        // calcul_price() applique parseFloat(sum.toFixed(2)) côté client. PHP round()
+        // diverge de toFixed(2) d'un centime sur les valeurs charnières
+        // (round(8.165,2)=8.17 contre 8.16 en JS) : sprintf reproduit toFixed.
+        $sous_total = (float) sprintf('%.2F', $sous_total);
 
         if (count($restaurant_ids) > 1) {
             return Quotation::refus(self::RAISON_MULTI_RESTAURANT);
@@ -118,7 +124,8 @@ class QuotationService
             $sous_total,
             $frais,
             $service,
-            round($sous_total + $frais + $service, 2),
+            // total() côté client ne fait aucun arrondi : sous_price + service + livraison bruts.
+            $sous_total + $frais + $service,
             $currency,
             $bracket,
             $warnings,
