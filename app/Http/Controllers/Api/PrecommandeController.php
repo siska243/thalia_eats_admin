@@ -1,0 +1,128 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Exceptions\PrecommandeRefusee;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\PrecommandeRequest;
+use App\Http\Resources\PrecommandeResource;
+use App\Models\Product;
+use App\Models\Town;
+use App\Services\PrecommandeService;
+use App\Wrappers\ApiResponse;
+use App\Wrappers\Cipher;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\URL;
+
+class PrecommandeController extends Controller
+{
+    public function __construct(private readonly PrecommandeService $precommandes) {}
+
+    public function store(PrecommandeRequest $request): JsonResponse
+    {
+        $town = Town::query()->where('slug', $request->input('town'))->first();
+
+        if (! $town) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette ville de livraison est introuvable');
+        }
+
+        try {
+            $lines = $this->resoudreLignes($request->input('products'));
+        } catch (ModelNotFoundException) {
+            return ApiResponse::BAD_REQUEST(
+                'produit_introuvable',
+                'Oups',
+                'Un des produits demandés est introuvable ou n\'est plus disponible'
+            );
+        }
+
+        try {
+            $precommande = $this->precommandes->creer(
+                $request->user(),
+                $lines,
+                $town,
+                $request->input('adresse'),
+                $request->input('destinataire'),
+            );
+        } catch (PrecommandeRefusee $e) {
+            return ApiResponse::BAD_REQUEST(
+                $e->raison,
+                'Oups',
+                $this->messageDeRefus($e->raison)
+            );
+        }
+
+        return ApiResponse::SUCCESS_DATA(
+            array_merge(
+                (new PrecommandeResource($precommande))->toArray($request),
+                ['lien_paiement' => $this->lienDePaiement($precommande)],
+            ),
+            'Pré-commande créée',
+            'Votre pré-commande est valable '.config('precommande.validite_heures').' heures.'
+        );
+    }
+
+    protected function lienDePaiement(\App\Models\Precommande $precommande): string
+    {
+        return URL::temporarySignedRoute(
+            'precommande.paiement',
+            $precommande->expires_at,
+            ['uid' => Cipher::Encrypt($precommande->id)],
+        );
+    }
+
+    private function messageDeRefus(string $raison): string
+    {
+        return match ($raison) {
+            PrecommandeRefusee::AUCUN_TARIF_LIVRAISON => 'Nous ne livrons pas encore dans cette zone.',
+            'multi_restaurant' => 'Une commande ne peut contenir que des plats d\'un seul restaurant.',
+            'devises_melangees' => 'Tous les plats doivent être dans la même devise.',
+            'panier_vide' => 'Veuillez indiquer au moins un produit.',
+            'quantite_invalide' => 'La quantité doit être au moins égale à 1.',
+            default => 'Cette commande ne peut pas être créée.',
+        };
+    }
+
+    /**
+     * @param  array<int, array{uid: string, quantity: int|float}>  $products
+     * @return array<int, array{product: Product, quantity: int|float}>
+     *
+     * @throws ModelNotFoundException
+     */
+    protected function resoudreLignes(array $products): array
+    {
+        $ids = [];
+
+        foreach ($products as $entry) {
+            $id = Cipher::Decrypt($entry['uid']);
+
+            if ($id === false || $id === '' || ! ctype_digit((string) $id)) {
+                throw new ModelNotFoundException;
+            }
+
+            $ids[$entry['uid']] = (int) $id;
+        }
+
+        $trouves = Product::query()
+            ->with('currency')
+            ->whereIn('id', array_values($ids))
+            ->where('is_active', true)
+            ->get()
+            ->keyBy('id');
+
+        $lines = [];
+
+        foreach ($products as $entry) {
+            $product = $trouves->get($ids[$entry['uid']]);
+
+            if (! $product) {
+                throw new ModelNotFoundException;
+            }
+
+            $lines[] = ['product' => $product, 'quantity' => $entry['quantity']];
+        }
+
+        return $lines;
+    }
+}

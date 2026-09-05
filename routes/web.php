@@ -34,6 +34,10 @@ Route::get('/auth/google', [\App\Http\Controllers\Api\GoogleAuthController::clas
 Route::get('/auth/google/register', [\App\Http\Controllers\Api\GoogleAuthController::class, 'register']);
 Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthController::class, 'callback']);
 
+Route::get('/paiement/precommande/{uid}', function () {
+    abort(501);
+})->name('precommande.paiement')->middleware('signed');
+
 
 
 

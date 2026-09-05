@@ -160,6 +160,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/quote', [\App\Http\Controllers\Api\QuotationController::class, 'quote']);
         Route::post('/budget-suggestions', [\App\Http\Controllers\Api\QuotationController::class, 'budgetSuggestions']);
     });
+
+    Route::middleware(['ability:precommande:creer', 'throttle:agent-ecriture'])->group(function () {
+        Route::post('/precommandes', [\App\Http\Controllers\Api\PrecommandeController::class, 'store']);
+    });
 });
 
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
