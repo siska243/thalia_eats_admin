@@ -46,6 +46,9 @@ class PrecommandeResource extends JsonResource
             ])->values()),
             'expires_at' => $this->resource->expires_at,
             'created_at' => $this->resource->created_at,
+            'commande' => $this->resource->commande ? [
+                'uid' => Cipher::Encrypt($this->resource->commande->id),
+            ] : null,
         ];
     }
 }

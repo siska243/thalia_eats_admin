@@ -164,6 +164,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware(['ability:precommande:creer', 'throttle:agent-ecriture'])->group(function () {
         Route::post('/precommandes', [\App\Http\Controllers\Api\PrecommandeController::class, 'store']);
     });
+
+    Route::middleware(['ability:precommande:lire', 'throttle:agent-lecture'])->group(function () {
+        Route::get('/precommandes', [\App\Http\Controllers\Api\PrecommandeController::class, 'index']);
+        Route::get('/precommandes/{uid}', [\App\Http\Controllers\Api\PrecommandeController::class, 'show']);
+        Route::get('/user/adresses-recentes', [\App\Http\Controllers\Api\AdresseRecenteController::class, 'index']);
+    });
 });
 
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {

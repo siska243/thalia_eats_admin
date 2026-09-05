@@ -6,6 +6,7 @@ use App\Exceptions\PrecommandeRefusee;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PrecommandeRequest;
 use App\Http\Resources\PrecommandeResource;
+use App\Models\Precommande;
 use App\Models\Product;
 use App\Models\Town;
 use App\Services\PrecommandeService;
@@ -13,6 +14,7 @@ use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 
 class PrecommandeController extends Controller
@@ -63,6 +65,55 @@ class PrecommandeController extends Controller
             'Pré-commande créée',
             'Votre pré-commande est valable '.config('precommande.validite_heures').' heures.'
         );
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $precommandes = Precommande::query()
+            ->with(['products.product', 'restaurant', 'currency', 'commande'])
+            ->where('user_id', $request->user()->id)
+            ->where('created_at', '>=', now()->subDays((int) config('precommande.visibilite_jours')))
+            ->orderByDesc('created_at')
+            ->get();
+
+        return ApiResponse::GET_DATA([
+            'data' => PrecommandeResource::collection($precommandes),
+        ]);
+    }
+
+    public function show(Request $request, string $uid): JsonResponse
+    {
+        $precommande = $this->sienne($request, $uid);
+
+        if (! $precommande) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette pré-commande est introuvable');
+        }
+
+        return ApiResponse::GET_DATA([
+            'data' => array_merge(
+                (new PrecommandeResource($precommande))->toArray($request),
+                // Un lien n'a de sens que sur une pré-commande encore payable.
+                ['lien_paiement' => $precommande->estValide() ? $this->lienDePaiement($precommande) : null],
+            ),
+        ]);
+    }
+
+    /**
+     * Restreint aux pré-commandes de l'utilisateur courant : celle d'un autre
+     * doit être indiscernable d'un identifiant inexistant.
+     */
+    protected function sienne(Request $request, string $uid): ?Precommande
+    {
+        $id = Cipher::Decrypt($uid);
+
+        if ($id === false || ! ctype_digit((string) $id)) {
+            return null;
+        }
+
+        return Precommande::query()
+            ->with(['products.product', 'restaurant', 'currency', 'commande'])
+            ->where('user_id', $request->user()->id)
+            ->find((int) $id);
     }
 
     protected function lienDePaiement(\App\Models\Precommande $precommande): string
