@@ -2049,7 +2049,24 @@ machine ne doit pas promettre une livraison gratuite par accident."
 
 ## Task 6: Lecture des pré-commandes et adresses récentes
 
-Trois endpoints de lecture. Le dernier alimente la question que l'assistant doit poser : « on livre au même endroit que la dernière fois ? ». Il lit les **commandes passées**, pas `user_adresses`, qui est vide (0 ligne).
+Trois endpoints de lecture. Le dernier alimente la question que l'assistant doit poser : « on livre au même endroit que la dernière fois ? ».
+
+**Amendé en cours de route.** Ce plan disait de lire les commandes passées parce que
+`user_adresses` était vide. Une autre session a depuis construit un vrai carnet
+d'adresses : la table porte maintenant `town_id`, `street`, `number_street`, `label`,
+un `UserAddressController` l'expose en GET/POST/DELETE, et elle contient des lignes.
+
+La bonne source est donc le carnet **quand il est renseigné** — il porte des libellés
+(« maison », « bureau ») qu'une adresse déduite d'une commande n'aura jamais — avec
+repli sur les commandes passées quand il est vide. Un client qui commande depuis des
+années sans avoir jamais ouvert l'écran d'adresses ne doit pas se voir répondre
+« je ne connais aucune adresse pour vous ».
+
+Noter aussi que les routes `/api/user/addresses` de l'autre session ne déclarent
+aucune ability : le refus par défaut de la tâche 2b les ferme donc aux assistants,
+en lecture comme en écriture. C'est voulu — un agent ne gère pas le carnet
+d'adresses. L'endpoint de cette tâche, qui déclare `ability:precommande:lire`, est
+sa seule porte vers ces données, en lecture seule.
 
 **Files:**
 - Modify: `app/Http/Controllers/Api/PrecommandeController.php` (deux méthodes)
@@ -2145,7 +2162,42 @@ class PrecommandeLectureTest extends TestCase
         $this->getJson('/api/precommandes/'.Cipher::Encrypt($autre->id))->assertStatus(404);
     }
 
-    public function test_les_adresses_recentes_viennent_des_commandes_passees(): void
+    public function test_le_carnet_d_adresses_est_la_source_prioritaire(): void
+    {
+        $moi = User::factory()->create();
+        Sanctum::actingAs($moi, TokenAbility::agent());
+
+        $town = Town::factory()->create();
+
+        DB::table('user_adresses')->insert([
+            'user_id' => $moi->id,
+            'town_id' => $town->id,
+            'adresse' => 'Avenue du Carnet',
+            'street' => 'Rue C',
+            'number_street' => '7',
+            'reference' => 'Portail bleu',
+            'label' => 'maison',
+            'slug' => 'carnet-'.\Illuminate\Support\Str::random(8),
+            'is_main' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Une commande passée existe aussi : le carnet doit primer.
+        Commande::query()->create([
+            'refernce' => '9010', 'user_id' => $moi->id, 'status_id' => 3,
+            'town_id' => $town->id, 'adresse_delivery' => 'Vieille adresse',
+        ]);
+
+        $response = $this->getJson('/api/user/adresses-recentes');
+
+        $response->assertStatus(200);
+        $this->assertSame('Avenue du Carnet', $response->json('0.adresse'));
+        $this->assertSame('maison', $response->json('0.label'));
+        $this->assertSame('carnet', $response->json('0.source'));
+    }
+
+    public function test_les_commandes_passees_servent_de_repli_quand_le_carnet_est_vide(): void
     {
         $moi = User::factory()->create();
         Sanctum::actingAs($moi, TokenAbility::agent());
@@ -2174,6 +2226,8 @@ class PrecommandeLectureTest extends TestCase
         // Deux adresses distinctes, la plus recente d'abord.
         $this->assertCount(2, $response->json());
         $this->assertSame('Avenue Kasavubu', $response->json('0.adresse'));
+        $this->assertSame('commandes', $response->json('0.source'));
+        $this->assertNull($response->json('0.label'));
     }
 
     public function test_les_adresses_d_un_autre_ne_fuient_pas(): void
@@ -2271,6 +2325,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Commande;
+use App\Models\UserAdresse;
 use App\Wrappers\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -2278,8 +2333,10 @@ use Illuminate\Http\Request;
 /**
  * Les adresses que l'assistant propose au client.
  *
- * Elles viennent des commandes passées, pas de user_adresses : cette table
- * existe mais est vide, l'adresse ayant toujours été saisie par commande.
+ * Deux sources, dans cet ordre : le carnet d'adresses s'il est renseigné — il
+ * porte des libellés (« maison », « bureau ») qu'une adresse déduite d'une
+ * commande n'aura jamais — puis les commandes passées en repli, pour le client
+ * qui commande depuis des années sans avoir jamais ouvert l'écran d'adresses.
  */
 class AdresseRecenteController extends Controller
 {
@@ -2287,6 +2344,30 @@ class AdresseRecenteController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $carnet = UserAdresse::query()
+            ->with('town')
+            ->where('user_id', $request->user()->id)
+            ->orderByDesc('is_main')
+            ->orderByDesc('created_at')
+            ->take(self::MAX)
+            ->get()
+            ->map(fn (UserAdresse $a) => [
+                'adresse' => $a->adresse,
+                'street' => $a->street,
+                'number_street' => $a->number_street,
+                'reference' => $a->reference,
+                'town' => $a->town?->slug,
+                'town_title' => $a->town?->title,
+                'label' => $a->label,
+                'source' => 'carnet',
+                'derniere_utilisation' => null,
+            ])
+            ->values();
+
+        if ($carnet->isNotEmpty()) {
+            return ApiResponse::GET_DATA($carnet);
+        }
+
         $adresses = Commande::query()
             ->with('town')
             ->where('user_id', $request->user()->id)
@@ -2302,6 +2383,8 @@ class AdresseRecenteController extends Controller
                 'reference' => $c->reference_adresse,
                 'town' => $c->town?->slug,
                 'town_title' => $c->town?->title,
+                'label' => null,
+                'source' => 'commandes',
                 'derniere_utilisation' => $c->created_at,
             ])
             ->values();
