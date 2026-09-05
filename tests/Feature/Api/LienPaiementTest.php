@@ -61,16 +61,55 @@ class LienPaiementTest extends TestCase
         $reponse->assertDontSee('Avenue Kasa-Vubu 45, Ibanda', false);
         $reponse->assertDontSee('Josephine Mukendi', false);
 
-        $reponse->assertSee(\Illuminate\Support\Str::mask('Avenue Kasa-Vubu 45, Ibanda', '*', 3), false);
-        $reponse->assertSee(\Illuminate\Support\Str::mask('Josephine Mukendi', '*', 3), false);
+        $reponse->assertSee('Ave******', false);
+        $reponse->assertSee('Jos******', false);
+    }
+
+    public function test_le_masque_ne_trahit_pas_la_longueur_de_la_valeur(): void
+    {
+        // Str::mask() remplacait caractere par caractere : le nombre
+        // d'asterisques disait la longueur exacte de l'adresse. La marque est
+        // desormais de largeur fixe.
+        $court = Precommande::factory()->create(['adresse_delivery' => 'Av. Lac']);
+        $long = Precommande::factory()->create([
+            'adresse_delivery' => 'Avenue de la Democratie 1428, quartier Nyalukemba',
+        ]);
+
+        $this->get($this->lien($court))->assertSee('Av.******', false);
+        $this->get($this->lien($long))->assertSee('Ave******', false);
+    }
+
+    public function test_une_valeur_trop_courte_n_est_jamais_rendue_en_clair(): void
+    {
+        // Str::mask('Eve', '*', 3) rendait « Eve » : rien n'etait masque.
+        $p = Precommande::factory()->create([
+            'recipient_name' => 'Eve',
+            'adresse_delivery' => 'Av',
+        ]);
+
+        $reponse = $this->get($this->lien($p))->assertStatus(200);
+
+        $reponse->assertDontSee('Eve', false);
+        $reponse->assertSee('pour ******.', false);
     }
 
     public function test_le_recapitulatif_montre_toujours_les_plats_et_le_total(): void
     {
-        // Masquer ne doit pas empecher le payeur de savoir ce qu'il paie.
+        // Masquer ne doit pas empecher le payeur de savoir ce qu'il paie :
+        // le plat commande doit rester nomme, et le total lisible.
         $p = Precommande::factory()->create(['total' => 5500]);
+        $produit = \App\Models\Product::factory()->create(['title' => 'Poulet moambe']);
 
-        $this->get($this->lien($p))->assertStatus(200)->assertSee('5500', false);
+        $p->products()->create([
+            'product_id' => $produit->id,
+            'quantity' => 2,
+            'price' => 1500,
+        ]);
+
+        $this->get($this->lien($p->fresh('products')))
+            ->assertStatus(200)
+            ->assertSee('Poulet moambe', false)
+            ->assertSee('5500', false);
     }
 
     public function test_la_page_d_indisponibilite_ne_livre_pas_la_reference_entiere(): void

@@ -36,7 +36,7 @@
          propre adresse aux premiers caracteres ; un tiers n'apprend ni ou ni
          chez qui livrer. Les plats et le total restent lisibles : le payeur
          doit savoir ce qu'il paie. --}}
-    <p>Livraison à {{ \Illuminate\Support\Str::mask((string) $precommande->adresse_delivery, '*', 3) }}, pour {{ \Illuminate\Support\Str::mask((string) $precommande->recipient_name, '*', 3) }}.</p>
+    <p>Livraison à {{ \App\Helpers\CurrentHelpers::masquer($precommande->adresse_delivery) }}, pour {{ \App\Helpers\CurrentHelpers::masquer($precommande->recipient_name) }}.</p>
 
     @foreach ($errors->all() as $erreur)
         <p class="erreur">{{ $erreur }}</p>

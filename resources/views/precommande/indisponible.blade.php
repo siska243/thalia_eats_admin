@@ -20,7 +20,7 @@
     {{-- Apres expiration, la page n'a plus rien a prouver au porteur du
          lien : la reference complete n'y sert qu'a l'identifier aupres du
          support. --}}
-    <p>Référence {{ \Illuminate\Support\Str::mask((string) $precommande->refernce, '*', 3) }}.</p>
+    <p>Référence {{ \App\Helpers\CurrentHelpers::masquer($precommande->refernce) }}.</p>
 </div>
 </body>
 </html>
