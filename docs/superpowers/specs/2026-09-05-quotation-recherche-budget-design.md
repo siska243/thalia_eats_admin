@@ -122,7 +122,7 @@ voyant la commande entière — produits des concurrents inclus. Rien n'encadre 
 | Sujet | Décision | Conséquence |
 |---|---|---|
 | Granularité géo | Distance quand `restaurants.location` **et** l'adresse client sont renseignés ; repli sur la town sinon | La distance ne sert qu'à la pertinence, jamais au prix |
-| Devises | **Mono-devise stricte** — pas de taux de change introduit | Un panier et sa tranche de livraison doivent partager la même devise, sinon refus |
+| Devises | **Mono-devise stricte** — pas de taux de change introduit | Des produits de devises différentes sont refusés ; une tranche d'une autre devise est signalée mais appliquée, comme le fait le client |
 | Multi-restaurant | **Une commande = un restaurant** | Première application effective de la règle ; la quotation refuse un panier multi-restaurants |
 | Comportement hors tranche | **Conservé tel quel** : `frais = 0`, `service = 0` | Cohérence entre canaux préservée ; la fuite est mesurée, pas corrigée, dans A |
 | Prix facturé | `products.price`, **jamais** `promotionnalPrice` | Bug-compatible avec `valide()`. Le web affiche `promotionnalPrice` mais fait payer `price` — signalé, hors périmètre |
@@ -163,8 +163,14 @@ raison           ?string
 
 1. **Un seul restaurant** — si les produits ne partagent pas le même
    `restaurant_id` : `disponible = false`, `raison = 'multi_restaurant'`.
-2. **Mono-devise** — tous les produits doivent partager le même `currency_id`,
-   et la tranche retenue doit avoir le même. Sinon `raison = 'devises_melangees'`.
+2. **Mono-devise** — tous les produits doivent partager le même `currency_id`.
+   Sinon `raison = 'devises_melangees'` : aucun total sensé n'existe.
+   En revanche, une **tranche** dont la devise diffère de celle des produits
+   ne provoque **pas** de refus : elle ajoute un warning
+   `devise_tranche_differente` et ses frais sont appliqués tels quels.
+   `calculePrice.js` filtre les tranches par town uniquement, jamais par
+   devise ; refuser ici créerait un écart systématique dans le journal
+   d'observation.
 3. **Sous-total** — `Σ (products.price × quantity)`, arrondi à 2 décimales
    (aligné sur le `toFixed(2)` de `calcul_price`). `promotionnalPrice` ignoré.
 4. **Tranche** — parmi les `delivrery_prices` de `town_id` **et**
@@ -207,9 +213,17 @@ Lecture pure. Brique consommée par B et C.
 
 #### `GET /api/products/search`
 
-Paramètres : `q` (FULLTEXT sur `title` + `description`), `category`,
-`sub_category`, `price_min`, `price_max`, `currency`, `town`, `lat`, `lng`,
-`radius`, `per_page`.
+Paramètres : `q` (FULLTEXT sur `title` + `description`), `sub_category`,
+`price_min`, `price_max`, `currency`, `town`, `lat`, `lng`, `radius`, `sort`,
+`per_page`.
+
+**Pas de filtre `category`.** Le schéma et le code se contredisent sur la clé
+étrangère des sous-catégories : la migration crée `sub_category_products.category_id`,
+alors que `SubCategoryProduct::category_product()` et
+`SubCategoryProductResource.php:39` référencent `category_product_id`. On ne
+construit pas un filtre public sur une relation que le schéma dément ; seul
+`sub_category`, qui s'appuie sur `products.sub_category_product_id`, est exposé.
+À trancher séparément.
 
 Filtre systématiquement `products.is_active` et `restaurants.is_active`.
 **Pagine** — contrairement à `list-restaurant` qui renvoie tout le parc d'un bloc.
@@ -270,8 +284,13 @@ L'agent peut alors répondre « rien à 500 FC livré ; le moins cher est à 3 2
 il te manque 700 » plutôt que « je n'ai rien trouvé ».
 
 Raisons distinctes et exploitables : `budget_insuffisant`,
-`aucun_tarif_livraison_pour_cette_town`, `aucun_produit_dans_cette_devise`,
-`aucun_restaurant_dans_cette_zone`, `multi_restaurant`, `devises_melangees`.
+`aucun_produit_dans_cette_devise`, `aucun_restaurant_dans_cette_zone`,
+`multi_restaurant`, `devises_melangees`, `panier_vide`, `quantite_invalide`,
+`restaurant_inattendu`.
+
+Une town sans tarif de livraison actif n'est **pas** une raison de refus :
+le comportement conservé donne alors une livraison à 0, donc un chiffrage
+valide. Elle produit un warning, pas un blocage.
 
 ### 4.5 Géolocalisation
 
@@ -286,6 +305,12 @@ Appliqué **restaurant par restaurant**, pas globalement : un restaurant
 géolocalisé est trié par distance, un restaurant sans coordonnées reste éligible
 via sa town et arrive après. Aucun restaurant ne disparaît du catalogue parce que
 ses données sont incomplètes.
+
+Ce principe s'étend au filtre par town lui-même : `restaurants.town_id` étant
+nullable et probablement peu renseigné, un restaurant **sans** town reste
+éligible. On ne filtre jamais sur une donnée absente — sinon un parc mal
+renseigné rendrait la recherche vide. De même, un rayon n'exclut que les
+restaurants dont la position est connue.
 
 `restaurants.location` étant un `json` nullable jamais lu jusqu'ici, le parsing
 est défensif : une valeur absente ou malformée dégrade vers la town, elle ne lève
@@ -334,10 +359,21 @@ Deux signaux distincts, à ne pas confondre :
 Sur flag de configuration, pas sur du code :
 
 ```php
-$commande->global_price = config('quotation.authoritative')
+$montant_facture = config('quotation.authoritative')
     ? $quotation->total
     : $total_price;
 ```
+
+**`global_price` ne suffit pas.** `valide()` n'envoie pas `$commande->global_price`
+à FlexPay : elle envoie `floatval($total_price)` (`CommandeController.php:578`) et
+enregistre ce même montant dans `Payement.amount` et `amount_customer`. Basculer
+le seul `global_price` laisserait donc le client dicter ce qui est réellement
+encaissé sur ce chemin. Les trois emplacements utilisent la même variable
+`$montant_facture` ; tant que le flag vaut `false`, elle est égale à
+`$total_price` et rien ne change.
+
+`paiement()` (l'autre chemin de paiement, pour une commande déjà créée) facture
+déjà `$order->global_price` : la bascule l'atteint sans modification.
 
 `QUOTATION_AUTHORITATIVE=false` à la livraison de A.
 
@@ -362,6 +398,10 @@ d'un double contrat sur l'ancien.
 
 - **Migration** : index `FULLTEXT` sur `products (title, description)`. Additif,
   réversible, sans verrou long à ce volume.
+- **`valide()`** : le bloc d'observation, et le remplacement de `$total_price` par
+  la variable `$montant_facture` aux trois endroits qui facturent (`global_price`,
+  la charge utile FlexPay, `Payement.amount` / `amount_customer`). Tant que le
+  flag vaut `false`, `$montant_facture === $total_price` : comportement identique.
 - **Aucun nouveau seeder** — rien à rendre idempotent pour `script-run.sh`.
 - **`helpers/Route.ts`** côté web **et** côté mobile : ajout des trois clés
   `quote`, `products_search`, `budget_suggestions`. Les deux fichiers ont déjà
