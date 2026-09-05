@@ -25,6 +25,19 @@ class RouteServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('api', function (Request $request) {
+            // Un jeton d'assistant compte sur SA propre cle : sinon il epuise
+            // le quota partage et l'application mobile du meme client se met a
+            // echouer, sans que le client puisse faire le lien. La cle est
+            // celle de cleDeLimitation(), deja utilisee par les limiteurs
+            // « agent-* » — pas une seconde expression du meme calcul.
+            $token = $request->user()?->currentAccessToken();
+
+            if ($token !== null && isset($token->id) && ! $request->user()->tokenCan('*')) {
+                return Limit::perMinute(60)->by(self::cleDeLimitation($request));
+            }
+
+            // Jeton d'application ordinaire, session ou anonyme : comportement
+            // strictement inchange.
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 

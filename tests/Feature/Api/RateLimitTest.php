@@ -65,6 +65,33 @@ class RateLimitTest extends TestCase
             ->postJson('/api/budget-suggestions', [])->assertStatus(422);
     }
 
+    public function test_un_assistant_n_epuise_pas_le_quota_partage_du_groupe_api(): void
+    {
+        // Les limiteurs "agent-*" comptent deja par jeton, mais le groupe de
+        // middlewares "api" applique EN PLUS throttle:api, compte par
+        // utilisateur. Un assistant bavard epuisait donc ce quota partage et
+        // l'application du meme client se mettait a repondre 429, sans que le
+        // client puisse faire le moindre lien.
+        $user = User::factory()->create();
+
+        $jetonAssistant = $user->createToken('assistant', TokenAbility::agent())->plainTextToken;
+        $jetonApplication = $user->createToken('application', ['*'])->plainTextToken;
+
+        // 60 requetes : exactement le budget de throttle:api.
+        for ($i = 0; $i < 60; $i++) {
+            $this->withHeader('Authorization', 'Bearer '.$jetonAssistant)
+                ->getJson('/api/products/search?q=riz');
+        }
+
+        // Le guard sanctum met en cache l'utilisateur resolu pour la duree du
+        // test : sans cet oubli, l'en-tete suivant serait ignore.
+        Auth::forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$jetonApplication)
+            ->getJson('/api/user')
+            ->assertStatus(200);
+    }
+
     public function test_l_emission_de_jetons_est_severement_limitee(): void
     {
         Sanctum::actingAs(User::factory()->create(), ['*']);
