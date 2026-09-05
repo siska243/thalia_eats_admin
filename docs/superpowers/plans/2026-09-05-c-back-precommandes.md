@@ -581,6 +581,178 @@ inexistant."
 
 ---
 
+## Task 2b: Refuser par défaut les jetons d'assistant
+
+**Défaut de conception trouvé à la revue de la tâche 1.** Une route qui ne porte pas de middleware `ability:` n'exige que `auth:sanctum` — un jeton d'assistant l'atteint donc. Le design est « autoriser par défaut ».
+
+Ce n'est pas théorique : pendant l'écriture de ce plan, une autre session a ajouté `CommandeController::updateDeliveryAddress` — changer l'adresse d'une commande en attente — sans garde. C'est exactement ce que la spec interdit à un agent, et personne n'a rien fait de mal : la route a simplement été écrite par quelqu'un qui ignorait l'existence des agents.
+
+Énumérer les routes mutantes à la main ne tiendrait pas. Il faut inverser la charge : **un jeton d'assistant est refusé partout où la route ne déclare pas explicitement une ability.**
+
+**Files:**
+- Create: `app/Http/Middleware/RefuserAgentSansAbility.php`
+- Modify: `app/Http/Kernel.php` (ajout au groupe `api`)
+- Test: `tests/Feature/Api/AgentRefuseParDefautTest.php`
+
+**Interfaces:**
+- Consumes: `App\Enums\TokenAbility` (tâche 1).
+- Produces: le middleware, ajouté au groupe `api` — donc actif sur toutes les routes de `routes/api.php`.
+
+- [ ] **Step 1: Écrire les tests**
+
+Créer `tests/Feature/Api/AgentRefuseParDefautTest.php` :
+
+```php
+<?php
+
+namespace Tests\Feature\Api;
+
+use App\Enums\TokenAbility;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class AgentRefuseParDefautTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_un_assistant_est_refuse_sur_une_route_sans_ability(): void
+    {
+        // /api/user/commande/current ne declare aucune ability : un assistant
+        // ne doit pas l'atteindre, meme si personne n'y a pense en l'ecrivant.
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+
+        $this->getJson('/api/user/commande/current')->assertStatus(403);
+    }
+
+    public function test_un_assistant_est_refuse_sur_le_changement_d_adresse(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+
+        $this->postJson('/api/user/commande/update-address-delivery', [])->assertStatus(403);
+    }
+
+    public function test_un_jeton_applicatif_passe_partout(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+
+        // Peu importe le corps : ce qui compte est que le garde ne refuse pas.
+        $this->assertNotSame(403, $this->getJson('/api/user/commande/current')->status());
+    }
+
+    public function test_un_assistant_passe_sur_une_route_qui_declare_son_ability(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+
+        $this->getJson('/api/products/search?q=poulet')->assertStatus(200);
+    }
+
+    public function test_une_route_publique_reste_publique(): void
+    {
+        // Aucun utilisateur authentifie : le garde ne doit rien faire.
+        $this->getJson('/api/categorie')->assertStatus(200);
+    }
+}
+```
+
+- [ ] **Step 2: Lancer les tests pour vérifier qu'ils échouent**
+
+Run: `php artisan test tests/Feature/Api/AgentRefuseParDefautTest.php`
+Expected: FAIL — les deux premiers tests obtiennent autre chose que 403, l'assistant atteignant aujourd'hui ces routes.
+
+- [ ] **Step 3: Écrire le middleware**
+
+Créer `app/Http/Middleware/RefuserAgentSansAbility.php` :
+
+```php
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Wrappers\ApiResponse;
+use Closure;
+use Illuminate\Http\Request;
+
+/**
+ * Refuser par défaut : un jeton d'assistant n'atteint que les routes qui
+ * déclarent explicitement une ability.
+ *
+ * Sans ce garde, une route protégée par le seul `auth:sanctum` est ouverte à
+ * tout jeton authentifié, assistants compris — y compris une route mutante
+ * ajoutée par quelqu'un qui ignore leur existence. Le cas s'est produit
+ * pendant l'écriture de ce plan.
+ *
+ * L'inverse — énumérer les routes interdites — ne tient pas : il faudrait y
+ * penser à chaque nouvelle route, et l'oubli est silencieux. Ici l'oubli est
+ * bruyant et du bon côté : une route destinée aux agents mais non marquée
+ * leur est fermée, ce qui se voit immédiatement.
+ */
+class RefuserAgentSansAbility
+{
+    public function handle(Request $request, Closure $next)
+    {
+        $user = $request->user();
+
+        // Route publique, ou jeton applicatif : rien à faire.
+        if (! $user || $user->tokenCan('*')) {
+            return $next($request);
+        }
+
+        $declareUneAbility = collect($request->route()?->gatherMiddleware() ?? [])
+            ->contains(fn ($middleware) => is_string($middleware) && str_starts_with($middleware, 'ability:'));
+
+        if (! $declareUneAbility) {
+            return ApiResponse::BAD_REQUEST(
+                'ability_absente',
+                'Oups',
+                'Cette action n\'est pas accessible depuis un assistant.'
+            )->setStatusCode(403);
+        }
+
+        return $next($request);
+    }
+}
+```
+
+- [ ] **Step 4: Ajouter le middleware au groupe `api`**
+
+Dans `app/Http/Kernel.php`, dans le tableau `'api' => [`, **après** `ThrottleRequests` et `SubstituteBindings` — l'utilisateur doit être résolu et la route liée avant que le garde ne s'exécute :
+
+```php
+            \App\Http\Middleware\RefuserAgentSansAbility::class,
+```
+
+Ne pas décommenter les lignes déjà commentées de ce groupe (`EnsureFrontendRequestsAreStateful`, `EnsureApiKeyIsPresent`).
+
+- [ ] **Step 5: Lancer les tests**
+
+Run: `php artisan test tests/Feature/Api/AgentRefuseParDefautTest.php`
+Expected: PASS, 5 tests.
+
+- [ ] **Step 6: Lancer la suite complète**
+
+Run: `php artisan test`
+Expected: aucune régression. Si un test échoue en 403, vérifier qu'il utilise bien `Sanctum::actingAs($user, ['*'])` — un test qui passe des abilities étroites sur une route non marquée est désormais refusé, ce qui est le comportement voulu.
+
+- [ ] **Step 7: Formater et committer**
+
+```bash
+./vendor/bin/pint app/Http/Middleware/RefuserAgentSansAbility.php tests/Feature/Api/AgentRefuseParDefautTest.php
+git add app/Http/Middleware/RefuserAgentSansAbility.php app/Http/Kernel.php tests/Feature/Api/AgentRefuseParDefautTest.php
+git commit -m "feat: refuser par defaut les jetons d'assistant
+
+Une route protegee par le seul auth:sanctum etait ouverte a tout jeton
+authentifie, assistants compris. Le cas s'est produit pendant l'ecriture
+de ce plan : une route de changement d'adresse a ete ajoutee sans garde,
+par quelqu'un qui ignorait l'existence des agents.
+
+Enumerer les routes interdites ne tiendrait pas : l'oubli serait
+silencieux. Ici l'oubli est bruyant et du bon cote."
+```
+
+---
+
 ## Task 3: Les limiteurs de débit, comptés par jeton
 
 Le limiteur `api` actuel compte **par utilisateur**. Un assistant partagerait donc le quota de l'application mobile du même client, qu'il pourrait épuiser — le client verrait son app se bloquer sans comprendre.
