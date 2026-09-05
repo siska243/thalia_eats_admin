@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\StatusPayement;
 use App\Models\Town;
 use App\Models\TrackOrder;
+use App\Services\QuotationService;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\EasyPay;
@@ -481,7 +482,6 @@ class CommandeController extends Controller
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
-            $callback_url = $request->input('callback_url');
             $webhook_url = $request->input('webhook_sse_url');
             $pricing = $request->input('pricing');
             $phone = $request->input('phone');
@@ -538,7 +538,117 @@ class CommandeController extends Controller
             $commande->street = $adresse['street'];
             $commande->number_street = $adresse['number_street'];
 
-            $commande->global_price = $total_price;
+            // --- Observation de la quotation serveur -------------------------
+            // Ce bloc ne doit jamais modifier le comportement de valide() tant
+            // que quotation.authoritative vaut false. Toute exception y est
+            // absorbée : une commande ne peut pas échouer à cause de la mesure.
+            $quotation = null;
+
+            try {
+                $ids = [];
+                $ids_by_uid = [];
+
+                foreach ($products as $entry) {
+                    $decrypted = Cipher::Decrypt($entry['uid']);
+
+                    if ($decrypted !== false && $decrypted !== '' && ctype_digit((string) $decrypted)) {
+                        $id = (int) $decrypted;
+                        $ids[] = $id;
+                        $ids_by_uid[$entry['uid']] = $id;
+                    }
+                }
+
+                $observes = Product::query()
+                    ->with('currency')
+                    ->whereIn('id', $ids)
+                    ->get()
+                    ->keyBy('id');
+
+                $quotation_lines = [];
+                $unresolved = false;
+
+                foreach ($products as $entry) {
+                    $id = $ids_by_uid[$entry['uid']] ?? null;
+                    $observed = $id !== null ? $observes->get($id) : null;
+
+                    if ($observed) {
+                        // Quantité numérique, PAS (int) : calculePrice.js fait
+                        // `item.quantity * item.price` sans coercition, et les
+                        // quantités arrivent ici du client sans validation
+                        // d'entier. Tronquer produirait un faux écart.
+                        $quotation_lines[] = [
+                            'product' => $observed,
+                            'quantity' => $entry['quantity'],
+                        ];
+                    } else {
+                        $unresolved = true;
+                    }
+                }
+
+                if ($unresolved) {
+                    // Une ligne non résolue chiffrerait un panier partiel : le
+                    // moteur crierait à l'écart sur un panier qu'il n'a jamais
+                    // vraiment vu. On ne chiffre pas, on journalise la raison.
+                    Log::channel('quotation')->error('observation_impossible', [
+                        'commande' => $commande->refernce,
+                        'message' => 'un ou plusieurs uid de produits ne resolvent a aucun produit',
+                    ]);
+                } elseif ($town && $quotation_lines !== []) {
+                    $quotation = app(QuotationService::class)->quote($quotation_lines, $town);
+
+                    if (! $quotation->disponible) {
+                        // Les refus du moteur (panier vide, quantité invalide,
+                        // multi-restaurant, devises mélangées) n'ont AUCUN
+                        // équivalent dans calculePrice.js : le client produit un
+                        // nombre dans les quatre cas. Un refus a un total de 0,
+                        // donc comparer les totaux ici crierait à l'écart sur
+                        // chaque commande concernée. On journalise à part.
+                        Log::channel('quotation')->notice('refus_quotation', [
+                            'commande' => $commande->refernce,
+                            'raison' => $quotation->raison,
+                            'client_total' => $total_price,
+                        ]);
+                    } elseif (abs($quotation->total - floatval($total_price)) > 0.01) {
+                        Log::channel('quotation')->warning('ecart_quotation', [
+                            'commande' => $commande->refernce,
+                            'client' => [
+                                'total' => $total_price,
+                                'frais' => $pricing['frais_livraison'] ?? null,
+                                'service' => $pricing['service_price'] ?? null,
+                            ],
+                            'serveur' => $quotation->toArray(),
+                        ]);
+                    } elseif ($quotation->warnings !== []) {
+                        // Les deux calculs concordent et valent tous deux 0 de
+                        // frais : c'est la fuite de données delivrery_prices,
+                        // pas un bug du moteur.
+                        Log::channel('quotation')->info('quotation_conforme_avec_warnings', [
+                            'commande' => $commande->refernce,
+                            'total' => $quotation->total,
+                            'warnings' => $quotation->warnings,
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Le canal « quotation » est peut-être précisément ce qui vient
+                // d'échouer : ne jamais laisser la récupération relever.
+                try {
+                    Log::channel('quotation')->error('observation_impossible', [
+                        'commande' => $commande->refernce,
+                        'message' => $e->getMessage(),
+                    ]);
+                } catch (\Throwable) {
+                    // Rien à faire : une commande ne peut pas échouer à cause
+                    // de la mesure.
+                }
+            }
+
+            $montant_facture = (config('quotation.authoritative') && $quotation !== null && $quotation->disponible)
+                ? $quotation->total
+                : $total_price;
+            // ----------------------------------------------------------------
+
+            $commande->global_price = $montant_facture;
             $commande->save();
 
             $commande->refresh();
@@ -575,13 +685,13 @@ class CommandeController extends Controller
 
 
             $data = [
-                'amount' => floatval($total_price),
+                'amount' => floatval($montant_facture),
                 'phone' => $phone,
                 'name' => $user_name,
                 'email' => $user_email,
                 'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code'] : "CDF",
                 'reference' => $commande->refernce,
-                'callback_url' => "https://app.thaliaeats.com/api/webhook-paiement-flexpay",
+                'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
                 "decline_url" => $error_url,
@@ -616,8 +726,8 @@ class CommandeController extends Controller
                 'phone' => preg_replace('/[\s+]/', '', $phone),
                 'channel' => "MPESA",
                 'status_payement_id' => $status_paiement?->id,
-                'amount' => $total_price,
-                'amount_customer' => $total_price,
+                'amount' => $montant_facture,
+                'amount_customer' => $montant_facture,
                 'webhook_sse_url' => $webhook_url
             ]);
 
@@ -695,7 +805,6 @@ class CommandeController extends Controller
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
-            $callback_url = $request->input('callback_url');
             $webhook_url = $request->input('webhook_sse_url');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
@@ -724,7 +833,10 @@ class CommandeController extends Controller
                 'email' => $user_email,
                 'currency' => !empty($order->product) ? $order->product[0]->currency->code : "CDF",
                 'reference' => $order->refernce,
-                'callback_url' => $callback_url,
+                // Le client ne decide pas ou son paiement est confirme : une
+                // adresse fournie par l'appelant enverrait la confirmation
+                // ailleurs que sur l'instance qui detient la commande.
+                'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
                 "decline_url" => $error_url,

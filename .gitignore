@@ -9,6 +9,7 @@
 .env
 .env.backup
 .env.production
+.env.testing
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -19,4 +20,5 @@ yarn-error.log
 /.idea
 /.vscode
 *.sql
+!database/schema/*.sql
 /storage/firebase_credentials.json

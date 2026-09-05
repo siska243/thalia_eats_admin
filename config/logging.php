@@ -73,6 +73,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'quotation' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/quotation.log'),
+            'level' => 'debug',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

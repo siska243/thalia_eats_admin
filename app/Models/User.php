@@ -61,6 +61,17 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        /*
+         * register() et activation() renvoient le modele complet : sans ces
+         * deux entrees, le code d'activation etait retourne dans la reponse
+         * d'inscription. La verification par email devenait decorative,
+         * puisqu'il suffisait de lire la reponse pour obtenir le code.
+         *
+         * Aucun client n'en fait usage : ni l'application mobile ni le site
+         * ne lisent ce champ.
+         */
+        'otp',
+        'otp_expire_at',
     ];
 
     /**
@@ -70,6 +81,9 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        // Sans ce cast, otp_expire_at est manipule comme une chaine et toute
+        // comparaison de date depend du bon vouloir du parseur.
+        'otp_expire_at' => 'datetime',
         'password' => 'hashed',
         'devices' => 'array',
         'mobile_permissions' => 'array'

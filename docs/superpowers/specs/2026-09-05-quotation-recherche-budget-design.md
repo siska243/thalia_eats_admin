@@ -213,17 +213,17 @@ Lecture pure. Brique consommée par B et C.
 
 #### `GET /api/products/search`
 
-Paramètres : `q` (FULLTEXT sur `title` + `description`), `sub_category`,
-`price_min`, `price_max`, `currency`, `town`, `lat`, `lng`, `radius`, `sort`,
-`per_page`.
+Paramètres : `q` (FULLTEXT sur `title` + `description`), `category`,
+`sub_category`, `price_min`, `price_max`, `currency`, `town`, `lat`, `lng`,
+`radius`, `sort`, `per_page`.
 
-**Pas de filtre `category`.** Le schéma et le code se contredisent sur la clé
-étrangère des sous-catégories : la migration crée `sub_category_products.category_id`,
-alors que `SubCategoryProduct::category_product()` et
-`SubCategoryProductResource.php:39` référencent `category_product_id`. On ne
-construit pas un filtre public sur une relation que le schéma dément ; seul
-`sub_category`, qui s'appuie sur `products.sub_category_product_id`, est exposé.
-À trancher séparément.
+**Note sur la clé étrangère des sous-catégories.** Le fichier de migration
+`2023_10_31_115717` crée `sub_category_products.category_id`, alors que
+`SubCategoryProduct::category_product()` et `SubCategoryProductResource.php:39`
+référencent `category_product_id`. Vérification faite sur la base réelle : la
+colonne est **`category_product_id`** — c'est le fichier de migration qui est
+périmé, la base ayant dérivé de son historique. Le filtre `category` s'appuie
+donc sans risque sur la relation existante.
 
 Filtre systématiquement `products.is_active` et `restaurants.is_active`.
 **Pagine** — contrairement à `list-restaurant` qui renvoie tout le parc d'un bloc.
@@ -347,12 +347,21 @@ Canal `quotation` dédié, donc lisible dans `opcodesio/log-viewer` depuis l'adm
 sans accès serveur. La tolérance de 0,01 absorbe les flottants (`products.price`
 est un `float`, `calcul_price` applique `toFixed(2)`).
 
-Deux signaux distincts, à ne pas confondre :
+**Trois** signaux distincts, à ne pas confondre :
 
 - **`ecart_quotation`** — le moteur diverge du client. Bug du moteur, à corriger
   avant toute bascule.
-- **`warnings` sans écart** — les deux calculs concordent et valent tous deux 0.
-  C'est la fuite `delivrery_prices` : problème de données, indépendant de la bascule.
+- **`quotation_conforme_avec_warnings`** — les deux calculs concordent et valent
+  tous deux 0. C'est la fuite `delivrery_prices` : problème de données,
+  indépendant de la bascule.
+- **`refus_quotation`** — le moteur refuse de chiffrer là où le client, lui, a
+  produit un nombre. Ce n'est **pas** un écart de calcul : c'est un panier que le
+  serveur juge invalide (multi-restaurant, devises mélangées) et que la production
+  accepte pourtant aujourd'hui. Comparer les totaux dans ce cas crierait à l'écart
+  sur chaque commande concernée, puisqu'un refus a un total de 0. Le volume de ces
+  entrées dit combien de commandes réelles violent des règles que personne
+  n'applique — **à lire avant la bascule**, car après elle ces commandes seront
+  refusées.
 
 ### 5.2 Bascule
 
@@ -453,6 +462,22 @@ ferait échouer les migrations sous SQLite.
 
 Il faut donc une **base MySQL de test dédiée** (`thalia_eats_test`) et un
 `.env.testing`. Sans cela, lancer la suite écrase la base de développement.
+
+**L'historique des migrations n'est pas rejouable à zéro.** Vérifié : un
+`migrate` sur une base vide échoue successivement sur
+
+1. `2023_11_01_201908_currencies_to_product_column` — doublon de `currency_id`
+   avec `2023_11_01_193157_currency_to_product_column` ;
+2. `2023_11_08_102129_rename_table_roles` — `roles_user` n'existe pas ;
+3. `2023_11_08_121208_create_permission_tables` — la table `roles` existe déjà.
+
+`RefreshDatabase` est donc inutilisable en l'état. Ces trois migrations ne sont
+**pas** corrigées : elles sont déjà enregistrées comme exécutées en production,
+les modifier ne répare rien là-bas et risque d'en casser le rejeu. La réponse
+retenue est le **dump de schéma** (`php artisan schema:dump`), le mécanisme
+prévu par Laravel pour ce cas : `migrate` le charge quand la table `migrations`
+est vide, puis n'applique que les migrations postérieures. Aucun effet sur la
+production, dont la table `migrations` est pleine.
 
 ---
 
