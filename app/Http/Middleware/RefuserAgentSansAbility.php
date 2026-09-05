@@ -19,6 +19,9 @@ use Illuminate\Http\Request;
  * penser à chaque nouvelle route, et l'oubli est silencieux. Ici l'oubli est
  * bruyant et du bon côté : une route destinée aux agents mais non marquée
  * leur est fermée, ce qui se voit immédiatement.
+ *
+ * La sécurité de ce garde suppose que le groupe api reste sans session :
+ * voir tests/Feature/Api/HypothesesDeSecuriteTest.php.
  */
 class RefuserAgentSansAbility
 {

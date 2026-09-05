@@ -124,7 +124,10 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_le_client_reste_autorite_sur_le_prix_quand_le_flag_est_a_false(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        // ['*'] modelise un client applicatif : createToken() sans arguments
+        // accorde cette ability, et c'est ce que portent les jetons du web et
+        // du mobile en production.
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -139,7 +142,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_flexpay_recoit_le_montant_du_client_quand_le_flag_est_a_false(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -152,7 +155,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_l_ecart_est_journalise_sur_le_canal_quotation(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -168,7 +171,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_aucun_ecart_n_est_journalise_quand_les_deux_calculs_concordent(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -186,7 +189,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_le_serveur_devient_autorite_quand_le_flag_est_a_true(): void
     {
         config(['quotation.authoritative' => true]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -200,7 +203,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_un_refus_du_moteur_est_journalise_a_part_et_ne_compte_pas_comme_ecart(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -228,7 +231,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_quotation_conforme_avec_warnings_est_journalise_hors_tranche(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
@@ -254,7 +257,7 @@ class CommandeValideNonRegressionTest extends TestCase
     public function test_une_observation_impossible_ne_casse_pas_la_commande(): void
     {
         config(['quotation.authoritative' => false]);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         [$town, $currency, $product] = $this->contexte();
 
