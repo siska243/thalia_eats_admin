@@ -16,7 +16,14 @@ class InfrastructureTest extends TestCase
 
     public function test_la_suite_tourne_sur_la_base_de_test_dediee(): void
     {
-        $this->assertSame('thalia_eats_test', config('database.connections.mysql.database'));
+        $database = config('database.connections.mysql.database');
+
+        // On assere le SUFFIXE, pas un nom precis : chaque session de travail a
+        // sa propre base pour ne pas tronquer les tables d'une autre pendant
+        // qu'elle tourne. Epingler « thalia_eats_test » faisait echouer ce test
+        // chez quiconque suivait cette consigne.
+        $this->assertStringEndsWith('_test', $database);
+        $this->assertNotSame('thalia_eats', $database);
     }
 
     public function test_les_factories_du_catalogue_produisent_un_produit_complet(): void
