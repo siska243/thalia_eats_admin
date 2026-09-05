@@ -36,7 +36,11 @@ class AuthController extends Controller
             $check_user=User::query()->where('email',$request->email)->first();
 
             if($check_user){
-                return ApiResponse::BAD_REQUEST('Oups','Error email','You have account, please login');
+                return ApiResponse::BAD_REQUEST(
+                    'Errors',
+                    'Compte existant',
+                    "Un compte existe déjà avec cette adresse email. Connectez-vous pour continuer."
+                );
             }
 
             $user = User::query()->firstOrCreate(
@@ -64,7 +68,11 @@ class AuthController extends Controller
 
             $user->save();
 
-            return ApiResponse::SUCCESS_DATA($user, "Felicitations", "Votre compte a été créer avec succès");
+            return ApiResponse::SUCCESS_DATA(
+                $user,
+                "Bienvenue",
+                "Votre compte a été créé. Un code de vérification vient de vous être envoyé par email."
+            );
 
         } catch (Exception $e) {
             //throw $th;
@@ -81,7 +89,7 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', "Veuillez saisir un email correcte");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
             }
 
             $credentials = $request->only('email', 'otp');
@@ -91,7 +99,7 @@ class AuthController extends Controller
                 ->first();
 
             if (!$user) {
-                return ApiResponse::BAD_REQUEST('Errors', __('Oups'), __("Otp incorrect"));
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Ce code n'est pas valide");
             }
 
             // otp_expire_at etait renseigne a l'inscription mais jamais relu :
@@ -100,7 +108,7 @@ class AuthController extends Controller
                 return ApiResponse::BAD_REQUEST(
                     'Errors',
                     __('Oups'),
-                    __("Ce code a expire, veuillez en demander un nouveau")
+                    "Ce code a expiré, demandez-en un nouveau"
                 );
             }
 
@@ -111,7 +119,11 @@ class AuthController extends Controller
 
             $user->save();
 
-            return ApiResponse::SUCCESS_DATA($user, "Felicitations", "Votre compte a été activer avec succès");
+            return ApiResponse::SUCCESS_DATA(
+                $user,
+                "Compte activé",
+                "Votre compte est activé. Vous pouvez maintenant passer commande."
+            );
         }
         catch (\Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -130,7 +142,7 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', "Veuillez saisir un email correcte");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
             }
             $credentials = $request->only('email', 'password');
 
@@ -176,7 +188,7 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', "Veuillez saisir un email correcte");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
             }
 
             $user = User::query()->where('email', $request->email)->first();
@@ -193,8 +205,8 @@ class AuthController extends Controller
             }
 
             return ApiResponse::GET_DATA([
-                'title' => 'Code envoye',
-                'message' => "Si un compte existe pour cette adresse, un code de verification vient d'etre envoye.",
+                'title' => 'Code envoyé',
+                'message' => "Si un compte existe pour cette adresse, un code de vérification vient d'être envoyé.",
             ]);
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -221,7 +233,7 @@ class AuthController extends Controller
                 return ApiResponse::BAD_REQUEST(
                     $validator->errors(),
                     'Oups',
-                    "Le mot de passe doit contenir au moins 8 caracteres et les deux saisies doivent correspondre"
+                    "Le mot de passe doit contenir au moins 8 caractères, et les deux saisies doivent être identiques"
                 );
             }
 
@@ -231,14 +243,14 @@ class AuthController extends Controller
                 ->first();
 
             if (!$user) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Code incorrect');
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Ce code n'est pas valide");
             }
 
             if (!$user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
                 return ApiResponse::BAD_REQUEST(
                     'Errors',
                     'Oups',
-                    'Ce code a expire, veuillez en demander un nouveau'
+                    "Ce code a expiré, demandez-en un nouveau"
                 );
             }
 
@@ -250,7 +262,7 @@ class AuthController extends Controller
             $user->tokens()->delete();
 
             return ApiResponse::GET_DATA([
-                'title' => 'Mot de passe modifie',
+                'title' => 'Mot de passe modifié',
                 'message' => 'Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.',
             ]);
         } catch (Exception $e) {
