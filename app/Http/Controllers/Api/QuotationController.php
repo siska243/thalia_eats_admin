@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\BudgetSuggestionRequest;
 use App\Http\Requests\QuoteRequest;
+use App\Models\Currency;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Town;
+use App\Services\BudgetSuggestionService;
 use App\Services\Quotation;
 use App\Services\QuotationService;
 use App\Wrappers\ApiResponse;
@@ -51,6 +54,35 @@ class QuotationController extends Controller
         $quotation = $this->quotations->quote($lines, $town, $expected_restaurant_id);
 
         return ApiResponse::GET_DATA($this->present($quotation));
+    }
+
+    public function budgetSuggestions(
+        BudgetSuggestionRequest $request,
+        BudgetSuggestionService $suggestions
+    ): JsonResponse {
+        $town = Town::query()->where('slug', $request->input('town'))->first();
+
+        if (! $town) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette ville de livraison est introuvable');
+        }
+
+        $currency = Currency::query()->where('slug', $request->input('currency'))->first();
+
+        if (! $currency) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette devise est introuvable');
+        }
+
+        $result = $suggestions->suggest(
+            (float) $request->input('budget'),
+            $currency,
+            $town,
+            $request->only(['q', 'category', 'sub_category', 'lat', 'lng', 'radius'])
+        );
+
+        return ApiResponse::GET_DATA(array_merge($result, [
+            'budget' => (float) $request->input('budget'),
+            'currency' => ['code' => $currency->code, 'slug' => $currency->slug],
+        ]));
     }
 
     /**
