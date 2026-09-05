@@ -67,6 +67,21 @@ class PayementController extends Controller
 
                 $status_paiement = StatusPayement::query()->where('code', $status)->first();
 
+                // Une pré-commande porte une référence préfixée « P- », impossible à
+                // confondre avec commandes.refernce qui est un entier nu. $order
+                // n'est donc null ici que pour une référence qui n'a jamais été une
+                // commande : le chemin Commande ci-dessus est rigoureusement inchangé.
+                if (! $order) {
+                    $order = app(\App\Services\ConversionPrecommande::class)
+                        ->convertirSiPossible($reference);
+
+                    if (! $order) {
+                        Log::warning('webhook: reference inconnue', ['reference' => $reference]);
+
+                        return ApiResponse::GET_DATA(['message' => 'Référence inconnue']);
+                    }
+                }
+
                 Payement::query()->updateOrCreate([
                     'commande_id' => $order?->id,
                     'phone' => preg_replace('/[\s+]/', '', $phone),
