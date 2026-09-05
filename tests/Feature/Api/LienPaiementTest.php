@@ -376,6 +376,22 @@ class LienPaiementTest extends TestCase
         Http::assertSent(fn ($request) => $request['phone'] === '+243810000001');
     }
 
+    public function test_la_case_decochee_fait_payer_un_autre_numero(): void
+    {
+        // On peut se faire livrer chez sa mere et payer soi-meme : le champ
+        // cache « 0 » du formulaire distingue la case decochee d'un premier
+        // affichage.
+        $p = Precommande::factory()->create(['recipient_phone' => '+243810000001']);
+
+        $this->post($this->lienInitiation($p), [
+            'method' => 'mobile',
+            'meme_numero' => '0',
+            'phone' => '+243810000000',
+        ])->assertStatus(200);
+
+        Http::assertSent(fn ($request) => $request['phone'] === '+243810000000');
+    }
+
     public function test_un_second_post_ne_reecrit_pas_des_coordonnees_figees(): void
     {
         // Un lien peut avoir ete transfere : celui qui l'a ne doit pas pouvoir

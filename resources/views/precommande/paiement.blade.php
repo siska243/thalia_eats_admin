@@ -90,7 +90,11 @@
              case couvre le cas courant sans confondre les deux. --}}
         <div id="bloc-mobile">
             <div class="case">
-                <input type="checkbox" id="meme_numero" name="meme_numero" value="1" onchange="basculerNumero()" @checked(old('meme_numero', '1'))>
+                {{-- Une case decochee n'est pas envoyee : sans ce champ cache,
+                     old() ne saurait pas la distinguer d'un premier affichage
+                     et la recocherait apres chaque erreur de saisie. --}}
+                <input type="hidden" name="meme_numero" value="0">
+                <input type="checkbox" id="meme_numero" name="meme_numero" value="1" onchange="basculerNumero()" @checked(old('meme_numero', '1') === '1')>
                 <label for="meme_numero" style="margin:0">C'est le même numéro que celui du destinataire</label>
             </div>
 
