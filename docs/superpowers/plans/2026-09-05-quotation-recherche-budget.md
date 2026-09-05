@@ -3178,6 +3178,34 @@ class CommandeValideNonRegressionTest extends TestCase
         Http::assertSent(fn ($request) => (float) $request['amount'] === 5500.0);
     }
 
+    public function test_un_refus_du_moteur_est_journalise_a_part_et_ne_compte_pas_comme_ecart(): void
+    {
+        config(['quotation.authoritative' => false]);
+        Sanctum::actingAs(User::factory()->create());
+
+        [$town, $currency, $product] = $this->contexte();
+
+        // Un second produit d'un AUTRE restaurant : le moteur refuse, le client
+        // non — calculePrice.js ne connaît pas cette règle.
+        $autre = Product::factory()->create([
+            'currency_id' => $currency->id,
+            'price' => 1000,
+        ]);
+
+        $payload = $this->payload($town, $currency, $product, 4000);
+        $payload['products'][] = ['uid' => Cipher::Encrypt($autre->id), 'quantity' => 1];
+
+        $this->postJson('/api/user/commande/valide', $payload)->assertStatus(201);
+
+        $contenu = file_exists($this->log_path) ? file_get_contents($this->log_path) : '';
+
+        $this->assertStringContainsString('refus_quotation', $contenu);
+        $this->assertStringNotContainsString('ecart_quotation', $contenu);
+
+        // Le client reste autorité : un refus ne change rien au montant.
+        $this->assertDatabaseHas('commandes', ['global_price' => 4000]);
+    }
+
     public function test_une_observation_impossible_ne_casse_pas_la_commande(): void
     {
         config(['quotation.authoritative' => false]);
@@ -3297,9 +3325,13 @@ La **remplacer** par le bloc suivant :
                         ->find(Cipher::Decrypt($entry['uid']));
 
                     if ($observed) {
+                        // Quantité numérique, PAS (int) : calculePrice.js fait
+                        // `item.quantity * item.price` sans coercition, et les
+                        // quantités arrivent ici du client sans validation
+                        // d'entier. Tronquer produirait un faux écart.
                         $quotation_lines[] = [
                             'product' => $observed,
-                            'quantity' => (int) $entry['quantity'],
+                            'quantity' => $entry['quantity'],
                         ];
                     }
                 }
@@ -3307,7 +3339,19 @@ La **remplacer** par le bloc suivant :
                 if ($town && $quotation_lines !== []) {
                     $quotation = app(QuotationService::class)->quote($quotation_lines, $town);
 
-                    if (abs($quotation->total - floatval($total_price)) > 0.01) {
+                    if (! $quotation->disponible) {
+                        // Les refus du moteur (panier vide, quantité invalide,
+                        // multi-restaurant, devises mélangées) n'ont AUCUN
+                        // équivalent dans calculePrice.js : le client produit un
+                        // nombre dans les quatre cas. Un refus a un total de 0,
+                        // donc comparer les totaux ici crierait à l'écart sur
+                        // chaque commande concernée. On journalise à part.
+                        Log::channel('quotation')->notice('refus_quotation', [
+                            'commande' => $commande->refernce,
+                            'raison' => $quotation->raison,
+                            'client_total' => $total_price,
+                        ]);
+                    } elseif (abs($quotation->total - floatval($total_price)) > 0.01) {
                         Log::channel('quotation')->warning('ecart_quotation', [
                             'commande' => $commande->refernce,
                             'client' => [

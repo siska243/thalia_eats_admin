@@ -347,12 +347,21 @@ Canal `quotation` dédié, donc lisible dans `opcodesio/log-viewer` depuis l'adm
 sans accès serveur. La tolérance de 0,01 absorbe les flottants (`products.price`
 est un `float`, `calcul_price` applique `toFixed(2)`).
 
-Deux signaux distincts, à ne pas confondre :
+**Trois** signaux distincts, à ne pas confondre :
 
 - **`ecart_quotation`** — le moteur diverge du client. Bug du moteur, à corriger
   avant toute bascule.
-- **`warnings` sans écart** — les deux calculs concordent et valent tous deux 0.
-  C'est la fuite `delivrery_prices` : problème de données, indépendant de la bascule.
+- **`quotation_conforme_avec_warnings`** — les deux calculs concordent et valent
+  tous deux 0. C'est la fuite `delivrery_prices` : problème de données,
+  indépendant de la bascule.
+- **`refus_quotation`** — le moteur refuse de chiffrer là où le client, lui, a
+  produit un nombre. Ce n'est **pas** un écart de calcul : c'est un panier que le
+  serveur juge invalide (multi-restaurant, devises mélangées) et que la production
+  accepte pourtant aujourd'hui. Comparer les totaux dans ce cas crierait à l'écart
+  sur chaque commande concernée, puisqu'un refus a un total de 0. Le volume de ces
+  entrées dit combien de commandes réelles violent des règles que personne
+  n'applique — **à lire avant la bascule**, car après elle ces commandes seront
+  refusées.
 
 ### 5.2 Bascule
 
