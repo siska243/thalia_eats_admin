@@ -37,7 +37,7 @@
         <p class="erreur">{{ $erreur }}</p>
     @endforeach
 
-    <form method="POST" action="{{ route('precommande.paiement.initier', ['uid' => $uid]) }}">
+    <form method="POST" action="{{ $action }}">
         @csrf
         <label for="phone">Numéro mobile money</label>
         <input id="phone" name="phone" inputmode="tel" placeholder="+243…" required>

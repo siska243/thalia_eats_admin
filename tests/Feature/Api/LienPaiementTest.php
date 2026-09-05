@@ -31,6 +31,15 @@ class LienPaiementTest extends TestCase
         );
     }
 
+    private function lienInitiation(Precommande $p, ?\DateTimeInterface $expiration = null): string
+    {
+        return URL::temporarySignedRoute(
+            'precommande.paiement.initier',
+            $expiration ?: $p->expires_at,
+            ['uid' => Cipher::Encrypt($p->id)],
+        );
+    }
+
     public function test_un_lien_valide_affiche_le_recapitulatif(): void
     {
         $p = Precommande::factory()->create();
@@ -74,7 +83,7 @@ class LienPaiementTest extends TestCase
     {
         $p = Precommande::factory()->create();
 
-        $this->post(route('precommande.paiement.initier', ['uid' => Cipher::Encrypt($p->id)]), [
+        $this->post($this->lienInitiation($p), [
             'phone' => '+243810000000',
         ])->assertRedirect();
 
@@ -85,7 +94,7 @@ class LienPaiementTest extends TestCase
     {
         $p = Precommande::factory()->create(['total' => 5500]);
 
-        $this->post(route('precommande.paiement.initier', ['uid' => Cipher::Encrypt($p->id)]), [
+        $this->post($this->lienInitiation($p), [
             'phone' => '+243810000000',
         ]);
 
@@ -96,11 +105,61 @@ class LienPaiementTest extends TestCase
     {
         $p = Precommande::factory()->expiree()->create();
 
-        $this->post(route('precommande.paiement.initier', ['uid' => Cipher::Encrypt($p->id)]), [
+        $this->post($this->lienInitiation($p, now()->addHour()), [
             'phone' => '+243810000000',
         ])->assertStatus(410);
 
         Http::assertNothingSent();
+    }
+
+    public function test_un_post_sans_signature_est_refuse(): void
+    {
+        $p = Precommande::factory()->create();
+
+        $this->post('/paiement/precommande/'.Cipher::Encrypt($p->id), [
+            'phone' => '+243810000000',
+        ])->assertStatus(403);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_un_post_avec_la_signature_d_une_autre_precommande_est_refuse(): void
+    {
+        $mienne = Precommande::factory()->create();
+        $autre = Precommande::factory()->create();
+
+        // Signature valide, mais emise pour une AUTRE pre-commande.
+        $urlAutre = URL::temporarySignedRoute(
+            'precommande.paiement.initier',
+            $autre->expires_at,
+            ['uid' => Cipher::Encrypt($autre->id)],
+        );
+
+        // On remplace l'uid dans le chemin en gardant la signature.
+        $forgee = str_replace(
+            Cipher::Encrypt($autre->id),
+            Cipher::Encrypt($mienne->id),
+            $urlAutre
+        );
+
+        $this->post($forgee, ['phone' => '+243810000000'])->assertStatus(403);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_un_post_signe_initie_bien_le_paiement(): void
+    {
+        $p = Precommande::factory()->create(['total' => 5500]);
+
+        $url = URL::temporarySignedRoute(
+            'precommande.paiement.initier',
+            $p->expires_at,
+            ['uid' => Cipher::Encrypt($p->id)],
+        );
+
+        $this->post($url, ['phone' => '+243810000000'])->assertRedirect();
+
+        $this->assertSame('TEST-ORDER-1', $p->fresh()->reference_paiement);
     }
 
     public function test_l_application_peut_initier_le_paiement_sans_lien(): void

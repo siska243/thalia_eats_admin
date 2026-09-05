@@ -7,6 +7,7 @@ use App\Wrappers\Cipher;
 use App\Wrappers\FlexPay;
 use App\Wrappers\LibPhoneNumber;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 /**
  * Le lien signé mène ici, pas directement à FlexPay : le paiement mobile money
@@ -33,7 +34,15 @@ class PaiementPrecommandeController extends Controller
 
         return view('precommande.paiement', [
             'precommande' => $precommande->load(['products.product', 'restaurant', 'currency']),
-            'uid' => $uid,
+            // L'action du formulaire porte sa propre signature : le jeton CSRF
+            // prouve que la requete vient d'une page du site, pas qu'elle porte
+            // sur CETTE pre-commande. Sans cela, n'importe quelle session
+            // autorise un POST vers n'importe quel uid.
+            'action' => URL::temporarySignedRoute(
+                'precommande.paiement.initier',
+                $precommande->expires_at,
+                ['uid' => $uid],
+            ),
         ]);
     }
 

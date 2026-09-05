@@ -40,7 +40,7 @@ Route::get('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecomm
 
 Route::post('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'initier'])
     ->name('precommande.paiement.initier')
-    ->middleware('throttle:lien-paiement');
+    ->middleware(['signed', 'throttle:lien-paiement']);
 
 
 
