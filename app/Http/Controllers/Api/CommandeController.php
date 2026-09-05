@@ -91,6 +91,16 @@ class CommandeController extends Controller
             $commande->adresse_delivery = $adresse['adresse'];
             $commande->street = $adresse['street'];
             $commande->number_street = $adresse['number_street'];
+
+            // Coordonnees choisies sur la carte : sans elles, le livreur ne
+            // recoit qu'un texte libre.
+            $commande->lat = $adresse['lat'] ?? null;
+            $commande->long = $adresse['long'] ?? null;
+
+            // Commande pour un tiers : le livreur doit joindre la personne a
+            // livrer, pas le titulaire du compte.
+            $commande->recipient_name = $request->input('recipient_name');
+            $commande->recipient_phone = $request->input('recipient_phone');
             $commande->save();
             $globale_price = 0;
 
@@ -537,6 +547,16 @@ class CommandeController extends Controller
             $commande->adresse_delivery = $adresse['adresse'];
             $commande->street = $adresse['street'];
             $commande->number_street = $adresse['number_street'];
+
+            // Coordonnees choisies sur la carte : sans elles, le livreur ne
+            // recoit qu'un texte libre.
+            $commande->lat = $adresse['lat'] ?? null;
+            $commande->long = $adresse['long'] ?? null;
+
+            // Commande pour un tiers : le livreur doit joindre la personne a
+            // livrer, pas le titulaire du compte.
+            $commande->recipient_name = $request->input('recipient_name');
+            $commande->recipient_phone = $request->input('recipient_phone');
 
             // --- Observation de la quotation serveur -------------------------
             // Ce bloc ne doit jamais modifier le comportement de valide() tant

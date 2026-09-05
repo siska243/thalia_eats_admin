@@ -92,6 +92,12 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
     });
     Route::post('/update/expo/token', [UserAccountController::class, 'expo']);
 
+    // Carnet d'adresses de livraison. La table existait depuis l'origine mais
+    // n'etait alimentee nulle part.
+    Route::get('/addresses', [\App\Http\Controllers\Api\UserAddressController::class, 'index']);
+    Route::post('/addresses', [\App\Http\Controllers\Api\UserAddressController::class, 'store']);
+    Route::delete('/addresses/{slug}', [\App\Http\Controllers\Api\UserAddressController::class, 'destroy']);
+
     Route::prefix('/commande')->controller(CommandeController::class)->group(function () {
 
         Route::post('/add', 'store');
