@@ -18,6 +18,18 @@ class BudgetSuggestionEndpointTest extends TestCase
     // dès qu'un `q` est fourni.
     use DatabaseTruncation;
 
+    /**
+     * DatabaseTruncation tronque en setUp(), pas en tearDown() : sans ceci, les
+     * lignes committées par le dernier test de cette classe survivraient et
+     * seraient visibles par une classe RefreshDatabase exécutée ensuite.
+     */
+    protected function tearDown(): void
+    {
+        $this->truncateTablesForAllConnections();
+
+        parent::tearDown();
+    }
+
     private function contexte(): array
     {
         $town = Town::factory()->create();

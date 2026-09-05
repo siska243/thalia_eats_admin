@@ -21,6 +21,18 @@ class ProductSearchEndpointTest extends TestCase
 {
     use DatabaseTruncation;
 
+    /**
+     * DatabaseTruncation tronque en setUp(), pas en tearDown() : sans ceci, les
+     * lignes committées par le dernier test de cette classe survivraient et
+     * seraient visibles par une classe RefreshDatabase exécutée ensuite.
+     */
+    protected function tearDown(): void
+    {
+        $this->truncateTablesForAllConnections();
+
+        parent::tearDown();
+    }
+
     public function test_l_endpoint_exige_une_authentification(): void
     {
         $this->getJson('/api/products/search')->assertStatus(401);

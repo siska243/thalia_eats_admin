@@ -66,7 +66,14 @@ class RestaurantController extends Controller
         $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
             $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
-            });
+            })
+                // Precharge les produits en les restreignant au restaurant :
+                // sans cela la ressource remontait toute la sous-categorie,
+                // donc les plats des autres restaurants qui la partagent.
+                ->with(['product' => function ($subQuery) use ($restaurantId) {
+                    $subQuery->where('restaurant_id', $restaurantId)
+                        ->where('is_active', true);
+                }]);
         }])->whereHas('sub_category_product', function ($query) use ($restaurantId) {
             return $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
@@ -79,7 +86,13 @@ class RestaurantController extends Controller
     {
         try {
             //code...
-            $menu = SubCategoryProduct::with(['product'])
+            $menu = SubCategoryProduct::query()
+                // Meme contrainte que dans categorie() : la sous-categorie est
+                // partagee entre restaurants, ses produits ne le sont pas.
+                ->with(['product' => function ($query) use ($restaurant) {
+                    $query->where('restaurant_id', $restaurant->id)
+                        ->where('is_active', true);
+                }])
                 ->where('slug', $slug)
                 ->whereHas('product', function ($query) use ($restaurant) {
                     $query->where('restaurant_id', $restaurant->id);

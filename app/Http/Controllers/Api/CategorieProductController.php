@@ -19,7 +19,13 @@ class CategorieProductController extends Controller
     {
         //
         try{
-            $categorie = CategoryProduct::with('sub_category_product')->get();
+            // Catalogue global : tous les restaurants confondus, mais les
+            // produits sont precharges explicitement. La ressource ne les
+            // charge plus paresseusement, et ce prechargement supprime au
+            // passage un N+1 (une requete par sous-categorie).
+            $categorie = CategoryProduct::with(['sub_category_product.product' => function ($query) {
+                $query->where('is_active', true);
+            }])->get();
             return CategorieResource::collection($categorie);
         }
         catch(Exception $e){
