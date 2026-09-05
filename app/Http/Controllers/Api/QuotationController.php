@@ -40,7 +40,7 @@ class QuotationController extends Controller
 
         try {
             $lines = $this->resolveLines($request->input('products'));
-        } catch (ModelNotFoundException $e) {
+        } catch (ModelNotFoundException) {
             return ApiResponse::BAD_REQUEST(
                 'produit_introuvable',
                 'Oups',

@@ -19,7 +19,7 @@ class QuoteRequest extends FormRequest
         return [
             'town' => ['required', 'string'],
             'restaurant' => ['nullable', 'string'],
-            'products' => ['required', 'array', 'min:1'],
+            'products' => ['required', 'array', 'min:1', 'max:100'],
             'products.*.uid' => ['required', 'string'],
             'products.*.quantity' => ['required', 'integer', 'min:1'],
         ];
@@ -34,6 +34,7 @@ class QuoteRequest extends FormRequest
             'town.required' => 'La ville de livraison est obligatoire.',
             'products.required' => 'Veuillez indiquer au moins un produit.',
             'products.min' => 'Veuillez indiquer au moins un produit.',
+            'products.max' => 'Une commande ne peut pas dépasser 100 produits différents.',
             'products.*.uid.required' => 'Chaque produit doit porter un identifiant.',
             'products.*.quantity.required' => 'Chaque produit doit porter une quantité.',
             'products.*.quantity.min' => 'La quantité doit être au moins égale à 1.',

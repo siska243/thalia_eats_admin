@@ -58,6 +58,7 @@ class QuoteEndpointTest extends TestCase
 
         // Les diagnostics internes ne fuitent pas vers les clients.
         $response->assertJsonMissingPath('warnings');
+        $response->assertJsonMissingPath('bracket');
         $response->assertJsonMissingPath('bracket_id');
     }
 
@@ -149,6 +150,20 @@ class QuoteEndpointTest extends TestCase
         $this->postJson('/api/quote', [
             'town' => $town->slug,
             'products' => [['uid' => Cipher::Encrypt($product->id)]],
+        ])->assertStatus(422);
+    }
+
+    public function test_un_panier_de_plus_de_cent_produits_est_rejete_par_la_validation(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+        $town = Town::factory()->create();
+        $product = Product::factory()->create();
+
+        $uid = Cipher::Encrypt($product->id);
+
+        $this->postJson('/api/quote', [
+            'town' => $town->slug,
+            'products' => array_fill(0, 101, ['uid' => $uid, 'quantity' => 1]),
         ])->assertStatus(422);
     }
 }
