@@ -227,7 +227,8 @@ class ConversionPrecommandeTest extends TestCase
         $precommande = $this->precommandeAvecLignes();
 
         \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
-            'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => $precommande->refernce],
         ], 200)]);
 
         $this->postJson('/api/webhook-paiement-flexpay', [
@@ -294,5 +295,199 @@ class ConversionPrecommandeTest extends TestCase
 
         $precommande->refresh();
         $this->assertSame(Precommande::STATUT_EN_ATTENTE, $precommande->status);
+    }
+
+    /**
+     * Une transaction reellement payee, mais qui appartient a quelqu'un
+     * d'autre. Avant le garde, il suffisait de la presenter avec la
+     * reference de la commande de son choix (refernce = 1000 + id, donc
+     * enumerable) pour la faire marquer payee.
+     */
+    public function test_le_webhook_refuse_une_reference_qui_n_est_pas_celle_de_la_transaction(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $commande = Commande::query()->create([
+            'refernce' => '4244',
+            'user_id' => \App\Models\User::factory()->create()->id,
+            'status_id' => 5,
+            'global_price' => 7000,
+        ]);
+
+        // La passerelle rattache la transaction a la commande 9999 ;
+        // l'appelant, lui, annonce 4244.
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => '9999'],
+        ], 200)]);
+
+        $response = $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => '4244',
+            'orderNumber' => 'ORD-VOLE',
+            'amount' => 7000,
+            'amountCustomer' => 7000,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000010',
+            'provider_reference' => 'PROV-VOLE',
+        ]);
+
+        $response->assertStatus(400);
+        $response->assertJson(['error' => 'reference_incoherente']);
+
+        $commande->refresh();
+
+        $this->assertSame(5, (int) $commande->status_id);
+        $this->assertNull($commande->paied_at);
+        $this->assertDatabaseMissing('payements', ['commande_id' => $commande->id]);
+    }
+
+    public function test_le_webhook_refuse_une_precommande_dont_la_transaction_designe_autre_chose(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => 'P-AUTRECHOSE'],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-VOLE-2',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000011',
+            'provider_reference' => 'PROV-VOLE-2',
+        ])->assertStatus(400);
+
+        $this->assertSame(0, Commande::query()->count());
+
+        $precommande->refresh();
+        $this->assertSame(Precommande::STATUT_EN_ATTENTE, $precommande->status);
+    }
+
+    public function test_le_webhook_accepte_une_commande_ordinaire_dont_la_reference_concorde(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $commande = Commande::query()->create([
+            'refernce' => '4245',
+            'user_id' => \App\Models\User::factory()->create()->id,
+            'status_id' => 5,
+            'global_price' => 7000,
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => '4245'],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => '4245',
+            'orderNumber' => 'ORD-OK',
+            'amount' => 7000,
+            'amountCustomer' => 7000,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000012',
+            'provider_reference' => 'PROV-OK',
+        ])->assertStatus(201);
+
+        $commande->refresh();
+
+        $this->assertSame(2, (int) $commande->status_id);
+        $this->assertNotNull($commande->paied_at);
+        $this->assertDatabaseHas('payements', ['commande_id' => $commande->id]);
+    }
+
+    /**
+     * Le chemin pre-commande n'a pas encore de trafic de production : il peut
+     * donc echouer ferme. Sans reference rattachee par la passerelle, rien ne
+     * prouve que cette transaction concerne CETTE pre-commande.
+     */
+    public function test_le_webhook_refuse_une_precommande_si_la_transaction_n_a_pas_de_reference(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
+        ], 200)]);
+
+        $response = $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-SANS-REF',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000013',
+            'provider_reference' => 'PROV-SANS-REF',
+        ]);
+
+        $response->assertStatus(400);
+        $response->assertJson(['error' => 'reference_non_verifiable']);
+
+        $this->assertSame(0, Commande::query()->count());
+
+        $precommande->refresh();
+        $this->assertSame(Precommande::STATUT_EN_ATTENTE, $precommande->status);
+    }
+
+    /**
+     * L'asymetrie, epinglee : une commande ordinaire continue de fonctionner
+     * meme si FlexPay ne renvoie pas le champ. On journalise et on apprend,
+     * plutot que de casser des paiements en production sur une hypothese.
+     */
+    public function test_une_commande_ordinaire_passe_encore_si_la_transaction_n_a_pas_de_reference(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $commande = Commande::query()->create([
+            'refernce' => '4246',
+            'user_id' => \App\Models\User::factory()->create()->id,
+            'status_id' => 5,
+            'global_price' => 7000,
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => '4246',
+            'orderNumber' => 'ORD-LEGACY',
+            'amount' => 7000,
+            'amountCustomer' => 7000,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000014',
+            'provider_reference' => 'PROV-LEGACY',
+        ])->assertStatus(201);
+
+        $commande->refresh();
+
+        $this->assertSame(2, (int) $commande->status_id);
+        $this->assertDatabaseHas('payements', ['commande_id' => $commande->id]);
     }
 }

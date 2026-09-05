@@ -63,6 +63,26 @@ class PayementController extends Controller
 
             } else {
 
+                // La reference et l'orderNumber viennent tous deux de l'appelant,
+                // et rien ne les liait : un orderNumber reellement paye suffisait
+                // a faire marquer payee n'importe quelle commande. On confronte
+                // desormais la reference annoncee a celle que la passerelle
+                // rattache elle-meme a la transaction verifiee.
+                $reference_verifiee = $result['transaction']['reference'] ?? null;
+
+                if ($reference_verifiee !== null && (string) $reference_verifiee !== (string) $reference) {
+                    Log::channel('quotation')->warning('webhook: reference annoncee differente de la transaction verifiee', [
+                        'annoncee' => $reference,
+                        'verifiee' => $reference_verifiee,
+                    ]);
+
+                    return ApiResponse::BAD_REQUEST(
+                        'reference_incoherente',
+                        'Oups',
+                        'La référence ne correspond pas à la transaction vérifiée.'
+                    );
+                }
+
                 $status = $result['transaction']['status'];
 
                 $status_paiement = StatusPayement::query()->where('code', $status)->first();
@@ -79,6 +99,24 @@ class PayementController extends Controller
                     // ferait cuisiner un repas non paye, et brulerait la
                     // pre-commande pour le vrai paiement arrivant ensuite.
                     if ($status_paiement?->is_paid) {
+                        // Le chemin pre-commande n'a pas encore de trafic de
+                        // production : il peut donc echouer ferme. Sans
+                        // reference rattachee par la passerelle, rien ne
+                        // prouve que cette transaction concerne CETTE
+                        // pre-commande — on refuse plutot que de croire
+                        // l'appelant sur parole.
+                        if ($reference_verifiee === null) {
+                            Log::channel('quotation')->warning('webhook: transaction sans reference verifiable, conversion refusee', [
+                                'reference' => $reference,
+                            ]);
+
+                            return ApiResponse::BAD_REQUEST(
+                                'reference_non_verifiable',
+                                'Oups',
+                                'Cette transaction ne peut pas être rattachée à une pré-commande.'
+                            );
+                        }
+
                         $order = app(\App\Services\ConversionPrecommande::class)
                             ->convertirSiPossible($reference);
                     }
