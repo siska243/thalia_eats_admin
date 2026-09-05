@@ -25,7 +25,7 @@ class UserAddressEndpointTest extends TestCase
 
     public function test_une_adresse_est_enregistree_avec_ses_coordonnees(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $town = Town::factory()->create();
 
         $response = $this->postJson('/api/user/addresses', [
@@ -44,7 +44,7 @@ class UserAddressEndpointTest extends TestCase
     public function test_la_meme_adresse_n_est_pas_dupliquee(): void
     {
         $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        Sanctum::actingAs($user, ['*']);
         $town = Town::factory()->create();
 
         $payload = ['adresse' => 'Avenue du Port 12', 'town' => $town->slug];
@@ -58,7 +58,7 @@ class UserAddressEndpointTest extends TestCase
     public function test_une_seule_adresse_principale_a_la_fois(): void
     {
         $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        Sanctum::actingAs($user, ['*']);
         $town = Town::factory()->create();
 
         $this->postJson('/api/user/addresses', [
@@ -87,7 +87,7 @@ class UserAddressEndpointTest extends TestCase
             'town_id' => $town->id,
         ]);
 
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $response = $this->getJson('/api/user/addresses');
 
@@ -98,7 +98,7 @@ class UserAddressEndpointTest extends TestCase
     public function test_une_adresse_se_supprime(): void
     {
         $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        Sanctum::actingAs($user, ['*']);
         $town = Town::factory()->create();
 
         $address = UserAdresse::create([
@@ -114,7 +114,7 @@ class UserAddressEndpointTest extends TestCase
 
     public function test_une_commune_inconnue_est_refusee(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $this->postJson('/api/user/addresses', [
             'adresse' => 'Avenue du Port 12',

@@ -46,7 +46,7 @@ class UpdateDeliveryAddressTest extends TestCase
     public function test_la_commande_visee_est_celle_dont_l_uid_est_fourni(): void
     {
         $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        Sanctum::actingAs($user, ['*']);
 
         $town = Town::factory()->create();
         $premiere = $this->pendingOrder($user, $town, 'CMD-1');
@@ -67,7 +67,7 @@ class UpdateDeliveryAddressTest extends TestCase
 
     public function test_sans_commande_en_attente_la_reponse_est_404(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $town = Town::factory()->create();
 
         // L'ancienne version ecrivait sur null et repondait 500.
@@ -80,7 +80,7 @@ class UpdateDeliveryAddressTest extends TestCase
     public function test_une_commune_inconnue_est_refusee(): void
     {
         $user = User::factory()->create();
-        Sanctum::actingAs($user);
+        Sanctum::actingAs($user, ['*']);
         $this->pendingOrder($user, Town::factory()->create(), 'CMD-3');
 
         $this->postJson('/api/user/commande/update-address-delivery', [
