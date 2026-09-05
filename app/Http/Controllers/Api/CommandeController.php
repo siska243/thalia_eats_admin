@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\StatusPayement;
 use App\Models\Town;
 use App\Models\TrackOrder;
+use App\Services\QuotationService;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\EasyPay;
@@ -538,7 +539,81 @@ class CommandeController extends Controller
             $commande->street = $adresse['street'];
             $commande->number_street = $adresse['number_street'];
 
-            $commande->global_price = $total_price;
+            // --- Observation de la quotation serveur -------------------------
+            // Ce bloc ne doit jamais modifier le comportement de valide() tant
+            // que quotation.authoritative vaut false. Toute exception y est
+            // absorbée : une commande ne peut pas échouer à cause de la mesure.
+            $quotation = null;
+
+            try {
+                $quotation_lines = [];
+
+                foreach ($products as $entry) {
+                    $observed = Product::query()
+                        ->with('currency')
+                        ->find(Cipher::Decrypt($entry['uid']));
+
+                    if ($observed) {
+                        // Quantité numérique, PAS (int) : calculePrice.js fait
+                        // `item.quantity * item.price` sans coercition, et les
+                        // quantités arrivent ici du client sans validation
+                        // d'entier. Tronquer produirait un faux écart.
+                        $quotation_lines[] = [
+                            'product' => $observed,
+                            'quantity' => $entry['quantity'],
+                        ];
+                    }
+                }
+
+                if ($town && $quotation_lines !== []) {
+                    $quotation = app(QuotationService::class)->quote($quotation_lines, $town);
+
+                    if (! $quotation->disponible) {
+                        // Les refus du moteur (panier vide, quantité invalide,
+                        // multi-restaurant, devises mélangées) n'ont AUCUN
+                        // équivalent dans calculePrice.js : le client produit un
+                        // nombre dans les quatre cas. Un refus a un total de 0,
+                        // donc comparer les totaux ici crierait à l'écart sur
+                        // chaque commande concernée. On journalise à part.
+                        Log::channel('quotation')->notice('refus_quotation', [
+                            'commande' => $commande->refernce,
+                            'raison' => $quotation->raison,
+                            'client_total' => $total_price,
+                        ]);
+                    } elseif (abs($quotation->total - floatval($total_price)) > 0.01) {
+                        Log::channel('quotation')->warning('ecart_quotation', [
+                            'commande' => $commande->refernce,
+                            'client' => [
+                                'total' => $total_price,
+                                'frais' => $pricing['frais_livraison'] ?? null,
+                                'service' => $pricing['service_price'] ?? null,
+                            ],
+                            'serveur' => $quotation->toArray(),
+                        ]);
+                    } elseif ($quotation->warnings !== []) {
+                        // Les deux calculs concordent et valent tous deux 0 de
+                        // frais : c'est la fuite de données delivrery_prices,
+                        // pas un bug du moteur.
+                        Log::channel('quotation')->info('quotation_conforme_avec_warnings', [
+                            'commande' => $commande->refernce,
+                            'total' => $quotation->total,
+                            'warnings' => $quotation->warnings,
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::channel('quotation')->error('observation_impossible', [
+                    'commande' => $commande->refernce,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+
+            $montant_facture = (config('quotation.authoritative') && $quotation !== null && $quotation->disponible)
+                ? $quotation->total
+                : $total_price;
+            // ----------------------------------------------------------------
+
+            $commande->global_price = $montant_facture;
             $commande->save();
 
             $commande->refresh();
@@ -575,7 +650,7 @@ class CommandeController extends Controller
 
 
             $data = [
-                'amount' => floatval($total_price),
+                'amount' => floatval($montant_facture),
                 'phone' => $phone,
                 'name' => $user_name,
                 'email' => $user_email,
@@ -616,8 +691,8 @@ class CommandeController extends Controller
                 'phone' => preg_replace('/[\s+]/', '', $phone),
                 'channel' => "MPESA",
                 'status_payement_id' => $status_paiement?->id,
-                'amount' => $total_price,
-                'amount_customer' => $total_price,
+                'amount' => $montant_facture,
+                'amount_customer' => $montant_facture,
                 'webhook_sse_url' => $webhook_url
             ]);
 
