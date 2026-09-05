@@ -482,7 +482,6 @@ class CommandeController extends Controller
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
-            $callback_url = $request->input('callback_url');
             $webhook_url = $request->input('webhook_sse_url');
             $pricing = $request->input('pricing');
             $phone = $request->input('phone');
@@ -656,7 +655,7 @@ class CommandeController extends Controller
                 'email' => $user_email,
                 'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code'] : "CDF",
                 'reference' => $commande->refernce,
-                'callback_url' => "https://app.thaliaeats.com/api/webhook-paiement-flexpay",
+                'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
                 "decline_url" => $error_url,
@@ -770,7 +769,6 @@ class CommandeController extends Controller
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
-            $callback_url = $request->input('callback_url');
             $webhook_url = $request->input('webhook_sse_url');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
@@ -799,7 +797,10 @@ class CommandeController extends Controller
                 'email' => $user_email,
                 'currency' => !empty($order->product) ? $order->product[0]->currency->code : "CDF",
                 'reference' => $order->refernce,
-                'callback_url' => $callback_url,
+                // Le client ne decide pas ou son paiement est confirme : une
+                // adresse fournie par l'appelant enverrait la confirmation
+                // ailleurs que sur l'instance qui detient la commande.
+                'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
                 "decline_url" => $error_url,
