@@ -24,7 +24,11 @@ class QuoteEndpointTest extends TestCase
 
     public function test_il_renvoie_le_detail_du_chiffrage(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        // ['*'] modelise un client applicatif : createToken() sans arguments
+        // accorde cette ability, et c'est ce que portent les jetons du web et du
+        // mobile en production. Sans elle, Sanctum::actingAs cree un jeton SANS
+        // aucune ability, qui ne modelise aucun client reel.
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $town = Town::factory()->create();
         $currency = Currency::factory()->create();
@@ -64,7 +68,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_un_panier_multi_restaurants_est_refuse_avec_sa_raison(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $town = Town::factory()->create();
         $currency = Currency::factory()->create();
@@ -87,7 +91,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_le_restaurant_attendu_sert_de_garde_fou(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $town = Town::factory()->create();
         $currency = Currency::factory()->create();
@@ -108,7 +112,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_un_uid_illisible_renvoie_une_erreur_400(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $town = Town::factory()->create();
 
         $this->postJson('/api/quote', [
@@ -119,7 +123,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_un_produit_inactif_est_introuvable(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $town = Town::factory()->create();
         $product = Product::factory()->inactive()->create();
@@ -132,7 +136,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_une_town_inconnue_renvoie_404(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $product = Product::factory()->create();
 
         $this->postJson('/api/quote', [
@@ -143,7 +147,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_une_quantite_absente_est_rejetee_par_la_validation(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $town = Town::factory()->create();
         $product = Product::factory()->create();
 
@@ -155,7 +159,7 @@ class QuoteEndpointTest extends TestCase
 
     public function test_un_panier_de_plus_de_cent_produits_est_rejete_par_la_validation(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $town = Town::factory()->create();
         $product = Product::factory()->create();
 
@@ -177,7 +181,7 @@ class QuoteEndpointTest extends TestCase
      */
     public function test_un_products_sous_forme_d_objet_json_ne_provoque_pas_une_erreur_500(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         $town = Town::factory()->create();
 
         // Un produit inactif ne se résout jamais (ModelNotFoundException) :

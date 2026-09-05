@@ -52,7 +52,11 @@ class BudgetSuggestionEndpointTest extends TestCase
 
     public function test_il_propose_ce_qui_tient_dans_le_budget(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        // ['*'] modelise un client applicatif : createToken() sans arguments
+        // accorde cette ability, et c'est ce que portent les jetons du web et du
+        // mobile en production. Sans elle, Sanctum::actingAs cree un jeton SANS
+        // aucune ability, qui ne modelise aucun client reel.
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency, $restaurant] = $this->contexte();
 
         Product::factory()->create([
@@ -77,7 +81,7 @@ class BudgetSuggestionEndpointTest extends TestCase
 
     public function test_quand_rien_ne_rentre_il_dit_combien_il_manque(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency, $restaurant] = $this->contexte();
 
         Product::factory()->create([
@@ -103,7 +107,7 @@ class BudgetSuggestionEndpointTest extends TestCase
 
     public function test_un_budget_negatif_est_rejete(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency] = $this->contexte();
 
         $this->postJson('/api/budget-suggestions', [
@@ -115,7 +119,7 @@ class BudgetSuggestionEndpointTest extends TestCase
 
     public function test_une_devise_inconnue_renvoie_404(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town] = $this->contexte();
 
         $this->postJson('/api/budget-suggestions', [

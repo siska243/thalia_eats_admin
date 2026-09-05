@@ -40,7 +40,11 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_trouve_un_plat_par_son_titre(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        // ['*'] modelise un client applicatif : createToken() sans arguments
+        // accorde cette ability, et c'est ce que portent les jetons du web et du
+        // mobile en production. Sans elle, Sanctum::actingAs cree un jeton SANS
+        // aucune ability, qui ne modelise aucun client reel.
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         Product::factory()->create(['title' => 'Poulet moambe', 'description' => 'plat traditionnel']);
         Product::factory()->create(['title' => 'Salade verte', 'description' => 'entree fraiche']);
@@ -54,7 +58,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_trouve_un_plat_sur_un_prefixe(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         Product::factory()->create(['title' => 'Poulet moambe', 'description' => 'plat traditionnel']);
 
@@ -66,7 +70,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_exclut_les_produits_inactifs(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         Product::factory()->inactive()->create(['title' => 'Poulet moambe']);
 
@@ -77,7 +81,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_exclut_les_produits_des_restaurants_inactifs(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $restaurant = Restaurant::factory()->inactive()->create();
         Product::factory()->create(['title' => 'Poulet moambe', 'restaurant_id' => $restaurant->id]);
@@ -89,7 +93,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_filtre_par_prix_maximum(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         Product::factory()->create(['title' => 'Poulet cher', 'price' => 20000]);
         Product::factory()->create(['title' => 'Poulet abordable', 'price' => 3000]);
@@ -102,7 +106,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_filtre_par_devise(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $cdf = Currency::factory()->create();
         $usd = Currency::factory()->usd()->create();
@@ -118,7 +122,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_il_calcule_la_distance_quand_les_deux_positions_sont_connues(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $restaurant = Restaurant::factory()->located(-2.508, 28.842)->create();
         Product::factory()->create(['title' => 'Poulet moambe', 'restaurant_id' => $restaurant->id]);
@@ -132,7 +136,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_un_restaurant_sans_coordonnees_reste_visible_avec_une_distance_nulle(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $restaurant = Restaurant::factory()->create(['location' => null]);
         Product::factory()->create(['title' => 'Poulet moambe', 'restaurant_id' => $restaurant->id]);
@@ -145,7 +149,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_une_location_malformee_ne_fait_pas_echouer_la_recherche(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $restaurant = Restaurant::factory()->create(['location' => ['n_importe_quoi' => true]]);
         Product::factory()->create(['title' => 'Poulet moambe', 'restaurant_id' => $restaurant->id]);
@@ -159,7 +163,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_le_filtre_town_garde_les_restaurants_sans_town(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $town = Town::factory()->create();
 
@@ -179,7 +183,7 @@ class ProductSearchEndpointTest extends TestCase
 
     public function test_les_resultats_sont_pagines(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         Product::factory()->count(7)->create(['title' => 'Poulet moambe']);
 
