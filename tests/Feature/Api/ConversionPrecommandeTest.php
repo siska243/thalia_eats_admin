@@ -24,7 +24,11 @@ class ConversionPrecommandeTest extends TestCase
         // Toute la securite residuelle du mode ouvert repose sur le fait que
         // ce journal soit ecrit puis lu : on le detourne vers un fichier de
         // test pour pouvoir l'affirmer, pas seulement l'esperer.
-        $this->journal_paiement = storage_path('logs/paiement-test.log');
+        // Chemin unique par instance : deux sessions travaillent dans ce
+        // meme checkout, et un chemin fixe ferait que chaque run supprime
+        // le fichier de l'autre — les assertions qui epinglent les capteurs
+        // echoueraient alors sans qu'aucun capteur ne soit casse.
+        $this->journal_paiement = storage_path('logs/paiement-test-'.getmypid().'-'.uniqid().'.log');
         @unlink($this->journal_paiement);
 
         config(['logging.channels.paiement' => [

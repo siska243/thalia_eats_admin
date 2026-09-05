@@ -121,6 +121,13 @@ class PayementController extends Controller
                 // confondre avec commandes.refernce qui est un entier nu. $order
                 // n'est donc null ici que pour une référence qui n'a jamais été une
                 // commande : le chemin Commande ci-dessus est rigoureusement inchangé.
+                // Une conversion de pre-commande confronte deja le montant sur
+                // son propre total, et la commande qui en nait porte ce meme
+                // total. Sans ce drapeau, un seul webhook ecrirait DEUX
+                // avertissements pour un seul evenement, et qui compte les
+                // occurrences du journal compterait double.
+                $total_deja_confronte = false;
+
                 if (! $order) {
                     // $result['code'] dit que l'appel de verification a abouti, PAS
                     // que le client a paye. C'est transaction.status, resolu en
@@ -160,7 +167,14 @@ class PayementController extends Controller
                             ->where('refernce', $reference)
                             ->first();
 
-                        if ($montant_verifie === null) {
+                        // Le capteur ne parle que si une pre-commande existe
+                        // vraiment : une reference inconnue n'a aucun total a
+                        // confronter, et journaliser la ferait crier le canal
+                        // sur du bruit. Toute la valeur de « paiement » tient
+                        // a ce qu'il reste silencieux quand tout va bien.
+                        $total_deja_confronte = (bool) $precommande;
+
+                        if ($precommande && $montant_verifie === null) {
                             Log::channel('paiement')->warning('webhook: transaction verifiee sans montant, total non confronte (mode ouvert)', [
                                 'reference' => $reference,
                                 'orderNumber' => $orderNumber,
@@ -218,7 +232,10 @@ class PayementController extends Controller
                     // devise, frais operateur) et refuser ici bloquerait des
                     // paiements reels. C'est ce journal qui dira, avec des
                     // semaines de production, si un refus est tenable.
-                    if ($montant_verifie === null) {
+                    if ($total_deja_confronte) {
+                        // Rien : la branche pre-commande vient de le faire sur
+                        // le meme montant. Un evenement, un avertissement.
+                    } elseif ($montant_verifie === null) {
                         Log::channel('paiement')->warning('webhook: transaction verifiee sans montant, prix de la commande non confronte (mode ouvert)', [
                             'reference' => $reference,
                             'orderNumber' => $orderNumber,
