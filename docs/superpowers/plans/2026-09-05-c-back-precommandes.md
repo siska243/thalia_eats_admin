@@ -1866,9 +1866,57 @@ class PrecommandeResource extends JsonResource
             ])->values()),
             'expires_at' => $this->resource->expires_at,
             'created_at' => $this->resource->created_at,
+            // Le client mobile en a besoin pour renvoyer vers le suivi une fois
+            // la pre-commande payee : sans cela l'ecran affiche « payee » sans
+            // pouvoir dire ou aller ensuite.
+            'commande' => $this->resource->commande_id ? [
+                'uid' => Cipher::Encrypt($this->resource->commande_id),
+                'reference' => $this->resource->commande?->refernce,
+            ] : null,
         ];
     }
 }
+```
+
+**Étape supplémentaire pour cette tâche :** ajouter ce bloc `commande` à
+`app/Http/Resources/PrecommandeResource.php`, créé en tâche 5, et charger la
+relation `commande` partout où la ressource est sérialisée — sans quoi
+`$this->resource->commande?->refernce` déclenche une requête par ligne.
+
+**Ajouter un test** dans `tests/Feature/Api/PrecommandeLectureTest.php` :
+
+```php
+    public function test_une_precommande_payee_porte_le_lien_vers_sa_commande(): void
+    {
+        $moi = User::factory()->create();
+        Sanctum::actingAs($moi, TokenAbility::agent());
+
+        $commande = Commande::query()->create([
+            'refernce' => '9100', 'user_id' => $moi->id, 'status_id' => 2,
+        ]);
+
+        $p = Precommande::factory()->payee()->create([
+            'user_id' => $moi->id,
+            'commande_id' => $commande->id,
+        ]);
+
+        $response = $this->getJson('/api/precommandes/'.Cipher::Encrypt($p->id));
+
+        $this->assertSame('9100', $response->json('data.commande.reference'));
+        $this->assertNotEmpty($response->json('data.commande.uid'));
+    }
+
+    public function test_une_precommande_non_payee_n_a_pas_de_commande(): void
+    {
+        $moi = User::factory()->create();
+        Sanctum::actingAs($moi, TokenAbility::agent());
+
+        $p = Precommande::factory()->create(['user_id' => $moi->id]);
+
+        $response = $this->getJson('/api/precommandes/'.Cipher::Encrypt($p->id));
+
+        $this->assertNull($response->json('data.commande'));
+    }
 ```
 
 - [ ] **Step 8: Écrire le contrôleur**
@@ -2072,7 +2120,13 @@ en lecture comme en écriture. C'est voulu — un agent ne gère pas le carnet
 d'adresses. L'endpoint de cette tâche, qui déclare `ability:precommande:lire`, est
 sa seule porte vers ces données, en lecture seule.
 
+**Ajout demandé par le client mobile.** L'écran des pré-commandes doit pouvoir
+renvoyer vers le suivi de commande une fois la pré-commande payée. `PrecommandeResource`
+ne porte aujourd'hui aucun lien vers la `Commande` issue de la conversion : il faut
+l'ajouter, sinon l'écran affiche « payée » sans pouvoir dire où aller ensuite.
+
 **Files:**
+- Modify: `app/Http/Resources/PrecommandeResource.php` (ajout du lien vers la commande)
 - Modify: `app/Http/Controllers/Api/PrecommandeController.php` (deux méthodes)
 - Create: `app/Http/Controllers/Api/AdresseRecenteController.php`
 - Modify: `routes/api.php`
@@ -2264,7 +2318,7 @@ Dans `app/Http/Controllers/Api/PrecommandeController.php`, ajouter après `store
     public function index(Request $request): JsonResponse
     {
         $precommandes = Precommande::query()
-            ->with(['products.product', 'restaurant', 'currency'])
+            ->with(['products.product', 'restaurant', 'currency', 'commande'])
             ->where('user_id', $request->user()->id)
             ->where('created_at', '>=', now()->subDays((int) config('precommande.visibilite_jours')))
             ->orderByDesc('created_at')
@@ -2305,7 +2359,7 @@ Dans `app/Http/Controllers/Api/PrecommandeController.php`, ajouter après `store
         }
 
         return Precommande::query()
-            ->with(['products.product', 'restaurant', 'currency'])
+            ->with(['products.product', 'restaurant', 'currency', 'commande'])
             ->where('user_id', $request->user()->id)
             ->find((int) $id);
     }
