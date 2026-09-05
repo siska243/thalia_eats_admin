@@ -22,6 +22,10 @@ use Illuminate\Http\Request;
  *
  * La sécurité de ce garde suppose que le groupe api reste sans session :
  * voir tests/Feature/Api/HypothesesDeSecuriteTest.php.
+ *
+ * Les deux alias comptent : `ability` (au moins une) et `abilities` (toutes).
+ * Ne reconnaître que le premier fermerait silencieusement aux assistants une
+ * route déclarant la variante « toutes », qui devrait leur être ouverte.
  */
 class RefuserAgentSansAbility
 {
@@ -35,7 +39,10 @@ class RefuserAgentSansAbility
         }
 
         $declareUneAbility = collect($request->route()?->gatherMiddleware() ?? [])
-            ->contains(fn ($middleware) => is_string($middleware) && str_starts_with($middleware, 'ability:'));
+            ->contains(fn ($middleware) => is_string($middleware) && (
+                str_starts_with($middleware, 'ability:')
+                || str_starts_with($middleware, 'abilities:')
+            ));
 
         if (! $declareUneAbility) {
             return ApiResponse::BAD_REQUEST(

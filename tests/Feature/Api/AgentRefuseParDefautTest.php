@@ -48,4 +48,21 @@ class AgentRefuseParDefautTest extends TestCase
         // Aucun utilisateur authentifie : le garde ne doit rien faire.
         $this->getJson('/api/categorie')->assertStatus(200);
     }
+
+    public function test_la_variante_toutes_les_abilities_est_reconnue(): void
+    {
+        // Aucune route de l'application n'utilise encore `abilities:`. On en
+        // declare une ici pour epingler le comportement avant qu'elle
+        // n'existe : sans cela, la premiere route ecrite avec la variante
+        // « toutes » serait silencieusement fermee aux assistants.
+        \Illuminate\Support\Facades\Route::middleware([
+            'api',
+            'auth:sanctum',
+            'abilities:catalogue:lire,devis:calculer',
+        ])->get('/api/_test_abilities', fn () => response()->json(['ok' => true]));
+
+        Sanctum::actingAs(User::factory()->create(), TokenAbility::agent());
+
+        $this->getJson('/api/_test_abilities')->assertStatus(200);
+    }
 }
