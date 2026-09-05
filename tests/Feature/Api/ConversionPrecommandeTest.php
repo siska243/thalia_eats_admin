@@ -14,10 +14,37 @@ class ConversionPrecommandeTest extends TestCase
 {
     use RefreshDatabase;
 
+    private string $journal_paiement;
+
     protected function setUp(): void
     {
         parent::setUp();
         Status::factory()->create(['id' => 2]);
+
+        // Toute la securite residuelle du mode ouvert repose sur le fait que
+        // ce journal soit ecrit puis lu : on le detourne vers un fichier de
+        // test pour pouvoir l'affirmer, pas seulement l'esperer.
+        $this->journal_paiement = storage_path('logs/paiement-test.log');
+        @unlink($this->journal_paiement);
+
+        config(['logging.channels.paiement' => [
+            'driver' => 'single',
+            'path' => $this->journal_paiement,
+            'level' => 'debug',
+        ]]);
+    }
+
+    protected function tearDown(): void
+    {
+        @unlink($this->journal_paiement);
+        parent::tearDown();
+    }
+
+    private function journal(): string
+    {
+        return file_exists($this->journal_paiement)
+            ? file_get_contents($this->journal_paiement)
+            : '';
     }
 
     private function precommandeAvecLignes(): Precommande
@@ -228,7 +255,7 @@ class ConversionPrecommandeTest extends TestCase
 
         \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
             'code' => 0, 'message' => 'ok',
-            'transaction' => ['status' => '0', 'reference' => $precommande->refernce],
+            'transaction' => ['status' => '0', 'reference' => $precommande->refernce, 'amount' => 5500],
         ], 200)]);
 
         $this->postJson('/api/webhook-paiement-flexpay', [
@@ -359,7 +386,7 @@ class ConversionPrecommandeTest extends TestCase
             'transaction' => ['status' => '0', 'reference' => 'P-AUTRECHOSE'],
         ], 200)]);
 
-        $this->postJson('/api/webhook-paiement-flexpay', [
+        $response = $this->postJson('/api/webhook-paiement-flexpay', [
             'reference' => $precommande->refernce,
             'orderNumber' => 'ORD-VOLE-2',
             'amount' => 5500,
@@ -368,7 +395,12 @@ class ConversionPrecommandeTest extends TestCase
             'code' => '0',
             'phone' => '243810000011',
             'provider_reference' => 'PROV-VOLE-2',
-        ])->assertStatus(400);
+        ]);
+
+        // Sans ce code, l'assertion serait satisfaite par n'importe quel
+        // autre garde renvoyant 400 — notamment celui du montant.
+        $response->assertStatus(400);
+        $response->assertJson(['error' => 'reference_incoherente']);
 
         $this->assertSame(0, Commande::query()->count());
 
@@ -489,5 +521,159 @@ class ConversionPrecommandeTest extends TestCase
 
         $this->assertSame(2, (int) $commande->status_id);
         $this->assertDatabaseHas('payements', ['commande_id' => $commande->id]);
+
+        // Le capteur : c'est lui qui dira, en production, si le mode ouvert
+        // s'active vraiment et donc s'il peut etre ferme.
+        $this->assertStringContainsString('coherence non etablie (mode ouvert)', $this->journal());
+        $this->assertStringContainsString('ORD-LEGACY', $this->journal());
+    }
+
+    /**
+     * Fix 1 verrouillait l'identite de la transaction, pas son montant. Un
+     * attaquant pouvait donc payer 100 CDF sa PROPRE pre-commande minuscule,
+     * puis presenter cette transaction — parfaitement coherente — pour en
+     * faire convertir, cuisiner et livrer une de 5500.
+     */
+    public function test_le_webhook_refuse_une_precommande_dont_le_montant_verifie_ne_correspond_pas(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => $precommande->refernce, 'amount' => 100],
+        ], 200)]);
+
+        // Le montant ANNONCE est le bon : c'est bien celui de la transaction
+        // verifiee qui doit trancher, jamais celui de la requete.
+        $response = $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-PETIT',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000020',
+            'provider_reference' => 'PROV-PETIT',
+        ]);
+
+        $response->assertStatus(400);
+        $response->assertJson(['error' => 'montant_incoherent']);
+
+        $this->assertSame(0, Commande::query()->count());
+
+        $precommande->refresh();
+        $this->assertSame(Precommande::STATUT_EN_ATTENTE, $precommande->status);
+    }
+
+    public function test_un_ecart_d_un_centime_ne_refuse_pas_la_conversion(): void
+    {
+        // Le projet a deja un precedent de divergence d'un centime entre
+        // round() cote PHP et toFixed(2) cote client : une egalite stricte
+        // sur des flottants refuserait des paiements parfaitement valides.
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => $precommande->refernce, 'amount' => 5499.99],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-CENTIME',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000021',
+            'provider_reference' => 'PROV-CENTIME',
+        ])->assertStatus(201);
+
+        $this->assertSame(1, Commande::query()->count());
+    }
+
+    public function test_une_precommande_se_convertit_encore_si_la_transaction_n_a_pas_de_montant(): void
+    {
+        // Mode ouvert sur le MONTANT : le nom du champ n'a pas ete etabli sur
+        // une capture reelle, une hypothese fausse doit degrader vers le
+        // comportement d'hier, jamais vers le refus.
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $precommande = $this->precommandeAvecLignes();
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => $precommande->refernce],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => $precommande->refernce,
+            'orderNumber' => 'ORD-SANS-MONTANT',
+            'amount' => 5500,
+            'amountCustomer' => 5500,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000022',
+            'provider_reference' => 'PROV-SANS-MONTANT',
+        ])->assertStatus(201);
+
+        $this->assertSame(1, Commande::query()->count());
+    }
+
+    /**
+     * L'asymetrie du montant, epinglee : chemin de production vivant, on
+     * observe sans refuser. Un ecart peut avoir des causes legitimes encore
+     * inconnues (arrondis, devise, frais operateur).
+     */
+    public function test_une_commande_ordinaire_au_montant_divergent_est_journalisee_mais_passe(): void
+    {
+        \App\Models\StatusPayement::query()->firstOrCreate(
+            ['code' => '0'],
+            ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
+        );
+
+        $commande = Commande::query()->create([
+            'refernce' => '4247',
+            'user_id' => \App\Models\User::factory()->create()->id,
+            'status_id' => 5,
+            'global_price' => 7000,
+        ]);
+
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+            'code' => 0, 'message' => 'ok',
+            'transaction' => ['status' => '0', 'reference' => '4247', 'amount' => 100],
+        ], 200)]);
+
+        $this->postJson('/api/webhook-paiement-flexpay', [
+            'reference' => '4247',
+            'orderNumber' => 'ORD-ECART',
+            'amount' => 7000,
+            'amountCustomer' => 7000,
+            'channel' => 'MPESA',
+            'code' => '0',
+            'phone' => '243810000023',
+            'provider_reference' => 'PROV-ECART',
+        ])->assertStatus(201);
+
+        $commande->refresh();
+
+        $this->assertSame(2, (int) $commande->status_id);
+        $this->assertNotNull($commande->paied_at);
+
+        // Rien n'est refuse, mais rien n'est tu : sans cette trace, l'ecart
+        // serait invisible et l'asymetrie ne serait qu'un renoncement.
+        $this->assertStringContainsString('montant verifie different du prix de la commande', $this->journal());
     }
 }
