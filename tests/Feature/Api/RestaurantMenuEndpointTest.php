@@ -21,6 +21,18 @@ class RestaurantMenuEndpointTest extends TestCase
 {
     use DatabaseTruncation;
 
+    /**
+     * DatabaseTruncation tronque en setUp(), pas en tearDown() : sans ceci, les
+     * lignes committées par le dernier test de cette classe survivraient et
+     * seraient visibles par une classe RefreshDatabase exécutée ensuite.
+     */
+    protected function tearDown(): void
+    {
+        $this->truncateTablesForAllConnections();
+
+        parent::tearDown();
+    }
+
     private function menuOf(Restaurant $restaurant): array
     {
         $response = $this->getJson("/api/categorie-restaurant/{$restaurant->slug}");

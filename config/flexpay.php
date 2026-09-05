@@ -16,16 +16,24 @@ return [
     | La valeur vient desormais d'un seul endroit, et le client ne decide plus
     | ou son propre paiement sera confirme.
     |
-    | Par defaut, l'adresse est deduite d'APP_URL : le webhook revient donc
-    | toujours sur l'instance qui a cree la commande. FLEXPAY_CALLBACK_URL
-    | permet de forcer une autre adresse lorsque l'API est joignable sous un
-    | domaine distinct de celui configure dans APP_URL.
+    | L'adresse ne derive PAS d'APP_URL : dans ce projet, APP_URL n'est pas
+    | maintenue comme l'origine publique (en local, elle pointe vers un
+    | tunnel ngrok jetable). La deduire d'APP_URL enverrait FlexPay confirmer
+    | un paiement sur une adresse ou personne n'ecoute des que APP_URL differe
+    | du domaine de production : le client est debite, la commande reste au
+    | statut 5, et rien ne le detecte.
+    |
+    | Par defaut, l'adresse retombe donc sur le domaine de production
+    | (app.thaliaeats.com) : c'est le repli le plus sur pour une confirmation
+    | de paiement, deliberement, meme quand on teste depuis un environnement
+    | different. FLEXPAY_CALLBACK_URL force une autre adresse lorsque l'API
+    | est reellement joignable sous un domaine different.
     |
     */
 
     'callback_url' => env(
         'FLEXPAY_CALLBACK_URL',
-        rtrim(env('APP_URL', 'http://127.0.0.1:8000'), '/').'/api/webhook-paiement-flexpay'
+        'https://app.thaliaeats.com/api/webhook-paiement-flexpay'
     ),
 
 ];

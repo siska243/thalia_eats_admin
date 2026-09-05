@@ -11,14 +11,21 @@ use Tests\TestCase;
  *
  * Un paiement pouvait donc etre confirme sur une instance qui ne detenait pas
  * la commande.
+ *
+ * L'adresse par defaut ne derive plus d'APP_URL : dans ce projet, APP_URL
+ * n'est pas maintenue comme l'origine publique (en local, elle pointe vers
+ * un tunnel ngrok jetable). Le repli par defaut est donc le domaine de
+ * production, deliberement : c'est la direction sure pour une confirmation
+ * de paiement.
  */
 class FlexpayCallbackConfigTest extends TestCase
 {
-    public function test_l_adresse_par_defaut_suit_l_instance_courante(): void
+    public function test_l_adresse_par_defaut_est_celle_de_production(): void
     {
-        $expected = rtrim(config('app.url'), '/').'/api/webhook-paiement-flexpay';
-
-        $this->assertSame($expected, config('flexpay.callback_url'));
+        $this->assertSame(
+            'https://app.thaliaeats.com/api/webhook-paiement-flexpay',
+            config('flexpay.callback_url')
+        );
     }
 
     public function test_le_controleur_ne_contient_plus_d_adresse_en_dur(): void

@@ -546,12 +546,15 @@ class CommandeController extends Controller
 
             try {
                 $ids = [];
+                $ids_by_uid = [];
 
                 foreach ($products as $entry) {
                     $decrypted = Cipher::Decrypt($entry['uid']);
 
                     if ($decrypted !== false && $decrypted !== '' && ctype_digit((string) $decrypted)) {
-                        $ids[] = (int) $decrypted;
+                        $id = (int) $decrypted;
+                        $ids[] = $id;
+                        $ids_by_uid[$entry['uid']] = $id;
                     }
                 }
 
@@ -565,10 +568,8 @@ class CommandeController extends Controller
                 $unresolved = false;
 
                 foreach ($products as $entry) {
-                    $decrypted = Cipher::Decrypt($entry['uid']);
-                    $observed = ($decrypted !== false && $decrypted !== '' && ctype_digit((string) $decrypted))
-                        ? $observes->get((int) $decrypted)
-                        : null;
+                    $id = $ids_by_uid[$entry['uid']] ?? null;
+                    $observed = $id !== null ? $observes->get($id) : null;
 
                     if ($observed) {
                         // Quantité numérique, PAS (int) : calculePrice.js fait

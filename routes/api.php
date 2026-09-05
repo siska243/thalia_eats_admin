@@ -71,6 +71,9 @@ Route::get('/not-auth', [AuthController::class, 'notlogin'])
     ->middleware('guest')
     ->name('login');
 
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.forgot-password');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('api.reset-password');
+
 Route::post('/refresh', [AuthController::class, 'refresh'])->name('api.refresh');
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('api.logout')

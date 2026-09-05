@@ -131,7 +131,10 @@ class ProductSearchService
         if ($indexables === []) {
             $query->where(function (Builder $sub) use ($tokens) {
                 foreach ($tokens as $token) {
-                    $sub->orWhere('products.title', 'like', '%'.$token.'%');
+                    // Échapper les jokers LIKE : un token tel que "a_" matcherait
+                    // sinon n'importe quel caractère à la place de "_".
+                    $escaped = str_replace(['%', '_'], ['\\%', '\\_'], $token);
+                    $sub->orWhere('products.title', 'like', '%'.$escaped.'%');
                 }
             });
 

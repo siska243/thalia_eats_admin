@@ -336,6 +336,16 @@ class QuotationServiceTest extends TestCase
     {
         // round() de PHP diverge de toFixed(2) du JS sur ces valeurs binaires
         // charnières ; sprintf('%.2F', ...) reproduit le comportement JS.
+        //
+        // Ce que ce test prouve : sprintf('%.2F', ...) et non round() est
+        // appliqué à la valeur flottante en mémoire (8.165, 1.005, 2.675).
+        // Ce qu'il NE prouve PAS : le comportement de bout en bout. La colonne
+        // products.price est un double(8,2) ; MySQL arrondit 8.165 en 8.17 au
+        // stockage, alors que le modèle en mémoire ici garde 8.165 (jamais
+        // relu depuis la base dans ce test). Ce test épingle donc sprintf
+        // contre round() côté PHP, pas la chaîne DB -> modèle -> sprintf. Le
+        // choix de sprintf reste correct et plus fidèle au JS ; ne pas changer
+        // l'assertion pour autant.
         return [
             '8.165 -> 8.16' => [8.165, 8.16],
             '1.005 -> 1.00' => [1.005, 1.00],

@@ -136,8 +136,13 @@ class QuotationController extends Controller
 
         $lines = [];
 
-        foreach ($products as $index => $entry) {
-            $product = $found->get($ids[$index]);
+        // On relit par id, pas par position : `products` valide comme `array`
+        // mais un objet JSON (`{"a": {...}}`) passe aussi cette validation et
+        // produit des clés non séquentielles — une lecture positionnelle sur
+        // $ids planterait sur une clé indéfinie.
+        foreach ($products as $entry) {
+            $id = (int) Cipher::Decrypt($entry['uid']);
+            $product = $found->get($id);
 
             if (! $product) {
                 throw new ModelNotFoundException;

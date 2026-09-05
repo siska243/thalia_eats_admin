@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginUserRequest;
 use App\Http\Requests\RegistrationRequest;
 use App\Http\Resources\UserResource;
+use App\Mail\OtpReinitPasswordMail;
 use App\Mail\WelcomeOtpMail;
 use App\Models\User;
 use App\Wrappers\ApiResponse;
@@ -93,6 +94,16 @@ class AuthController extends Controller
                 return ApiResponse::BAD_REQUEST('Errors', __('Oups'), __("Otp incorrect"));
             }
 
+            // otp_expire_at etait renseigne a l'inscription mais jamais relu :
+            // un code d'activation restait valable indefiniment.
+            if (!$user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
+                return ApiResponse::BAD_REQUEST(
+                    'Errors',
+                    __('Oups'),
+                    __("Ce code a expire, veuillez en demander un nouveau")
+                );
+            }
+
             $user->otp=null;
             $user->otp_expire_at=null;
 
@@ -125,12 +136,11 @@ class AuthController extends Controller
 
             $user = User::query()->where('email',  $credentials['email'])->first();
 
-            if (!$user) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Email incorrect');
-            }
-
-            if (!Hash::check($request->password, $user->password)) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Password incorrect');
+            // Un message distinct par champ permettait d'enumerer les comptes :
+            // « Email incorrect » revelait qu'une adresse n'existe pas, et
+            // « Password incorrect » qu'elle existe. Reponse unique.
+            if (!$user || !Hash::check($request->password, $user->password)) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Email ou mot de passe incorrect');
             }
 
             $token=$user->createToken('api token')->plainTextToken;
@@ -148,6 +158,102 @@ class AuthController extends Controller
 
         } catch (Exception $e) {
             //throw $th;
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    /**
+     * Demande un code de reinitialisation.
+     *
+     * La reponse est identique que le compte existe ou non : la distinguer
+     * transformerait cet endpoint en outil d'enumeration des comptes.
+     */
+    public function forgotPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => ['required', 'email', 'string'],
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::BAD_REQUEST('Error validation', 'Oups', "Veuillez saisir un email correcte");
+            }
+
+            $user = User::query()->where('email', $request->email)->first();
+
+            if ($user) {
+                $user->otp = self::generateOtp();
+                $user->otp_expire_at = now()->addMinutes(30);
+                $user->save();
+
+                Mail::to($user->email)->send(new OtpReinitPasswordMail([
+                    'full_name' => "{$user->last_name} {$user->name}",
+                    'otp' => $user->otp,
+                ]));
+            }
+
+            return ApiResponse::GET_DATA([
+                'title' => 'Code envoye',
+                'message' => "Si un compte existe pour cette adresse, un code de verification vient d'etre envoye.",
+            ]);
+        } catch (Exception $e) {
+            return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    /**
+     * Change le mot de passe a partir du code recu.
+     *
+     * Le code est consomme, et toutes les sessions ouvertes sont revoquees :
+     * si le compte etait compromis, l'ancien acces tombe avec le mot de passe.
+     */
+    public function resetPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => ['required', 'email', 'string'],
+                'otp' => ['required', 'string'],
+                'password' => ['required', 'string', 'min:8'],
+                'confirm_password' => ['required', 'same:password'],
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::BAD_REQUEST(
+                    $validator->errors(),
+                    'Oups',
+                    "Le mot de passe doit contenir au moins 8 caracteres et les deux saisies doivent correspondre"
+                );
+            }
+
+            $user = User::query()
+                ->where('email', $request->email)
+                ->where('otp', $request->otp)
+                ->first();
+
+            if (!$user) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Code incorrect');
+            }
+
+            if (!$user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
+                return ApiResponse::BAD_REQUEST(
+                    'Errors',
+                    'Oups',
+                    'Ce code a expire, veuillez en demander un nouveau'
+                );
+            }
+
+            $user->password = Hash::make($request->password);
+            $user->otp = null;
+            $user->otp_expire_at = null;
+            $user->save();
+
+            $user->tokens()->delete();
+
+            return ApiResponse::GET_DATA([
+                'title' => 'Mot de passe modifie',
+                'message' => 'Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.',
+            ]);
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }

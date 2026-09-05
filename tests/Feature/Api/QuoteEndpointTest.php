@@ -166,4 +166,37 @@ class QuoteEndpointTest extends TestCase
             'products' => array_fill(0, 101, ['uid' => $uid, 'quantity' => 1]),
         ])->assertStatus(422);
     }
+
+    /**
+     * `products` valide comme `array`, mais un objet JSON tel que
+     * {"a": {"uid": ..., "quantity": 1}} passe aussi cette validation et
+     * produit des clés non séquentielles. resolveLines() lisait autrefois
+     * $found->get($ids[$index]) où $index venait de la clé de $products :
+     * une clé non entière ("a") plantait avec une ErreurException (500) au
+     * lieu d'une réponse d'erreur exploitable par un client agent/MCP.
+     */
+    public function test_un_products_sous_forme_d_objet_json_ne_provoque_pas_une_erreur_500(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+        $town = Town::factory()->create();
+
+        // Un produit inactif ne se résout jamais (ModelNotFoundException) :
+        // avec une clé non entière ('a'), l'ancien code lisait $ids['a'] —
+        // une clé indéfinie — et plantait en 500 AVANT même d'atteindre cette
+        // logique de "produit introuvable". Le comportement attendu est
+        // identique à celui d'un panier normal (clés séquentielles) : 400.
+        $product = Product::factory()->inactive()->create();
+
+        // Un tableau PHP avec une clé non entière ('a') est sérialisé par
+        // json_encode() comme un objet JSON, exactement le cas qui plantait.
+        $response = $this->postJson('/api/quote', [
+            'town' => $town->slug,
+            'products' => [
+                'a' => ['uid' => Cipher::Encrypt($product->id), 'quantity' => 1],
+            ],
+        ]);
+
+        $this->assertLessThan(500, $response->getStatusCode());
+        $response->assertStatus(400);
+    }
 }
