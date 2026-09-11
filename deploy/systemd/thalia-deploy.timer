@@ -10,8 +10,8 @@ OnUnitActiveSec=2min
 # Laisse systemd regrouper les réveils : inutile d'être à la seconde.
 AccuracySec=15s
 
-# Rattrape le passage manqué si la machine était éteinte.
-Persistent=true
+# Pas de Persistent= : cette option ne s'applique qu'aux declencheurs
+# calendaires (OnCalendar=). systemd l'ignore pour un timer monotone.
 
 Unit=thalia-deploy.service
 
