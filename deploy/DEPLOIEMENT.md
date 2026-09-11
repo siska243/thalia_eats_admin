@@ -741,6 +741,98 @@ s'arrête au lieu de créer un merge sur la machine de production.
 
 ---
 
+## 11. Déploiement automatique
+
+Une fois installé, un `git push` sur la branche suivie suffit : le serveur
+récupère et déploie seul, dans les deux minutes.
+
+### Pourquoi le serveur interroge, et non l'inverse
+
+GitHub ne joint jamais cette machine. Aucun port à ouvrir, aucun service
+d'écoute à maintenir, et **aucune clé privée confiée à un tiers** — la clé de
+déploiement en lecture seule de l'étape 10a suffit.
+
+L'alternative, GitHub Actions qui se connecte en SSH, est instantanée et donne
+un joli journal dans GitHub. Mais elle exige de déposer dans les secrets
+GitHub une clé qui ouvre un shell sur un serveur hébergeant connect-rdc,
+eza360 et quatre applications sims-opportunity. Une fuite de ce secret ne
+concernerait plus seulement Thalia.
+
+Deux minutes de latence contre cette surface : le compromis est vite fait.
+
+### Installation `[serveur]`
+
+```bash
+cd /srv/thalia-eats/code/deploy
+
+# L'utilisateur propriétaire de /srv/thalia-eats, celui du groupe docker.
+sed -i "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service
+
+sudo cp systemd/thalia-deploy.service systemd/thalia-deploy.timer \
+        /etc/systemd/system/
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now thalia-deploy.timer
+```
+
+Contrôle :
+
+```bash
+systemctl list-timers thalia-deploy      # prochain passage
+sudo systemctl start thalia-deploy       # forcer un passage tout de suite
+journalctl -u thalia-deploy -n 40        # ce qu'il a fait
+cat /srv/thalia-eats/dernier-deploiement.txt
+```
+
+### Ce qu'il refuse de faire seul
+
+Deux garde-fous. Dans les deux cas la version en place **continue de tourner**,
+rien n'est déployé à moitié.
+
+**Un fichier suivi modifié sur le serveur.** Le `git pull --ff-only` de
+`deploy.sh` échouerait au milieu du déploiement. Le veilleur le voit avant et
+s'arrête, en listant les fichiers concernés.
+
+**Une migration dans le lot.** Changer le schéma d'une base qui porte des
+commandes et des paiements réels ne se fait pas sans quelqu'un devant
+l'écran. Le veilleur refuse, nomme les fichiers de migration, et attend :
+
+```bash
+cd /srv/thalia-eats/code/deploy
+./deploy.sh --migrate
+```
+
+Le passage suivant du timer repart normalement, puisque le commit local
+correspond alors au distant.
+
+C'est le seul cas où une livraison demande une action. Surveillez donc
+`dernier-deploiement.txt`, ou le journal, après un push qui touche
+`database/migrations`.
+
+### Ce qui empêche deux déploiements de se croiser
+
+Le build dure plusieurs minutes, le timer passe toutes les deux : un `flock`
+sur `/srv/thalia-eats/.auto-deploy.lock` fait sortir immédiatement tout
+passage qui en trouve un en cours.
+
+### Entretien
+
+Les images précédentes s'accumulent. Un nettoyage mensuel suffit :
+
+```bash
+cd /srv/thalia-eats/code/deploy && ./deploy.sh --no-build --prune
+```
+
+Et revenir en arrière reste possible : les images sont étiquetées par
+`IMAGE_TAG` dans `deploy/.env`. Pensez à **arrêter le timer** avant, sinon il
+redéploiera la branche au passage suivant :
+
+```bash
+sudo systemctl stop thalia-deploy.timer
+```
+
+---
+
 ## Ce qui a été corrigé au passage, et pourquoi
 
 **Deux liens symboliques du dépôt sont cassés**, tous deux hérités
