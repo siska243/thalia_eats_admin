@@ -70,7 +70,7 @@ class CommandeController extends Controller
             $user = auth()->user();
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user->id)->first();
+            $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
 
             if (!$commande) {
 
@@ -145,7 +145,7 @@ class CommandeController extends Controller
 
             $user = auth()->user();
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user->id)->first();
+            $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
 
 
             if (!$commande) {
@@ -240,7 +240,7 @@ class CommandeController extends Controller
             $commande = Commande::query()
                 ->with('product')
                 ->where('user_id', $user?->id)
-                ->whereIn('status_id', [1, 5])
+                ->nonReglee()
                 ->when($uid, fn ($query) => $query->where('id', Cipher::Decrypt($uid)))
                 ->first();
 
@@ -283,7 +283,7 @@ class CommandeController extends Controller
             if (!$commandId) {
                 return ApiResponse::BAD_REQUEST(__("Error"), __("Oups"), __("Commande is required"));
             }
-            $commande = Commande::with('product')->whereIn('status_id', [1, 5])
+            $commande = Commande::with('product')->nonReglee()
                 ->where('id', Cipher::Decrypt($commandId))
                 ->where('user_id', $user?->id)
                 ->latest()
@@ -314,7 +314,7 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+            $commande = Commande::with('product')->nonReglee()->where('user_id', $user?->id)->first();
 
             if (!$commande) {
                 return ApiResponse::NOT_FOUND(__("Not found"), __('messages.commandes.not_found'));
@@ -355,7 +355,7 @@ class CommandeController extends Controller
             $user = Auth()->user();
 
             $product_id = $request->input('product_id');
-            $commande = Commande::with('product')->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+            $commande = Commande::with('product')->nonReglee()->where('user_id', $user?->id)->first();
             CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id', Cipher::Decrypt($product_id))->delete();
 
             return $this->current();
@@ -616,10 +616,17 @@ class CommandeController extends Controller
             }
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
-            $commande = Commande::query()->whereIn('status_id', [1,5])->where('user_id', $user?->id)->first();
+            $commande = Commande::query()->nonReglee()->where('user_id', $user?->id)->first();
 
             if ($commande) {
-                return ApiResponse::BAD_REQUEST(__(""), __("Oups"), __("Une commande est déjà en cours. Accédez à Historique des commandes pour la payer ou l’annuler."));
+                // Le message nomme la commande concernee : sans sa reference,
+                // le client cherche dans une liste sans savoir laquelle
+                // l'empeche de commander.
+                return ApiResponse::BAD_REQUEST(
+                    ['uid' => Cipher::Encrypt($commande->id), 'reference' => $commande->refernce],
+                    __('Commande en attente'),
+                    __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $commande->refernce])
+                );
             }
 
             $products = $request->input("products");
@@ -631,7 +638,7 @@ class CommandeController extends Controller
 
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
 
-            $getExistOrder = Commande::query()->whereIn('status_id', [1, 5])->where('user_id', $user?->id)->first();
+            $getExistOrder = Commande::query()->nonReglee()->where('user_id', $user?->id)->first();
             $commande = $getExistOrder ?? new Commande();
 
             if (!$getExistOrder) {

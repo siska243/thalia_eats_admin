@@ -49,6 +49,24 @@ class Commande extends Model
      * place ; elles restent parce que les lignes ecrites avant elle, comme la
      * commande annulee en juillet 2025, sont toujours en base.
      */
+    /**
+     * Les commandes du client qui restent a regler : en attente (1) ou en
+     * attente de paiement (5), et non annulees.
+     *
+     * Cette definition etait ecrite HUIT fois dans CommandeController, sous
+     * la forme whereIn('status_id', [1, 5]). Ajouter nonAnnulee() a
+     * l'affichage sans l'ajouter au controle de creation a suffi a les faire
+     * divergier : une commande portant cancel_at avec le statut reste a 5 —
+     * une des lignes heritees incoherentes — disparaissait de « Commandes en
+     * cours » tout en continuant de bloquer toute nouvelle commande. Le
+     * client se retrouvait sans issue : rien a annuler a l'ecran, et rien de
+     * possible non plus.
+     */
+    public function scopeNonReglee(Builder $query): Builder
+    {
+        return $query->whereIn('status_id', [1, 5])->nonAnnulee();
+    }
+
     public function scopeNonAnnulee(Builder $query): Builder
     {
         return $query
