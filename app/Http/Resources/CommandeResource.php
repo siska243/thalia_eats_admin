@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Commande;
 use App\Models\CommandeProduct;
+use App\Models\Restaurant;
 use App\Wrappers\Cipher;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -28,12 +29,25 @@ class CommandeResource extends JsonResource
             'adresse' => $this->resource->adresse_delivery,
             'created_at'=>$this->resource->created_at,
             'reference_adresse'=>$this->resource->reference_adresse,
-            'code_confirmation' => $this->resource->code_confirmation,
-            'restaurant_code_confirmation' => $this->resource->code_confirmation_restaurant,
+            // Chaque code n'est communique qu'a la partie qui doit le
+            // detenir. Le livreur les recevait tous les deux : il pouvait
+            // declarer une commande recuperee puis livree sans jamais voir ni
+            // le restaurant ni le client, ce qui privait les deux
+            // confirmations de tout effet.
+            'code_confirmation' => $this->estLeClient($request)
+                ? $this->resource->code_confirmation
+                : null,
+            'restaurant_code_confirmation' => $this->estRestaurateur($request)
+                ? $this->resource->code_confirmation_restaurant
+                : null,
             "address_delivery"=> $this->resource->adresse_delivery,
             "street"=>$this->resource->street,
             "number_street"=>$this->resource->number_street,
-            'delivery_at'=>$this->resource->delivrery_at,
+            // La colonne s'appelle delivery_at ; lire delivrery_at visait un
+            // attribut inexistant, et le champ partait donc toujours a null.
+            // Seule la lecture etait fautive : la cle de reponse, elle, est
+            // correcte et ne bouge pas.
+            'delivery_at'=>$this->resource->delivery_at,
             'cancel_at'=>$this->resource->cancel_at,
             'accepted_at'=>$this->resource->accepted_at,
             'global_price' => $this->resource->global_price,
@@ -69,5 +83,26 @@ class CommandeResource extends JsonResource
         $date->setTime($time->hour, $time->minute, $time->second);
 
         return $date->toDateTimeString();
+    }
+
+    private function estLeClient(Request $request): bool
+    {
+        return $request->user()?->id === $this->resource->user_id;
+    }
+
+    /**
+     * Le proprietaire d'un restaurant. La reponse est memorisee pour la duree
+     * de la requete : une collection de commandes interrogerait sinon la table
+     * une fois par ligne.
+     */
+    private function estRestaurateur(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (!$user) return false;
+
+        static $cache = [];
+
+        return $cache[$user->id] ??= Restaurant::query()->where('user_id', $user->id)->exists();
     }
 }

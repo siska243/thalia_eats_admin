@@ -130,6 +130,10 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()->where('status_id', 2)
+                // Une commande annulee n'est pas a preparer : le restaurateur
+                // engageait des ingredients et du temps pour un plat que
+                // personne ne viendrait chercher.
+                ->nonAnnulee()
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
@@ -153,6 +157,10 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()->where('status_id', 2)
+                // Une commande annulee n'est pas a preparer : le restaurateur
+                // engageait des ingredients et du temps pour un plat que
+                // personne ne viendrait chercher.
+                ->nonAnnulee()
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
@@ -176,6 +184,10 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()->where('status_id', 2)
+                // Une commande annulee n'est pas a preparer : le restaurateur
+                // engageait des ingredients et du temps pour un plat que
+                // personne ne viendrait chercher.
+                ->nonAnnulee()
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')

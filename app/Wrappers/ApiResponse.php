@@ -44,6 +44,16 @@ class ApiResponse{
 
     }
 
+    public static function TOO_MANY_ATTEMPTS($title, $message): JsonResponse
+    {
+
+            return response()->json([
+                'title' => $title,
+                'message' => $message
+            ], 429);
+
+    }
+
     public static function NOT_FOUND($title,$message){
 
         return response()->json([

@@ -1,0 +1,136 @@
+# Deploiement du backend Thalia Eats en production.
+#
+# Ce fichier n'est pas versionne : il decrit un serveur precis.
+#
+# Le serveur est partage : Apache2 y sert deja d'autres applications, et
+# Connect RDC y tourne en conteneurs. Trois choix en decoulent.
+#
+# 1. Aucun port public. L'application n'ecoute que sur la boucle locale
+#    (127.0.0.1:${APP_PORT}), la base sur aucun port du tout. Apache garde 80
+#    et 443, garde le TLS, et relaie. Rien de ce qui tourne deja n'est touche,
+#    et la bascule se fait en rechargeant Apache.
+#
+# 2. La base vit dans un conteneur, sur le reseau interne du projet. Elle
+#    n'est jamais exposee a l'hote, donc ni au reste du serveur ni a
+#    l'extérieur : seul le service `app` la joint, par le nom `db`.
+#
+# 3. Les secrets ne sont pas ici. deploy/.env porte les mots de passe MySQL et
+#    ne voyage pas ; seul deploy/.env.example, vide, est transfere.
+
+name: thalia-eats
+
+services:
+    db:
+        # 8.4 LTS, la meme version que le MySQL deja installe sur ce serveur.
+        # Le dump vient d'un 8.0.46 : le sens 8.0 -> 8.4 est supporte, et il ne
+        # contient aucune syntaxe retiree en 8.4.
+        image: mysql:8.4
+        container_name: thalia-eats-db
+        restart: unless-stopped
+
+        # AUCUN `ports:`. La base n'est joignable que depuis le reseau du
+        # projet. L'exposer sur l'hote la rendrait accessible a tous les autres
+        # conteneurs du serveur.
+
+        environment:
+            MYSQL_DATABASE: "${DB_DATABASE:?DB_DATABASE manquant dans deploy/.env}"
+            MYSQL_USER: "${DB_USERNAME:?DB_USERNAME manquant dans deploy/.env}"
+            MYSQL_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD manquant dans deploy/.env}"
+            MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD manquant dans deploy/.env}"
+
+        volumes:
+            # Volume nomme plutot qu'un montage lie : le repertoire de donnees
+            # de MySQL est sensible aux proprietaires, et l'image s'en occupe
+            # elle-meme dans un volume. La sauvegarde se fait par mysqldump,
+            # pas par copie de fichiers.
+            - db_data:/var/lib/mysql
+
+            # L'image n'execute ce dossier QUE si le volume est vide, donc au
+            # tout premier demarrage : c'est ainsi que la base locale est
+            # importee, sans commande a lancer. Les .gz sont decompresses par
+            # l'entrypoint de l'image.
+            - ${DUMP_FILE:?DUMP_FILE manquant dans deploy/.env}:/docker-entrypoint-initdb.d/01-thalia.sql.gz:ro
+
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+            interval: 10s
+            timeout: 5s
+            # L'import du dump a lieu pendant cette periode : la base ne repond
+            # pas encore, et ce n'est pas une panne.
+            start_period: 120s
+            retries: 5
+
+        logging:
+            driver: json-file
+            options:
+                max-size: "20m"
+                max-file: "3"
+
+    app:
+        build:
+            context: ..
+            dockerfile: deploy/Dockerfile
+        # Construite sur le serveur et jamais poussee dans un registre.
+        image: thalia-eats-backend:${IMAGE_TAG:-latest}
+        container_name: thalia-eats-backend
+        restart: unless-stopped
+
+        # Attend que la base reponde vraiment, pas seulement qu'elle demarre :
+        # au premier lancement, l'import du dump prend plusieurs secondes et
+        # une migration lancee trop tot echouerait.
+        depends_on:
+            db:
+                condition: service_healthy
+
+        # Boucle locale uniquement : Apache est le seul a pouvoir l'atteindre.
+        ports:
+            - "127.0.0.1:${APP_PORT:-8096}:8080"
+
+        environment:
+            # La base arrive par import automatique au premier demarrage,
+            # migrations comprises : migrate n'a rien a faire ce jour-la.
+            # Passer a "true" pour les livraisons suivantes.
+            THALIA_RUN_MIGRATIONS: "${THALIA_RUN_MIGRATIONS:-false}"
+
+        volumes:
+            # Configuration et secrets de Laravel, en lecture seule, hors de
+            # l'image.
+            - ./.env.production:/var/www/html/.env:ro
+
+            # Journaux, sessions, cache, documents du disque
+            # « uploads_document », et firebase_credentials.json que la
+            # configuration attend a storage/firebase_credentials.json.
+            - ${DATA_DIR:?DATA_DIR manquant dans deploy/.env}/storage:/var/www/html/storage
+
+            # Les images : racine du disque « uploads_image ». Montees et non
+            # copiees, sinon les televersements disparaitraient a chaque
+            # reconstruction de l'image.
+            - ${DATA_DIR}/images:/var/www/html/public/images
+
+            # Pas de montage pour public/documents : c'est un lien symbolique
+            # casse du depot, herite d'un ancien hebergement cPanel
+            # (/home/c2176201c/...), et rien ne se trouve derriere. Le disque
+            # « uploads_document » ecrit en realite dans
+            # storage/app/public/uploads/document, donc dans le volume storage
+            # ci-dessus, et se sert par le lien public/storage que
+            # l'entrypoint refait au demarrage.
+
+        healthcheck:
+            # trim() plutot qu'une comparaison a "ok\n" : entre apostrophes,
+            # PHP ne traduit pas \n en retour a la ligne, la comparaison
+            # echouait donc toujours et le conteneur passait « unhealthy ».
+            test: ["CMD-SHELL", "php -r \"exit(trim(@file_get_contents('http://127.0.0.1:8080/healthz')) === 'ok' ? 0 : 1);\""]
+            interval: 30s
+            timeout: 5s
+            start_period: 30s
+            retries: 3
+
+        logging:
+            driver: json-file
+            options:
+                max-size: "20m"
+                max-file: "5"
+
+volumes:
+    db_data:
+        name: thalia-eats-db-data

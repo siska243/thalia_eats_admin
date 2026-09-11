@@ -1,0 +1,46 @@
+# Motifs pour le rsync du code (etape 2a de DEPLOIEMENT.md).
+#
+# ATTENTION : un motif sans « / » initial est applique a TOUS les niveaux.
+# « .env » excluait donc aussi deploy/.env, le fichier de variables de
+# Compose, et deploy.sh s'arretait sur le serveur avec « .env introuvable ».
+# Les motifs qui ne concernent que la racine sont donc ancres.
+
+/.git/
+/.gitignore
+/.github/
+
+# Reinstalle par Composer dans l'etape « vendor » de l'image.
+/vendor/
+/node_modules/
+
+# Montes depuis l'hote au demarrage : voyagent a part (etapes 2b et 2c).
+/storage/
+/public/images/
+/public/documents/
+/public/storage
+
+# Le .env de la machine de developpement. L'ancrage est indispensable : sans
+# lui, le motif s'appliquerait aussi a deploy/.env.example et au modele de
+# production, qui doivent partir.
+/.env
+/.env.testing
+/.env.example
+
+# Sauvegardes de base committees dans le depot : 570 Mo a eux deux.
+*.sql
+*.sql.gz
+
+# Certificats et cles.
+*.pem
+*.p12
+*.key
+
+/.phpunit.result.cache
+/.superpowers/
+/deploy/transfert/
+
+# Les deux .env RENSEIGNES ne partent jamais : celui de Laravel porte ses
+# secrets, celui de Compose les mots de passe MySQL. Seuls les modeles
+# voyagent, et l'operateur les remplit sur le serveur.
+/deploy/.env
+/deploy/.env.production

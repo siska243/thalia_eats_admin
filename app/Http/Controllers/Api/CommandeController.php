@@ -333,7 +333,13 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with(['product', 'delivrery_driver', 'status'])->whereIn('status_id', [2])->where('user_id', $user->id)->get();
+            // Sans ce filtre, une commande annulee depuis l'administration
+            // s'affichait au client comme etant en route.
+            $commande = Commande::with(['product', 'delivrery_driver', 'status'])
+                ->whereIn('status_id', [2])
+                ->nonAnnulee()
+                ->where('user_id', $user->id)
+                ->get();
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -365,7 +371,9 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
-            $commande = Commande::with(['product', 'delivrery_driver', 'status'])->whereIn('status_id', [2, 5])
+            $commande = Commande::with(['product', 'delivrery_driver', 'status'])
+                ->whereIn('status_id', [2, 5])
+                ->nonAnnulee()
                 ->where('user_id', $user->id)
                 ->latest()
                 ->get();
@@ -401,16 +409,55 @@ class CommandeController extends Controller
         return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
     }
 
+    /**
+     * Retrouve une commande accessible au demandeur.
+     *
+     * L'uid n'est pas une capacite : Cipher chiffre un entier avec une cle et
+     * un IV ecrits dans le depot, sans MAC. N'importe qui peut donc forger
+     * l'uid de n'importe quelle commande. L'autorisation doit venir d'une
+     * clause SQL, pas du fait de connaitre l'identifiant.
+     *
+     * Trois profils y ont legitimement acces : le client qui a commande, le
+     * livreur qui en a la charge, et le restaurant dont elle contient les
+     * plats.
+     */
+    private function commandeAccessible(?string $uid, array $with = []): ?Commande
+    {
+        $id = Cipher::Decrypt((string) $uid);
+
+        if ($id === false || !ctype_digit((string) $id)) return null;
+
+        $user = auth()->user();
+
+        if (!$user) return null;
+
+        return Commande::query()
+            ->with($with)
+            ->where('id', (int) $id)
+            ->where(function ($query) use ($user) {
+                $query
+                    ->where('user_id', $user->id)
+                    ->orWhereHas('delivrery_driver', fn ($q) => $q->where('user_id', $user->id))
+                    ->orWhereHas(
+                        'commande_products.product.restaurant',
+                        fn ($q) => $q->where('user_id', $user->id)
+                    );
+            })
+            ->first();
+    }
+
     public function showOrder(string $uid)
     {
-        $commande = Commande::with(['product', 'delivrery_driver', 'status'])
-            ->where('id', Cipher::Decrypt($uid))
-            ->first();
+        $commande = $this->commandeAccessible($uid, ['product', 'delivrery_driver', 'status']);
 
+        // Un uid inconnu et un uid appartenant a autrui donnent la meme
+        // reponse : sinon l'ecart renseigne sur l'existence des commandes.
+        // L'ancienne version renvoyait en plus l'identifiant entier decode.
         if (!$commande) {
-            return ApiResponse::GET_DATA(Cipher::Decrypt($uid));
+            return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
         }
-        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
+
+        return ApiResponse::GET_DATA(new CommandeResource($commande));
     }
 
     /**
@@ -430,7 +477,14 @@ class CommandeController extends Controller
                 return ApiResponse::BAD_REQUEST(__("Oups"), __("error"), __('messages.commandes.not_found'));
             }
 
-            $current_order = Commande::query()->where('id', Cipher::Decrypt($order))->where('status_id', 2)->first();
+            // Remonter une position n'appartient qu'au livreur affecte : sans
+            // ce filtre, tout compte authentifie pouvait faire croire au
+            // client que son repas approchait.
+            $current_order = Commande::query()
+                ->where('id', Cipher::Decrypt($order))
+                ->where('status_id', 2)
+                ->whereHas('delivrery_driver', fn ($q) => $q->where('user_id', auth()->id()))
+                ->first();
 
             if ($current_order) {
 
@@ -464,7 +518,12 @@ class CommandeController extends Controller
     {
         try {
 
-            $data = TrackOrder::query()->where('commande_id', Cipher::Decrypt($uid))->first();
+            $commande = $this->commandeAccessible($uid);
+
+            if (!$commande) return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+
+            $data = TrackOrder::query()->where('commande_id', $commande->id)->first();
+
             return ApiResponse::GET_DATA($data);
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -538,7 +597,11 @@ class CommandeController extends Controller
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
-            $webhook_url = $request->input('webhook_sse_url');
+            // Cette adresse est appelee par le serveur depuis le webhook de
+            // paiement, qui est public. La laisser venir de la requete
+            // revenait a offrir un POST vers l'hote de son choix — metadonnees
+            // cloud, services internes, proxy Ollama en 127.0.0.1:11434.
+            $webhook_url = config('sse.webhook_url');
             $pricing = $request->input('pricing');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
@@ -871,7 +934,11 @@ class CommandeController extends Controller
             $success_url = $request->input('success_url');
             $error_url = $request->input('error_url');
             $cancle_url = $request->input('cancel_url');
-            $webhook_url = $request->input('webhook_sse_url');
+            // Cette adresse est appelee par le serveur depuis le webhook de
+            // paiement, qui est public. La laisser venir de la requete
+            // revenait a offrir un POST vers l'hote de son choix — metadonnees
+            // cloud, services internes, proxy Ollama en 127.0.0.1:11434.
+            $webhook_url = config('sse.webhook_url');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
             $mobile=$request->input('mobile');
