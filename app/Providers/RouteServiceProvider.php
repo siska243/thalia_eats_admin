@@ -55,6 +55,25 @@ class RouteServiceProvider extends ServiceProvider
         // La signature n'identifie pas l'appelant : on compte par IP.
         RateLimiter::for('lien-paiement', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
 
+        // OAuth : aucune de ces routes n'est authentifiée au moment où elle est
+        // appelée, l'IP est donc la seule cle disponible.
+
+        // L'enregistrement dynamique crée une ligne en base sans qu'aucun
+        // humain n'intervienne : sans limite, on remplit la table.
+        RateLimiter::for('oauth-enregistrement', fn (Request $request) => Limit::perHour(20)->by($request->ip()));
+
+        RateLimiter::for('oauth-autorisation', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
+
+        // Celui-ci vérifie des mots de passe. C'est le seul endroit de
+        // l'application où un formulaire public teste des identifiants : sans
+        // limite, la page d'autorisation devient un banc d'essai de mots de passe.
+        RateLimiter::for('oauth-connexion', fn (Request $request) => [
+            Limit::perMinute(5)->by($request->ip()),
+            Limit::perHour(30)->by($request->ip()),
+        ]);
+
+        RateLimiter::for('oauth-jeton', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
+
         $this->routes(function () {
             Route::middleware('api')
                 ->prefix('api')
