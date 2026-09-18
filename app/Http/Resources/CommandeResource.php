@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Commande;
 use App\Models\CommandeProduct;
+use App\Models\Currency;
 use App\Models\Restaurant;
 use App\Wrappers\Cipher;
 use Carbon\Carbon;
@@ -51,6 +52,12 @@ class CommandeResource extends JsonResource
             'cancel_at'=>$this->resource->cancel_at,
             'accepted_at'=>$this->resource->accepted_at,
             'global_price' => $this->resource->global_price,
+            // La devise d'une commande n'etait exposee nulle part : chaque
+            // client la deduisait de `products[0].currency`. Les commandes sans
+            // produit — il en existe en base — affichaient donc leur total nu,
+            // « 2,3 » sans unite, aussi bien sur le web que sur le telephone.
+            // Une commande porte un montant, elle doit porter sa monnaie.
+            'currency' => $this->devise(),
             'price_delivery' => $this->resource->price_delivery,
             'price_service'=>$this->resource->price_service,
             'town_id' => new TownResource($this->resource->town),
@@ -73,6 +80,25 @@ class CommandeResource extends JsonResource
             'user_delivery_complet_adress'=>"{$this->resource->adresse_delivery}, {$this->resource->town?->title} {$this->resource->town?->city?->title}",
             "mask_address"=>Str::mask("{$this->resource->adresse_delivery}, {$this->resource->town?->title}","*",3)
         ];
+    }
+
+    /**
+     * La devise de la commande.
+     *
+     * Elle n'a pas de colonne : elle se lit sur les produits commandes. Quand
+     * il n'y en a plus — lignes heritees dont les produits ont disparu — on
+     * retombe sur la devise active de la plateforme plutot que de ne rien
+     * renvoyer, parce qu'un montant sans unite n'est pas une information.
+     */
+    private function devise(): ?Currency
+    {
+        $surLaCommande = $this->resource->product?->first()?->currency;
+
+        if ($surLaCommande) return $surLaCommande;
+
+        static $defaut = null;
+
+        return $defaut ??= Currency::query()->where('is_active', 1)->first();
     }
 
     public static function customTime($date,$time)
