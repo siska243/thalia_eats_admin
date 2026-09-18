@@ -48,6 +48,21 @@ class PrecommandeService
         $premier = $lines[array_key_first($lines)]['product'];
 
         return DB::transaction(function () use ($user, $lines, $town, $quotation, $premier) {
+            // Le plafond se verifie DANS la transaction : le compter avant
+            // laisserait une fenetre ou deux creations simultanees passent
+            // toutes les deux. Deux requetes rigoureusement concurrentes
+            // pourraient encore produire une pre-commande de trop — le
+            // limiteur d'ecriture (10/min) borne le degat a une unite, et une
+            // neuvieme pre-commande n'est pas un probleme de securite.
+            $actives = Precommande::query()
+                ->where('user_id', $user->id)
+                ->valides()
+                ->count();
+
+            if ($actives >= (int) config('precommande.plafond_actives')) {
+                throw PrecommandeRefusee::pour(PrecommandeRefusee::TROP_DE_PRECOMMANDES);
+            }
+
             $precommande = Precommande::query()->create([
                 'refernce' => $this->reference(),
                 'user_id' => $user->id,
