@@ -63,7 +63,7 @@ En attendant OAuth, le jeton se demande à l'API, authentifié par un jeton de
 session normal (celui de l'application web ou mobile) :
 
 ```bash
-curl -X POST https://app.thaliaeats.com/api/assistants \
+curl -X POST https://app.thaliaeats.com/api/user/assistants \
      -H "Authorization: Bearer <jeton de session de l'utilisateur>" \
      -H "Accept: application/json" \
      -H "Content-Type: application/json" \
@@ -87,8 +87,8 @@ Réponse (`201`) :
 
 `data.token` est le jeton à donner au client MCP. Il porte les cinq capacités
 d'agent et **rien d'autre** : il ne peut ni annuler une commande, ni déclencher
-un paiement, ni émettre un autre jeton. `GET /api/assistants` liste les
-connexions, `DELETE /api/assistants/{uid}` en révoque une — depuis l'API, pas
+un paiement, ni émettre un autre jeton. `GET /api/user/assistants` liste les
+connexions, `DELETE /api/user/assistants/{uid}` en révoque une — depuis l'API, pas
 depuis ce connecteur.
 
 ## Lancer en local
@@ -151,7 +151,7 @@ fait la jonction et porte l'en-tête `Authorization`. À coller dans
         "Authorization:Bearer ${THALIA_JETON}"
       ],
       "env": {
-        "THALIA_JETON": "42|le-jeton-rendu-par-POST-/api/assistants"
+        "THALIA_JETON": "42|le-jeton-rendu-par-POST-/api/user/assistants"
       }
     }
   }

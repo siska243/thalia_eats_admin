@@ -54,7 +54,7 @@ def metadonnees_de_ressource(config: Config) -> dict[str, object]:
             "commande:lire",
         ],
         "resource_name": "Thalia Eats",
-        "resource_documentation": f"{config.url_api}/api/assistants",
+        "resource_documentation": f"{config.url_api}/api/user/assistants",
     }
 
 

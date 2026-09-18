@@ -922,7 +922,7 @@ curl -i -X POST https://mcp.thaliaeats.com/mcp \
 ```
 
 Puis une vraie session : créer un jeton d'agent avec
-`POST /api/assistants` (voir `mcp/README.md`) et lister les outils depuis un
+`POST /api/user/assistants` (voir `mcp/README.md`) et lister les outils depuis un
 client MCP. Six outils doivent apparaître.
 
 ### Ce que ce service ne fait pas
