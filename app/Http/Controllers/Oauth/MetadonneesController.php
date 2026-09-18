@@ -17,7 +17,19 @@ class MetadonneesController extends Controller
 {
     public function show(): JsonResponse
     {
-        $emetteur = rtrim((string) config('app.url'), '/');
+        $emetteur = rtrim((string) config('oauth.origine'), '/');
+
+        // Une découverte silencieusement fausse est pire qu'une erreur : le
+        // client suivrait les adresses publiées ici, en clair ou vers un hôte
+        // où personne n'écoute, sans que rien ne le signale. On refuse plutôt
+        // de servir le document.
+        if (! str_starts_with($emetteur, 'https://')) {
+            return response()->json([
+                'error' => 'server_error',
+                'error_description' => "L'origine publique du serveur d'autorisation n'est pas en https : "
+                    .'corrigez OAUTH_ORIGINE avant de publier ce document.',
+            ], 500);
+        }
 
         return response()->json([
             // L'émetteur doit être identique, caractère pour caractère, à
