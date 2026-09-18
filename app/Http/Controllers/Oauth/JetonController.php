@@ -67,18 +67,37 @@ class JetonController extends Controller
                 return null;
             }
 
+            // Le compte a pu disparaitre entre l'autorisation et l'echange.
+            // Sans cette garde, l'appel suivant leverait une erreur sur null et
+            // rendrait un 500 depuis l'interieur de la transaction, la ou un
+            // refus ordinaire est la bonne reponse.
+            $utilisateur = $code->user;
+
+            if ($utilisateur === null) {
+                return null;
+            }
+
             $code->consumed_at = now();
             $code->save();
 
             $jours = AssistantTokenController::JOURS_PAR_DEFAUT;
 
+            // Les capacites reellement accordees : l'intersection entre ce que
+            // le client a demande et ce que Thalia delivre. `scopes` a deja ete
+            // valide comme un sous-ensemble a l'autorisation, et vaut les cinq
+            // capacites quand le client n'a rien demande de precis. Delivrer
+            // systematiquement les cinq donnerait plus que ce que la page de
+            // consentement a annonce.
+            $capacites = array_values(array_intersect($code->scopes, TokenAbility::agent()));
+
             return [
-                'jeton' => $code->user->createToken(
+                'jeton' => $utilisateur->createToken(
                     $client->client_name,
-                    TokenAbility::agent(),
+                    $capacites,
                     now()->addDays($jours),
                 ),
                 'secondes' => $jours * 86400,
+                'capacites' => $capacites,
             ];
         });
 
@@ -92,7 +111,7 @@ class JetonController extends Controller
             'access_token' => $resultat['jeton']->plainTextToken,
             'token_type' => 'Bearer',
             'expires_in' => $resultat['secondes'],
-            'scope' => implode(' ', TokenAbility::agent()),
+            'scope' => implode(' ', $resultat['capacites']),
         ])->header('Cache-Control', 'no-store')->header('Pragma', 'no-cache');
     }
 
@@ -123,6 +142,12 @@ class JetonController extends Controller
      * Un échange qui n'en désigne aucune est accepté : le code reste lié à la
      * ressource de son autorisation, et refuser ici casserait les clients qui
      * n'envoient l'indicateur qu'à l'autorisation.
+     *
+     * ATTENTION à ce que ce contrôle N'EST PAS : il vérifie la cohérence entre
+     * l'autorisation et l'échange, c'est de la tenue de registre. Il ne
+     * restreint pas l'audience du jeton délivré, qui reste un jeton Sanctum
+     * valable partout où ses capacités le portent. Donner une audience aux
+     * jetons toucherait toute l'application, et ne se décide pas ici.
      */
     private function ressourceConcorde(OauthAuthorizationCode $code, mixed $resource): bool
     {
