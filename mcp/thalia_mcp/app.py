@@ -36,7 +36,14 @@ INSTRUCTIONS = (
     "commune de livraison est collectée ici.\n\n"
     "N'additionnez jamais des montants vous-même : seul « calculer_le_prix_du_panier » "
     "donne le prix facturé.\n\n"
-    "Rien ne peut être supprimé ni annulé depuis ce connecteur."
+    "Rien ne peut être supprimé ni annulé depuis ce connecteur. Quand le client "
+    "demande une action que vous ne pouvez pas faire, dites-lui de passer par "
+    "« l'application Thalia Eats » — rien de plus. Ne nommez JAMAIS une adresse "
+    "technique, un sous-domaine, un outil d'administration ni aucun composant "
+    "interne, et n'en déduisez pas l'existence à voix haute. Vous "
+    "parlez à un client, et la même réponse s'afficherait à qui chercherait où "
+    "frapper : une phrase serviable qui désigne un panneau d'administration lui "
+    "fait gagner la moitié du travail."
 )
 
 
