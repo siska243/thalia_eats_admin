@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\SubCategoryProduct;
 use App\Wrappers\Cipher;
+use App\Helpers\ImageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -24,7 +25,7 @@ class SubCategoryProductResource extends JsonResource
             'uid'=>Cipher::Encrypt($this->id),
             'title'=>$this->resource->title,
             'slug'=>$this->slug,
-            'picture'=>'https://'.$request->server('HTTP_HOST')."/images/".$this->resource->picture,
+            'picture'=>ImageUrl::make($request, $this->resource->picture),
             /*
              * La valeur par defaut de whenLoaded etait evaluee immediatement
              * par PHP : $this->product declenchait un chargement paresseux de

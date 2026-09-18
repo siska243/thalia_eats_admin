@@ -762,18 +762,42 @@ Deux minutes de latence contre cette surface : le compromis est vite fait.
 
 ### Installation `[serveur]`
 
+L'unité se **fabrique dans `/etc/systemd/system/`** à partir du modèle. Le
+fichier suivi par git n'est jamais modifié : c'est tout l'intérêt, et
+l'explication est juste en dessous.
+
 ```bash
 cd /srv/thalia-eats/code/deploy
 
-# L'utilisateur propriétaire de /srv/thalia-eats, celui du groupe docker.
-sed -i "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service
+# Le modele est lu, jamais ecrit : la substitution part vers /etc.
+# $USER doit etre le proprietaire de /srv/thalia-eats, celui du groupe docker.
+sed "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service.example \
+    | sudo tee /etc/systemd/system/thalia-deploy.service > /dev/null
 
-sudo cp systemd/thalia-deploy.service systemd/thalia-deploy.timer \
-        /etc/systemd/system/
+sudo cp systemd/thalia-deploy.timer /etc/systemd/system/
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now thalia-deploy.timer
+
+# Le modele doit rester intact : cette commande ne doit rien afficher.
+git -C /srv/thalia-eats/code status --short
 ```
+
+> **Pourquoi ce detour plutot qu'un `sed -i` sur place.**
+> `auto-deploy.sh` refuse de deployer des qu'un fichier suivi est modifie sur
+> le serveur — c'est voulu, sinon un `git pull --ff-only` echouerait au milieu
+> d'une livraison. Mais l'ancienne procedure editait justement un fichier
+> suivi pour y poser `User=`. Le serveur divergeait donc des l'installation,
+> et **tous** les deploiements suivants etaient refuses. C'est arrive le
+> 18 septembre 2026 : un `User=ubuntu` pose des le premier jour avait gele la
+> livraison continue, sans que le lien soit fait entre les deux.
+>
+> Si vous heritez d'un serveur dans cet etat : copiez l'unite vers `/etc`
+> comme ci-dessus, puis
+> `git checkout -- deploy/systemd/thalia-deploy.service`. Verifiez d'abord
+> que `/etc/systemd/system/thalia-deploy.service` est une vraie copie et non
+> un lien symbolique vers le depot (`ls -l`) — restaurer sous un lien
+> casserait le service.
 
 Contrôle :
 
@@ -830,6 +854,162 @@ redéploiera la branche au passage suivant :
 ```bash
 sudo systemctl stop thalia-deploy.timer
 ```
+
+---
+
+## 12. Connecteur MCP `[serveur]`
+
+Le connecteur MCP (`mcp/`) est un service Python séparé qui permet à Claude ou
+ChatGPT de commander chez Thalia au nom d'un client. Il est **un client de
+l'API comme un autre** : il ne touche jamais `db`, n'est pas sur son réseau, et
+ne connaît de Thalia que `https://app.thaliaeats.com`.
+
+```
+Internet ──443──> Apache2 ──> 127.0.0.1:8096   app (Laravel)
+                     │
+                     └──443──> 127.0.0.1:8097   mcp (connecteur)
+                                    │
+                                    └── appelle https://app.thaliaeats.com
+```
+
+Les trois principes du reste de ce déploiement tiennent : **aucun port public**
+(le connecteur n'écoute que sur la boucle locale), **tout passe par Apache**,
+et **la base n'est jamais exposée** — le connecteur n'a d'ailleurs aucun accès
+à MySQL, par construction.
+
+### 12a. Variables
+
+Le connecteur ne porte **aucun secret** : chaque client envoie son propre jeton
+à chaque requête, et rien n'est stocké. Les variables du bloc « Connecteur
+MCP » de `deploy/.env.example` suffisent. Une seule est obligatoire :
+
+```bash
+# deploy/.env
+MCP_PORT=8097
+MCP_URL_PUBLIQUE=https://mcp.thaliaeats.com   # OBLIGATOIRE
+```
+
+`MCP_URL_PUBLIQUE` est l'URL telle qu'un client la voit. Elle part dans le
+document de métadonnées RFC 9728 et dans le défi `401` : une valeur fausse et
+aucun client ne peut découvrir où s'authentifier. Compose refuse de démarrer si
+elle manque, plutôt que de servir des métadonnées mensongères.
+
+Vérifier que le port est libre, comme pour 8096 :
+
+```bash
+ss -ltnp | grep 8097
+```
+
+### 12b. Démarrage
+
+Le connecteur vit dans **son propre fichier Compose**, jamais dans celui du
+backend. Les commandes le nomment donc explicitement :
+
+```bash
+cd /srv/thalia-eats/code/deploy
+COMPOSE="-f docker-compose.yml -f docker-compose.mcp.yml"
+
+docker compose $COMPOSE build mcp
+docker compose $COMPOSE up -d mcp
+docker compose $COMPOSE ps mcp          # doit passer « healthy » en ~15 s
+curl -s http://127.0.0.1:8097/healthz   # ok
+```
+
+> **Pourquoi un fichier separe.** Compose interpole le fichier ENTIER avant de
+> regarder quels services sont demandes. Tant que `mcp` vivait dans
+> `docker-compose.yml`, son `MCP_URL_PUBLIQUE:?` manquant faisait echouer
+> l'analyse du fichier — donc le deploiement du **backend**, qui n'a rien a voir
+> avec le connecteur. Le 18 septembre 2026, la production a cesse de se deployer
+> pour cette seule raison. Un service accessoire ne doit jamais pouvoir bloquer
+> le service principal.
+>
+> `deploy.sh` ne lit pas ce fichier : mettre a jour le connecteur se fait a la
+> main, avec les commandes ci-dessus.
+>
+> **Corollaire qui a coute un 503 le jour meme.** Un service absent du fichier
+> que Compose lit est un ORPHELIN. `deploy.sh` portait `--remove-orphans` :
+> chaque deploiement du backend supprimait donc le conteneur du connecteur, et
+> `mcp.thaliaeats.com` rendait 503 jusqu'a relance manuelle. Le drapeau a ete
+> retire ; ne le remettez pas, et n'ajoutez pas non plus `-f
+> docker-compose.mcp.yml` a `deploy.sh` — ce serait recreer le couplage que la
+> separation vient de defaire.
+>
+> Si le connecteur est tombe :
+>
+> ```bash
+> cd /srv/thalia-eats/code/deploy
+> docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d mcp
+> ```
+
+### 12c. Apache
+
+Un sous-domaine dédié, `mcp.thaliaeats.com`. Reprendre
+`apache-thalia-http.conf` en changeant deux lignes — **port 80 uniquement,
+aucune directive SSL**, pour la raison expliquée en section 7 : un certificat
+absent fait échouer `configtest`, et un `restart` ferait tomber toutes les
+applications du serveur.
+
+```apache
+    ServerName mcp.thaliaeats.com
+
+    ProxyPass        / http://127.0.0.1:8097/
+    ProxyPassReverse / http://127.0.0.1:8097/
+```
+
+`ProxyTimeout 120` est utile ici aussi : le transport MCP « streamable HTTP »
+garde un flux SSE ouvert pendant la session.
+
+**Discretion sur la pile.** Le connecteur ne publie plus « Server: uvicorn » :
+c'est supprime a la source (`server_header=False`), donc vrai meme pour qui
+joindrait le conteneur directement. Apache, lui, annonce encore sa version, et
+ses pages d'erreur affichent « Apache/2.4.63 (Ubuntu) » — une version exacte
+vaut mieux qu'un nom de serveur pour qui cherche une faille connue. Cela se
+regle globalement, une fois, pour les onze applications de la machine :
+
+```apache
+# /etc/apache2/conf-enabled/security.conf
+ServerTokens Prod
+ServerSignature Off
+```
+
+```bash
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl -sI https://mcp.thaliaeats.com/healthz | grep -i '^server'
+```
+
+Ce n'est pas une protection : cacher un nom n'empeche aucune attaque, et il ne
+faut pas s'en croire protege. C'est retirer une indication gratuite.
+
+Puis, comme en section 7 : `a2ensite`, `apache2ctl configtest`,
+`apache2ctl -S` (le vhost MCP ne doit pas devenir le serveur par défaut),
+`systemctl reload apache2`, et enfin `certbot --apache` pour le vhost 443.
+
+### 12d. Recette
+
+```bash
+# Les métadonnées désignent bien Thalia comme serveur d'autorisation.
+curl -s https://mcp.thaliaeats.com/.well-known/oauth-protected-resource/mcp
+
+# Sans jeton : 401 et le défi qui pointe vers ces métadonnées.
+curl -i -X POST https://mcp.thaliaeats.com/mcp \
+     -H 'Content-Type: application/json' \
+     -H 'Accept: application/json, text/event-stream' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Puis une vraie session : créer un jeton d'agent avec
+`POST /api/user/assistants` (voir `mcp/README.md`) et lister les outils depuis un
+client MCP. Six outils doivent apparaître.
+
+### Ce que ce service ne fait pas
+
+Il n'implémente **pas** OAuth : il sert les métadonnées de ressource protégée
+et le défi `401`, rien de plus. Le serveur d'autorisation se construira côté
+Laravel ; une demi-implémentation dans le connecteur devrait être arrachée.
+
+Il n'expose **aucun** outil de suppression ni d'annulation, et ne peut écrire
+que ce que les capacités du jeton de l'utilisateur autorisent — jamais
+davantage.
 
 ---
 

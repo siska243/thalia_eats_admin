@@ -12,8 +12,33 @@ class Commande extends Model
 {
     use HasFactory;
 
-    /** Identifiant du statut « Annuler » dans la table status. */
+    /*
+     * Identifiants de la table status. Ils sont ecrits ici, une fois, parce
+     * qu'ils etaient dissemines en nombres nus dans les controleurs — un
+     * `whereIn('status_id', [1, 5])` ne dit pas ce qu'il cherche.
+     */
+    public const STATUT_EN_ATTENTE = 1;
+    public const STATUT_EN_COURS = 2;
+    public const STATUT_LIVREE = 3;
     public const STATUT_ANNULEE = 4;
+    public const STATUT_ATTENTE_PAIEMENT = 5;
+
+    /** Les statuts d'une commande qui n'est ni livree ni annulee. */
+    public const STATUTS_EN_COURS = [
+        self::STATUT_EN_ATTENTE,
+        self::STATUT_EN_COURS,
+        self::STATUT_ATTENTE_PAIEMENT,
+    ];
+
+    /**
+     * Au-dela de ce delai, une commande toujours en cours est consideree
+     * abandonnee.
+     *
+     * Deux jours : un repas ne se livre pas le surlendemain, et une commande
+     * qui traine si longtemps bloque le client — il ne peut pas en passer une
+     * nouvelle tant que la precedente n'est pas reglee.
+     */
+    public const JOURS_AVANT_ABANDON = 2;
 
     /**
      * Une commande annulee doit le dire des deux façons.
@@ -72,6 +97,22 @@ class Commande extends Model
         return $query
             ->whereNull('cancel_at')
             ->where('status_id', '!=', self::STATUT_ANNULEE);
+    }
+
+    /**
+     * Les commandes restees en cours au-dela du delai d'abandon.
+     *
+     * `delivery_at` est verifie en plus du statut : les deux ont diverge sur
+     * des lignes anciennes, et une commande effectivement livree ne doit pas
+     * etre annulee parce que son statut n'a pas suivi.
+     */
+    public function scopeAbandonnee(Builder $query): Builder
+    {
+        return $query
+            ->whereIn('status_id', self::STATUTS_EN_COURS)
+            ->whereNull('delivery_at')
+            ->nonAnnulee()
+            ->where('created_at', '<', now()->subDays(self::JOURS_AVANT_ABANDON));
     }
 
 

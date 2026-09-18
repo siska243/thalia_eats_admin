@@ -45,7 +45,7 @@ class ProductSearchController extends Controller
         }
 
         if (! empty($validated['currency'])) {
-            $currency = Currency::query()->where('slug', $validated['currency'])->first();
+            $currency = Currency::parSlugOuCode($validated['currency']);
 
             if (! $currency) {
                 return ApiResponse::NOT_FOUND('Oups', 'Cette devise est introuvable');

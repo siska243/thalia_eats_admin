@@ -29,4 +29,26 @@ class Currency extends Model
     {
         return $this->hasMany(Product::class, 'product_id');
     }
+
+    /**
+     * Retrouve une devise par son slug ou par son code.
+     *
+     * Les controleurs la cherchaient par slug seulement (« dollars »), alors
+     * que tout ce que l'API affiche est le code (« 13 USD »). Un client — un
+     * assistant en particulier — qui lit un prix puis renvoie « USD » se
+     * faisait repondre « Cette devise est introuvable ». L'identifiant montre
+     * doit etre celui qu'on peut renvoyer.
+     *
+     * La comparaison ignore la casse : personne n'ecrit « usd » et « USD » de
+     * la meme facon deux fois de suite.
+     */
+    public static function parSlugOuCode(?string $valeur): ?self
+    {
+        if (! $valeur) return null;
+
+        return static::query()
+            ->whereRaw('LOWER(slug) = ?', [mb_strtolower($valeur)])
+            ->orWhereRaw('LOWER(code) = ?', [mb_strtolower($valeur)])
+            ->first();
+    }
 }
