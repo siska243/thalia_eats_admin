@@ -902,13 +902,29 @@ ss -ltnp | grep 8097
 
 ### 12b. Démarrage
 
+Le connecteur vit dans **son propre fichier Compose**, jamais dans celui du
+backend. Les commandes le nomment donc explicitement :
+
 ```bash
 cd /srv/thalia-eats/code/deploy
-docker compose build mcp
-docker compose up -d mcp
-docker compose ps mcp            # doit passer « healthy » en ~15 s
+COMPOSE="-f docker-compose.yml -f docker-compose.mcp.yml"
+
+docker compose $COMPOSE build mcp
+docker compose $COMPOSE up -d mcp
+docker compose $COMPOSE ps mcp          # doit passer « healthy » en ~15 s
 curl -s http://127.0.0.1:8097/healthz   # ok
 ```
+
+> **Pourquoi un fichier separe.** Compose interpole le fichier ENTIER avant de
+> regarder quels services sont demandes. Tant que `mcp` vivait dans
+> `docker-compose.yml`, son `MCP_URL_PUBLIQUE:?` manquant faisait echouer
+> l'analyse du fichier — donc le deploiement du **backend**, qui n'a rien a voir
+> avec le connecteur. Le 18 septembre 2026, la production a cesse de se deployer
+> pour cette seule raison. Un service accessoire ne doit jamais pouvoir bloquer
+> le service principal.
+>
+> `deploy.sh` ne lit pas ce fichier : mettre a jour le connecteur se fait a la
+> main, avec les commandes ci-dessus.
 
 ### 12c. Apache
 
