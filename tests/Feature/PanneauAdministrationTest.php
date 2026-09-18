@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -57,7 +58,7 @@ class PanneauAdministrationTest extends TestCase
         return array_map(fn (string $c) => [$c], $chemins);
     }
 
-    /** @dataProvider ressources */
+    #[DataProvider('ressources')]
     public function test_l_ecran_s_ouvre(string $chemin): void
     {
         $this->actingAs($this->superAdmin())

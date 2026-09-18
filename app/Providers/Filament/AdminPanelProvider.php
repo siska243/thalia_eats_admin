@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
@@ -81,12 +82,24 @@ class AdminPanelProvider extends PanelProvider
                 FilamentSpatieLaravelHealthPlugin::make()
                 //->usingPage(\ShuvroRoy\FilamentSpatieLaravelHealth\Pages\HealthCheckResults::class),
                  ->usingPage(HealthCheckResults::class),
-                /*
-                 * saade/filament-laravel-log est retire : aucune version ne
-                 * suit Filament 5, il plafonne a ^4.0. La consultation des
-                 * journaux passe par opcodesio/log-viewer, deja en dependance
-                 * directe, sur sa propre route /log-viewer.
-                 */
+            ])
+            /*
+             * saade/filament-laravel-log est retire : aucune version ne suit
+             * Filament 5, il plafonne a ^4.0. La page « Logs » disparaissait
+             * donc du menu, alors que opcodesio/log-viewer — deja en
+             * dependance directe — sert les journaux sur sa propre route.
+             *
+             * L'entree est rendue au menu, au meme endroit et sous le meme
+             * libelle : la consultation des journaux ne change pas de place
+             * pour ceux qui s'en servent. Elle ouvre un nouvel onglet parce
+             * que la visionneuse a sa propre interface, hors du panneau.
+             */
+            ->navigationItems([
+                NavigationItem::make('Logs')
+                    ->url('/log-viewer', shouldOpenInNewTab: true)
+                    ->icon('heroicon-o-bug-ant')
+                    ->group('System Tools')
+                    ->sort(1),
             ])
             ->authMiddleware([
                 Authenticate::class,
