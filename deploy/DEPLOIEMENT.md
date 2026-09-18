@@ -833,6 +833,110 @@ sudo systemctl stop thalia-deploy.timer
 
 ---
 
+## 12. Connecteur MCP `[serveur]`
+
+Le connecteur MCP (`mcp/`) est un service Python séparé qui permet à Claude ou
+ChatGPT de commander chez Thalia au nom d'un client. Il est **un client de
+l'API comme un autre** : il ne touche jamais `db`, n'est pas sur son réseau, et
+ne connaît de Thalia que `https://app.thaliaeats.com`.
+
+```
+Internet ──443──> Apache2 ──> 127.0.0.1:8096   app (Laravel)
+                     │
+                     └──443──> 127.0.0.1:8097   mcp (connecteur)
+                                    │
+                                    └── appelle https://app.thaliaeats.com
+```
+
+Les trois principes du reste de ce déploiement tiennent : **aucun port public**
+(le connecteur n'écoute que sur la boucle locale), **tout passe par Apache**,
+et **la base n'est jamais exposée** — le connecteur n'a d'ailleurs aucun accès
+à MySQL, par construction.
+
+### 12a. Variables
+
+Le connecteur ne porte **aucun secret** : chaque client envoie son propre jeton
+à chaque requête, et rien n'est stocké. Les variables du bloc « Connecteur
+MCP » de `deploy/.env.example` suffisent. Une seule est obligatoire :
+
+```bash
+# deploy/.env
+MCP_PORT=8097
+MCP_URL_PUBLIQUE=https://mcp.thaliaeats.com   # OBLIGATOIRE
+```
+
+`MCP_URL_PUBLIQUE` est l'URL telle qu'un client la voit. Elle part dans le
+document de métadonnées RFC 9728 et dans le défi `401` : une valeur fausse et
+aucun client ne peut découvrir où s'authentifier. Compose refuse de démarrer si
+elle manque, plutôt que de servir des métadonnées mensongères.
+
+Vérifier que le port est libre, comme pour 8096 :
+
+```bash
+ss -ltnp | grep 8097
+```
+
+### 12b. Démarrage
+
+```bash
+cd /srv/thalia-eats/code/deploy
+docker compose build mcp
+docker compose up -d mcp
+docker compose ps mcp            # doit passer « healthy » en ~15 s
+curl -s http://127.0.0.1:8097/healthz   # ok
+```
+
+### 12c. Apache
+
+Un sous-domaine dédié, `mcp.thaliaeats.com`. Reprendre
+`apache-thalia-http.conf` en changeant deux lignes — **port 80 uniquement,
+aucune directive SSL**, pour la raison expliquée en section 7 : un certificat
+absent fait échouer `configtest`, et un `restart` ferait tomber toutes les
+applications du serveur.
+
+```apache
+    ServerName mcp.thaliaeats.com
+
+    ProxyPass        / http://127.0.0.1:8097/
+    ProxyPassReverse / http://127.0.0.1:8097/
+```
+
+`ProxyTimeout 120` est utile ici aussi : le transport MCP « streamable HTTP »
+garde un flux SSE ouvert pendant la session.
+
+Puis, comme en section 7 : `a2ensite`, `apache2ctl configtest`,
+`apache2ctl -S` (le vhost MCP ne doit pas devenir le serveur par défaut),
+`systemctl reload apache2`, et enfin `certbot --apache` pour le vhost 443.
+
+### 12d. Recette
+
+```bash
+# Les métadonnées désignent bien Thalia comme serveur d'autorisation.
+curl -s https://mcp.thaliaeats.com/.well-known/oauth-protected-resource/mcp
+
+# Sans jeton : 401 et le défi qui pointe vers ces métadonnées.
+curl -i -X POST https://mcp.thaliaeats.com/mcp \
+     -H 'Content-Type: application/json' \
+     -H 'Accept: application/json, text/event-stream' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Puis une vraie session : créer un jeton d'agent avec
+`POST /api/user/assistants` (voir `mcp/README.md`) et lister les outils depuis un
+client MCP. Six outils doivent apparaître.
+
+### Ce que ce service ne fait pas
+
+Il n'implémente **pas** OAuth : il sert les métadonnées de ressource protégée
+et le défi `401`, rien de plus. Le serveur d'autorisation se construira côté
+Laravel ; une demi-implémentation dans le connecteur devrait être arrachée.
+
+Il n'expose **aucun** outil de suppression ni d'annulation, et ne peut écrire
+que ce que les capacités du jeton de l'utilisateur autorisent — jamais
+davantage.
+
+---
+
 ## Ce qui a été corrigé au passage, et pourquoi
 
 **Deux liens symboliques du dépôt sont cassés**, tous deux hérités
