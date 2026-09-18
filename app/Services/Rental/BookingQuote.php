@@ -21,8 +21,7 @@ readonly class BookingQuote
         public float $deposit,
         public float $balance,
         public Currency $currency,
-    ) {
-    }
+    ) {}
 
     /** @return array<string, mixed> Les colonnes d'une reservation. */
     public function toBookingAttributes(): array

@@ -176,6 +176,32 @@ Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecritur
     Route::post('/precommandes/{uid}/paiement', [\App\Http\Controllers\Api\PrecommandeController::class, 'payer']);
 });
 
+/*
+ * Location de vehicules avec chauffeur.
+ *
+ * Le catalogue exige un creneau : afficher des vehicules sans savoir quand le
+ * client veut partir revient a lui montrer des voitures qu'il ne pourra pas
+ * reserver.
+ *
+ * Aucune route ne declare d'ability : le garde RefuserAgentSansAbility les
+ * ferme donc aux jetons d'assistant. C'est voulu — reserver une voiture au nom
+ * de quelqu'un engage un paiement et un chauffeur, et rien dans le devis ne
+ * prevoit qu'un assistant le fasse. Ouvrir ces routes aux agents demandera de
+ * declarer des abilities explicites, ce qui se verra en relecture.
+ */
+Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
+    Route::get('/vehicles', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'index']);
+
+    Route::controller(\App\Http\Controllers\Api\Rental\BookingController::class)
+        ->prefix('/bookings')
+        ->group(function () {
+            Route::get('/', 'index');
+            Route::post('/', 'store');
+            Route::get('/{uid}', 'show');
+            Route::post('/{uid}/cancel', 'cancel');
+        });
+});
+
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
     Route::get('/', 'index');
     Route::get('/preview', 'preview');

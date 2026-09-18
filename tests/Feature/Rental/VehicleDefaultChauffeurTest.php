@@ -38,7 +38,7 @@ class VehicleDefaultChauffeurTest extends TestCase
 
         return Vehicle::query()->create(array_merge([
             'brand' => 'Toyota', 'model' => 'Land Cruiser',
-            'plate_number' => 'KIN-' . fake()->unique()->numberBetween(1000, 9999),
+            'plate_number' => 'KIN-'.fake()->unique()->numberBetween(1000, 9999),
             'hourly_rate' => 10,
             'currency_id' => $currency->id,
         ], $attributes));

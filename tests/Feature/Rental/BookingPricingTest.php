@@ -43,7 +43,6 @@ class BookingPricingTest extends TestCase
         ]);
     }
 
-
     /**
      * Les reglages sont declares par le test, pas lus en base.
      *

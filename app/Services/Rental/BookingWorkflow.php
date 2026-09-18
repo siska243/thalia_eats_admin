@@ -26,8 +26,7 @@ class BookingWorkflow
     public function __construct(
         private readonly BookingConfirmation $confirmation,
         private readonly RentalSettings $settings,
-    ) {
-    }
+    ) {}
 
     /**
      * L'acompte est encaisse.

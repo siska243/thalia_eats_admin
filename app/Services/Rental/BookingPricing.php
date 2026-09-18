@@ -16,9 +16,7 @@ use InvalidArgumentException;
  */
 class BookingPricing
 {
-    public function __construct(private readonly RentalSettings $settings)
-    {
-    }
+    public function __construct(private readonly RentalSettings $settings) {}
 
     public function quote(Vehicle $vehicle, Carbon $startsAt, Carbon $endsAt): BookingQuote
     {

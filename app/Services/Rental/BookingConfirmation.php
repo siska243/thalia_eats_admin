@@ -28,8 +28,7 @@ class BookingConfirmation
     public function __construct(
         private readonly VehicleAvailability $availability,
         private readonly BookingPricing $pricing,
-    ) {
-    }
+    ) {}
 
     /**
      * L'acompte est arrive. Le creneau est-il encore libre ?
