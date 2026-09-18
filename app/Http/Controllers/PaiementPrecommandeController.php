@@ -202,18 +202,15 @@ class PaiementPrecommandeController extends Controller
     }
 
     /**
-     * LibPhoneNumber::numberProto() renvoie l'exception de parsing au lieu de
-     * la lever : isValidNumber() reçoit alors un objet du mauvais type et
-     * déclenche une TypeError. Sans ce garde, un numéro fantaisiste fait
-     * tomber la page en 500.
+     * Le garde contre la TypeError de LibPhoneNumber vit désormais dans le
+     * wrapper lui-même, seule définition de « ce numéro est valide » : les
+     * trois autres appelants en bénéficient, dont le chemin de commande de
+     * production qui rendait un 500 sur un numéro mal tapé. On ne garde ici
+     * qu'un nom lisible au point d'appel.
      */
     private function numeroValide(string $phone): bool
     {
-        try {
-            return (new LibPhoneNumber($phone))->checkValidationNumber();
-        } catch (\Throwable) {
-            return false;
-        }
+        return (new LibPhoneNumber($phone))->checkValidationNumber();
     }
 
     private function trouver(string $uid): ?Precommande
