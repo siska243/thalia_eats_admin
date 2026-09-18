@@ -37,3 +37,4 @@ yarn-error.log
 # Les dumps de base. *.sql etait deja couvert, pas *.sql.gz.
 *.sql.gz
 /deploy/transfert/
+.gstack/
