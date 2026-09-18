@@ -176,6 +176,26 @@ Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecritur
     Route::post('/precommandes/{uid}/paiement', [\App\Http\Controllers\Api\PrecommandeController::class, 'payer']);
 });
 
+/*
+ * Le lien de paiement d'une pre-commande, consomme par la page du site.
+ *
+ * Aucune authentification par jeton : la signature EST l'autorisation, comme
+ * sur l'ancienne page Blade. Le client qui a commande par la conversation n'a
+ * pas de session ouverte sur thaliaeats.com.
+ *
+ * Les deux routes partagent volontairement la meme URI : la signature de
+ * Laravel ne couvre pas la methode HTTP, une seule suffit donc pour lire le
+ * recapitulatif puis payer. C'est cette URL — celle de l'API — qui est signee,
+ * et le lien remis au client n'en recopie que la chaine de requete.
+ */
+Route::middleware(['signed', 'throttle:lien-paiement'])->group(function () {
+    Route::get('/precommandes/{uid}/lien-paiement', [\App\Http\Controllers\Api\LienPaiementPrecommandeController::class, 'show'])
+        ->name('api.precommande.lien-paiement');
+
+    Route::post('/precommandes/{uid}/lien-paiement', [\App\Http\Controllers\Api\LienPaiementPrecommandeController::class, 'payer'])
+        ->name('api.precommande.lien-paiement.payer');
+});
+
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
     Route::get('/', 'index');
     Route::get('/preview', 'preview');

@@ -34,6 +34,19 @@ Route::get('/auth/google', [\App\Http\Controllers\Api\GoogleAuthController::clas
 Route::get('/auth/google/register', [\App\Http\Controllers\Api\GoogleAuthController::class, 'register']);
 Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthController::class, 'callback']);
 
+/*
+ * La page Blade de paiement d'une pre-commande.
+ *
+ * CONSERVEE POUR LES LIENS DEJA EMIS, et pour eux seuls. Le lien qu'un client
+ * recoit desormais mene au site Next.js
+ * (GET|POST /api/precommandes/{uid}/lien-paiement), comme le veut la regle
+ * d'architecture du projet : « Pas de rendu Blade cote produit ».
+ *
+ * Mais un lien vaut douze heures : certains circulent peut-etre encore chez
+ * des clients au moment du deploiement, et les casser laisserait quelqu'un
+ * avec un repas commande et aucun moyen de payer. Ces deux routes pourront
+ * partir une fois cette fenetre ecoulee.
+ */
 Route::get('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'show'])
     ->name('precommande.paiement')
     ->middleware(['signed', 'throttle:lien-paiement']);
