@@ -3,12 +3,16 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\BookingResource\Pages;
+use App\Filament\Resources\BookingResource\RelationManagers;
 use App\Models\Booking;
 use App\Models\Chauffeur;
 use App\Models\Vehicle;
+use App\Models\PaimentMethod;
 use App\Services\Rental\BookingPricing;
+use App\Services\Rental\BookingWorkflow;
 use App\Services\Rental\VehicleAvailability;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -242,12 +246,12 @@ class BookingResource extends Resource
                 TextColumn::make('user.name')
                     ->label('Client')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('vehicle.plate_number')
                     ->label('Véhicule')
                     ->formatStateUsing(fn (Booking $record) => $record->vehicle?->name)
-                    ->description(fn (Booking $record) => $record->vehicle?->plate_number)
                     ->searchable(),
 
                 TextColumn::make('starts_at')
@@ -265,7 +269,7 @@ class BookingResource extends Resource
                 TextColumn::make('total')
                     ->label('Total')
                     ->formatStateUsing(fn ($state, Booking $record) => number_format((float) $state, 2, ',', ' ') . ' ' . $record->currency?->code)
-                    ->description(fn (Booking $record) => 'solde ' . number_format((float) $record->balance, 2, ',', ' ') . ' en espèces')
+                    ->alignEnd()
                     ->sortable(),
 
                 TextColumn::make('status')
@@ -282,6 +286,7 @@ class BookingResource extends Resource
                     }),
             ])
             ->defaultSort('starts_at', 'desc')
+            ->actionsPosition(\Filament\Tables\Enums\ActionsPosition::BeforeColumns)
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Statut')
@@ -304,6 +309,81 @@ class BookingResource extends Resource
                     ->query(fn (Builder $query) => $query->whereNotNull('pickup_code_locked_at')),
             ])
             ->actions([
+                /*
+                 * Le parcours courant, en un clic chacun.
+                 *
+                 * L'administrateur garde par ailleurs le droit de tout
+                 * modifier a la main depuis le formulaire : ces actions ne
+                 * restreignent rien, elles evitent d'avoir a se souvenir
+                 * quels champs vont ensemble. Encaisser un solde sans laisser
+                 * de ligne de paiement, par exemple, priverait le
+                 * rapprochement de fin de journee de sa seule trace.
+                 */
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('payDeposit')
+                        ->label("Encaisser l'acompte")
+                        ->icon('heroicon-o-banknotes')
+                        ->color('success')
+                        ->visible(fn (Booking $record) => $record->status === Booking::STATUS_PENDING_PAYMENT)
+                        ->form([
+                            Select::make('paiment_method_id')
+                                ->label('Moyen de paiement')
+                                ->options(fn () => PaimentMethod::query()->where('is_active', true)->pluck('title', 'id')->all())
+                                ->native(false)
+                                ->required(),
+                            TextInput::make('reference')->label('Référence'),
+                            TextInput::make('phone')->label('Numéro débité')->tel(),
+                        ])
+                        ->modalDescription(fn (Booking $record) => "Acompte de {$record->deposit} {$record->currency?->code}. Le créneau est vérifié : si un autre client a payé avant, la réservation passe en « ratée » et un remboursement est calculé.")
+                        ->action(function (Booking $record, array $data) {
+                            $confirmed = app(BookingWorkflow::class)->payDeposit(
+                                $record,
+                                (int) $data['paiment_method_id'],
+                                $data['reference'] ?? null,
+                                $data['phone'] ?? null,
+                            );
+
+                            \Filament\Notifications\Notification::make()
+                                ->title($confirmed ? 'Réservation confirmée' : 'Créneau déjà pris')
+                                ->body($confirmed
+                                    ? 'Le code de prise en charge a été généré.'
+                                    : "Un autre client avait payé avant. La réservation passe en « ratée », avec un remboursement à effectuer.")
+                                ->status($confirmed ? 'success' : 'warning')
+                                ->send();
+                        }),
+
+                    Tables\Actions\Action::make('startRide')
+                        ->label('Démarrer la course')
+                        ->icon('heroicon-o-play')
+                        ->requiresConfirmation()
+                        ->modalDescription("À utiliser quand le chauffeur ne peut pas le faire depuis son application.")
+                        ->visible(fn (Booking $record) => $record->status === Booking::STATUS_CONFIRMED)
+                        ->action(fn (Booking $record) => app(BookingWorkflow::class)->startRide($record)),
+
+                    Tables\Actions\Action::make('collectBalance')
+                        ->label('Encaisser le solde')
+                        ->icon('heroicon-o-check-badge')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalDescription(fn (Booking $record) => "Solde de {$record->balance} {$record->currency?->code}, remis en espèces au chauffeur. La course passe en « terminée ».")
+                        ->visible(fn (Booking $record) => $record->status === Booking::STATUS_IN_PROGRESS)
+                        ->action(fn (Booking $record) => app(BookingWorkflow::class)->collectBalance($record)),
+
+                    Tables\Actions\Action::make('cancelBooking')
+                        ->label('Annuler')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->form([
+                            Textarea::make('reason')->label("Motif")->rows(2),
+                        ])
+                        ->modalDescription("Le remboursement dû est calculé sur ce qui a réellement été payé. Le virement, lui, reste à faire à la main.")
+                        ->visible(fn (Booking $record) => in_array($record->status, [Booking::STATUS_PENDING_PAYMENT, Booking::STATUS_CONFIRMED], true))
+                        ->action(fn (Booking $record, array $data) => app(BookingWorkflow::class)->cancel($record, $data['reason'] ?? null)),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->button(),
+
                 Tables\Actions\Action::make('unlockPickupCode')
                     ->label('Débloquer le code')
                     ->icon('heroicon-o-lock-open')
@@ -311,18 +391,15 @@ class BookingResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription("Le chauffeur a épuisé ses essais. Vérifiez avec le client avant de débloquer.")
                     ->visible(fn (Booking $record) => $record->isPickupCodeLocked())
-                    ->action(fn (Booking $record) => $record->update([
-                        'pickup_code_locked_at' => null,
-                        'pickup_code_attempts' => 0,
-                    ])),
+                    ->action(fn (Booking $record) => app(BookingWorkflow::class)->unlockPickupCode($record)),
 
                 Tables\Actions\Action::make('markRefunded')
                     ->label('Marquer remboursée')
                     ->icon('heroicon-o-banknotes')
                     ->requiresConfirmation()
                     ->modalDescription("À cocher une fois le virement réellement effectué : cette application ne rembourse pas elle-même.")
-                    ->visible(fn (Booking $record) => $record->status === Booking::STATUS_LOST && $record->refunded_at === null)
-                    ->action(fn (Booking $record) => $record->update(['refunded_at' => now()])),
+                    ->visible(fn (Booking $record) => $record->refund_amount > 0 && $record->refunded_at === null)
+                    ->action(fn (Booking $record) => app(BookingWorkflow::class)->markRefunded($record)),
 
                 Tables\Actions\EditAction::make(),
             ])
@@ -357,6 +434,13 @@ class BookingResource extends Resource
             Booking::STATUS_CANCELLED => 'Annulée',
             Booking::STATUS_LOST => 'Ratée',
             Booking::STATUS_EXPIRED => 'Expirée',
+        ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            RelationManagers\PaymentsRelationManager::class,
         ];
     }
 
