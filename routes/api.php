@@ -199,6 +199,7 @@ Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
             Route::post('/', 'store');
             Route::get('/{uid}', 'show');
             Route::post('/{uid}/cancel', 'cancel');
+            Route::post('/{uid}/deposit', 'deposit');
         });
 });
 

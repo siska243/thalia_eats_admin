@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Api\Rental;
 use App\Exceptions\BookingRefusee;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Rental\BookingRequest;
+use App\Http\Requests\Rental\DepositRequest;
 use App\Http\Resources\Rental\BookingResource;
 use App\Models\Booking;
 use App\Models\Vehicle;
 use App\Services\Rental\BookingCreator;
 use App\Services\Rental\BookingWorkflow;
+use App\Services\Rental\DepositPayment;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
+use App\Wrappers\LibPhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -22,6 +25,7 @@ class BookingController extends Controller
     public function __construct(
         private readonly BookingCreator $creator,
         private readonly BookingWorkflow $workflow,
+        private readonly DepositPayment $deposit,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -82,6 +86,49 @@ class BookingController extends Controller
             'Réservation enregistrée',
             "Réglez l'acompte pour confirmer : le véhicule reste disponible tant qu'il n'est pas payé.",
         );
+    }
+
+    /**
+     * Le client engage le paiement de son acompte.
+     *
+     * Rien n'est confirme au retour de cet appel : la passerelle debite le
+     * client sur son combine, et c'est le webhook qui tranchera, sous verrou,
+     * si le creneau est encore libre. L'application doit donc relire la
+     * reservation — son `status` passe a `confirmed` ou a `lost`.
+     */
+    public function deposit(DepositRequest $request, string $uid): JsonResponse
+    {
+        $booking = $this->trouver($request, $uid);
+
+        if (! $booking) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette réservation est introuvable');
+        }
+
+        $method = (string) $request->input('method', 'mobile');
+        $phone = $method === 'mobile' ? (string) $request->input('phone') : '';
+
+        if ($method === 'mobile' && ! $this->numeroValide($phone)) {
+            return ApiResponse::BAD_REQUEST('telephone_invalide', 'Oups', 'Numéro de téléphone invalide.');
+        }
+
+        $resultat = $this->deposit->initier($booking, $method, $phone);
+
+        if (! $resultat['ok']) {
+            return ApiResponse::BAD_REQUEST(
+                $resultat['raison'],
+                'Oups',
+                $resultat['message'] ?? $this->messageDeRefus($resultat['raison']),
+            );
+        }
+
+        return ApiResponse::GET_DATA([
+            'data' => [
+                'order_number' => $resultat['orderNumber'],
+                // Non nulle en carte seulement : c'est la page de saisie a
+                // ouvrir. En mobile money, le client valide sur son telephone.
+                'url' => $resultat['url'],
+            ],
+        ]);
     }
 
     /**
@@ -147,12 +194,29 @@ class BookingController extends Controller
         return $id ? Vehicle::query()->whereKey($id)->first() : null;
     }
 
+    /**
+     * LibPhoneNumber::numberProto() renvoie l'exception de parsing au lieu de
+     * la lever : sans ce garde, un numero fantaisiste fait tomber la route en
+     * 500 au lieu de rendre un 400 lisible.
+     */
+    private function numeroValide(string $phone): bool
+    {
+        try {
+            return (new LibPhoneNumber($phone))->checkValidationNumber();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function messageDeRefus(string $raison): string
     {
         return match ($raison) {
             BookingRefusee::VEHICULE_INTROUVABLE => "Ce véhicule n'est plus proposé à la location.",
             BookingRefusee::VEHICULE_INDISPONIBLE => 'Ce véhicule est déjà réservé sur ce créneau.',
             BookingRefusee::CRENEAU_INVALIDE => 'La fin doit suivre le début.',
+            'acompte_non_attendu' => "Cette réservation n'attend plus d'acompte.",
+            'creneau_passe' => 'Ce créneau est déjà passé.',
+            'paiement_refuse' => "Le paiement n'a pas pu être engagé, réessayez.",
             default => "Cette réservation n'a pas pu être enregistrée.",
         };
     }

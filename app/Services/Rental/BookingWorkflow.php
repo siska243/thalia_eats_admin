@@ -42,15 +42,41 @@ class BookingWorkflow
         ?int $paimentMethodId = null,
         ?string $reference = null,
         ?string $phone = null,
+        array $attributes = [],
     ): bool {
         $amount = (float) $booking->deposit;
 
-        $this->recordPayment($booking, BookingPayment::KIND_DEPOSIT, $amount, [
+        $ligne = array_merge([
             'paiment_method_id' => $paimentMethodId,
             'reference' => $reference,
             'phone' => $phone,
             'paid_at' => now(),
-        ]);
+        ], $attributes);
+
+        /*
+         * Un paiement en ligne a deja ouvert une ligne, sans `paid_at`, au
+         * moment ou la passerelle a ete appelee. On la solde plutot que d'en
+         * ecrire une seconde : deux lignes pour le meme argent feraient
+         * compter l'acompte deux fois au rapprochement.
+         */
+        $tentative = $reference
+            ? $booking->payments()
+                ->where('kind', BookingPayment::KIND_DEPOSIT)
+                ->where('reference', $reference)
+                ->whereNull('paid_at')
+                ->latest('id')
+                ->first()
+            : null;
+
+        if ($tentative) {
+            $tentative->update(array_merge($ligne, [
+                'amount' => $amount,
+                'status_payement_id' => $attributes['status_payement_id']
+                    ?? StatusPayement::query()->where('is_paid', true)->value('id'),
+            ]));
+        } else {
+            $this->recordPayment($booking, BookingPayment::KIND_DEPOSIT, $amount, $ligne);
+        }
 
         return $this->confirmation->settleDeposit($booking, $amount);
     }

@@ -12,6 +12,7 @@ use App\Http\Resources\CommandeResource;
 use App\Models\Commande;
 use App\Models\Payement;
 use App\Models\StatusPayement;
+use App\Services\Rental\DepositWebhook;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
@@ -40,6 +41,26 @@ class PayementController extends Controller
             $code = $request->input('code');
             $phone = $request->input('phone');
             $provider_reference = $request->input('provider_reference');
+
+            /*
+             * Les locations partent avant tout le reste.
+             *
+             * Leur reference porte le prefixe « R- », qu'aucune commande de
+             * repas (un entier nu) ni aucune pre-commande (« P- ») ne peut
+             * produire : la separation est sure. Elles sont traitees dans leur
+             * propre service, plus strict, et ce retour laisse le code
+             * ci-dessous — le chemin vivant de la production — rigoureusement
+             * inchange.
+             */
+            if (DepositWebhook::concerne($reference)) {
+                $resultat = app(DepositWebhook::class)->traiter($reference, $orderNumber, [
+                    'phone' => $phone,
+                    'channel' => $channel,
+                    'provider_reference' => $provider_reference,
+                ]);
+
+                return ApiResponse::GET_DATA($resultat);
+            }
 
             $order = Commande::query()
                 ->with('user')
