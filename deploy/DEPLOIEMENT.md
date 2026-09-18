@@ -762,18 +762,42 @@ Deux minutes de latence contre cette surface : le compromis est vite fait.
 
 ### Installation `[serveur]`
 
+L'unité se **fabrique dans `/etc/systemd/system/`** à partir du modèle. Le
+fichier suivi par git n'est jamais modifié : c'est tout l'intérêt, et
+l'explication est juste en dessous.
+
 ```bash
 cd /srv/thalia-eats/code/deploy
 
-# L'utilisateur propriétaire de /srv/thalia-eats, celui du groupe docker.
-sed -i "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service
+# Le modele est lu, jamais ecrit : la substitution part vers /etc.
+# $USER doit etre le proprietaire de /srv/thalia-eats, celui du groupe docker.
+sed "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service.example \
+    | sudo tee /etc/systemd/system/thalia-deploy.service > /dev/null
 
-sudo cp systemd/thalia-deploy.service systemd/thalia-deploy.timer \
-        /etc/systemd/system/
+sudo cp systemd/thalia-deploy.timer /etc/systemd/system/
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now thalia-deploy.timer
+
+# Le modele doit rester intact : cette commande ne doit rien afficher.
+git -C /srv/thalia-eats/code status --short
 ```
+
+> **Pourquoi ce detour plutot qu'un `sed -i` sur place.**
+> `auto-deploy.sh` refuse de deployer des qu'un fichier suivi est modifie sur
+> le serveur — c'est voulu, sinon un `git pull --ff-only` echouerait au milieu
+> d'une livraison. Mais l'ancienne procedure editait justement un fichier
+> suivi pour y poser `User=`. Le serveur divergeait donc des l'installation,
+> et **tous** les deploiements suivants etaient refuses. C'est arrive le
+> 18 septembre 2026 : un `User=ubuntu` pose des le premier jour avait gele la
+> livraison continue, sans que le lien soit fait entre les deux.
+>
+> Si vous heritez d'un serveur dans cet etat : copiez l'unite vers `/etc`
+> comme ci-dessus, puis
+> `git checkout -- deploy/systemd/thalia-deploy.service`. Verifiez d'abord
+> que `/etc/systemd/system/thalia-deploy.service` est une vraie copie et non
+> un lien symbolique vers le depot (`ls -l`) — restaurer sous un lien
+> casserait le service.
 
 Contrôle :
 
