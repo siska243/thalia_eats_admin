@@ -64,6 +64,10 @@ class LienPaiementPrecommandeController extends Controller
      */
     public function payer(Request $request, string $uid): JsonResponse
     {
+        if ($refus = $this->refuserJetonDAssistant($request)) {
+            return $refus;
+        }
+
         $precommande = $this->paiements->trouver($uid);
 
         if (! $precommande) {
@@ -132,6 +136,16 @@ class LienPaiementPrecommandeController extends Controller
             }
         }
 
+        // Une initiation deja partie interdit la suivante : sans ce garde, le
+        // telephone du client sonne deux fois pour la meme commande.
+        if ($this->paiements->initiationEnVol($precommande)) {
+            return ApiResponse::BAD_REQUEST(
+                'paiement_deja_initie',
+                'Paiement déjà lancé',
+                'Un paiement vient d\'être lancé pour cette commande. Regardez votre téléphone et validez la demande reçue, ou patientez quelques minutes avant de réessayer.'
+            );
+        }
+
         $result = $this->paiements->initierFlexPay($precommande, $phone, $method);
 
         if (! empty($result['code']) && $result['code'] != 0) {
@@ -177,6 +191,46 @@ class LienPaiementPrecommandeController extends Controller
             'title' => 'Paiement en attente',
             'message' => 'Validez le paiement depuis le message reçu sur votre téléphone.',
         ]);
+    }
+
+    /**
+     * Refuse une ecriture portee par un jeton d'assistant.
+     *
+     * POURQUOI CE CONTROLE EST ECRIT ICI, ET NON DELEGUE A UN MIDDLEWARE :
+     * RefuserAgentSansAbility et EnsureNotAgentToken lisent tous deux
+     * `$request->user()`, qui resout le garde PAR DEFAUT — « web », pilote
+     * « session » (config/auth.php). Le groupe api n'a deliberement pas de
+     * StartSession (HypothesesDeSecuriteTest l'epingle), et cette route ne
+     * porte ni `auth:sanctum` ni `ability:` pour faire resoudre le garde
+     * sanctum. En production, aucun utilisateur n'est donc jamais resolu ici :
+     * ces middlewares laisseraient passer n'importe quel en-tete Authorization.
+     * Ne remplacez pas ces trois lignes par un middleware « qui fait deja ca ».
+     *
+     * Ce que ce controle ferme : lienDePaiement() rend le lien signe au
+     * porteur du jeton, donc a l'assistant qui a cree la pre-commande. Sans
+     * lui, un agent pourrait faire sonner le telephone d'un client pour un
+     * paiement qu'aucun humain n'a confirme — ce que
+     * POST /api/precommandes/{uid}/paiement interdit deja par
+     * `assistant.emetteur`, et ce que CLAUDE.md appelle une ecriture
+     * silencieuse.
+     *
+     * Le client sur le site n'envoie aucun en-tete Authorization : il n'est
+     * pas gene. La lecture du recapitulatif reste ouverte — lire ce qu'on paie
+     * ne deplace pas d'argent.
+     */
+    private function refuserJetonDAssistant(Request $request): ?JsonResponse
+    {
+        $porteur = auth('sanctum')->user();
+
+        if ($porteur && ! $porteur->tokenCan('*')) {
+            return ApiResponse::BAD_REQUEST(
+                'jeton_assistant',
+                'Oups',
+                'Cette action ne peut pas être effectuée depuis un assistant.'
+            )->setStatusCode(403);
+        }
+
+        return null;
     }
 
     /**

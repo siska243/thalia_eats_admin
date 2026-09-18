@@ -176,31 +176,72 @@ class LienPaiementFrontTest extends TestCase
             ->assertJsonPath('data.total', 5500);
     }
 
-    public function test_un_client_connecte_au_site_peut_utiliser_son_lien(): void
+    /**
+     * Un vrai en-tete Authorization, jamais Sanctum::actingAs().
+     *
+     * actingAs() appelle shouldUse('sanctum') et change le garde par defaut
+     * POUR LE PROCESSUS DE TEST. C'est la seule raison pour laquelle
+     * $request->user() resoudrait ici : en production, le garde par defaut est
+     * « web » (pilote session) et le groupe api n'a pas de StartSession, donc
+     * aucun utilisateur n'est jamais resolu sur une route sans `auth:sanctum`.
+     * Un test ecrit avec actingAs() passerait meme sans aucun controle : il
+     * testerait actingAs, pas le garde.
+     *
+     * @param  array<int, string>  $abilities
+     */
+    private function jeton(array $abilities): string
     {
-        // Le site envoie « Authorization » des qu'un jeton traine dans les
-        // cookies. Un jeton applicatif porte « * » et traverse donc
-        // RefuserAgentSansAbility : la page ne casse pas pour un client
-        // connecte.
-        Sanctum::actingAs(User::factory()->create(), ['*']);
-
-        $p = Precommande::factory()->create(['total' => 5500]);
-
-        $this->getJson($this->lien($p))->assertStatus(200);
+        return User::factory()->create()
+            ->createToken('test', $abilities)
+            ->plainTextToken;
     }
 
-    public function test_un_jeton_d_assistant_ne_peut_pas_se_servir_du_lien(): void
+    public function test_un_jeton_d_assistant_ne_peut_pas_payer_par_le_lien(): void
     {
-        // Le lien de paiement EST la confirmation humaine : un agent ne doit
-        // jamais engager d'argent seul, meme en detenant le lien.
-        Sanctum::actingAs(User::factory()->create(), \App\Enums\TokenAbility::agent());
+        // Le lien signe est remis au porteur du jeton, donc a l'assistant qui a
+        // cree la pre-commande : sans controle, il pourrait faire sonner le
+        // telephone du client pour un paiement qu'aucun humain n'a confirme.
+        $p = Precommande::factory()->create(['total' => 5500]);
 
+        $this->withHeader('Authorization', 'Bearer '.$this->jeton(\App\Enums\TokenAbility::agent()))
+            ->postJson($this->lien($p), ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(403)
+            ->assertJsonPath('error', 'jeton_assistant');
+
+        Http::assertNothingSent();
+        $this->assertNull($p->fresh()->reference_paiement);
+    }
+
+    public function test_un_jeton_d_assistant_peut_encore_lire_le_recapitulatif(): void
+    {
+        // Asymetrie deliberee : lire ce qu'on paie ne deplace pas d'argent, et
+        // l'assistant doit pouvoir verifier la pre-commande qu'il a creee.
+        $p = Precommande::factory()->create(['total' => 5500]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->jeton(\App\Enums\TokenAbility::agent()))
+            ->getJson($this->lien($p))
+            ->assertStatus(200);
+    }
+
+    public function test_un_client_connecte_au_site_peut_payer_par_le_lien(): void
+    {
+        // Le site envoie « Authorization » des qu'un jeton traine. Un jeton
+        // applicatif porte « * » et doit passer : la page ne casse pas pour un
+        // client connecte.
+        $p = Precommande::factory()->create(['total' => 5500]);
+
+        $this->withHeader('Authorization', 'Bearer '.$this->jeton(['*']))
+            ->postJson($this->lien($p), ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200);
+    }
+
+    public function test_un_visiteur_sans_jeton_paie_sans_entrave(): void
+    {
+        // Le cas normal : le client qui clique sur son lien n'a aucune session.
         $p = Precommande::factory()->create(['total' => 5500]);
 
         $this->postJson($this->lien($p), ['method' => 'mobile', 'phone' => '+243810000000'])
-            ->assertStatus(403);
-
-        Http::assertNothingSent();
+            ->assertStatus(200);
     }
 
     // --- Le recapitulatif -------------------------------------------------
@@ -553,6 +594,47 @@ class LienPaiementFrontTest extends TestCase
             ->assertJsonPath('message', 'Solde insuffisant');
 
         $this->assertNull($p->fresh()->reference_paiement);
+    }
+
+    public function test_une_seconde_initiation_immediate_est_refusee(): void
+    {
+        // Sans ce garde, le telephone du client sonne deux fois pour la meme
+        // commande, et s'il confirme la premiere sollicitation la reference
+        // enregistree n'est plus celle qui a ete payee.
+        $p = Precommande::factory()->create(['total' => 5500]);
+        $url = $this->lien($p);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'paiement_deja_initie')
+            ->assertJsonPath('message', 'Un paiement vient d\'être lancé pour cette commande. Regardez votre téléphone et validez la demande reçue, ou patientez quelques minutes avant de réessayer.');
+
+        // Une seule sollicitation est partie.
+        Http::assertSentCount(1);
+    }
+
+    public function test_une_relance_apres_le_delai_est_acceptee_sans_ecraser_la_reference(): void
+    {
+        $p = Precommande::factory()->create(['total' => 5500]);
+        $url = $this->lien($p);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200);
+
+        $this->travel(config('precommande.delai_relance_paiement_minutes') + 1)->minutes();
+
+        $this->reponseFlexPay(['code' => 0, 'orderNumber' => 'TEST-ORDER-2']);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200);
+
+        // La reference de la PREMIERE initiation reussie tient : si le client
+        // confirme finalement la sollicitation d'avant, la base ne pointe pas
+        // vers un paiement qui n'a jamais eu lieu.
+        $this->assertSame('TEST-ORDER-1', $p->fresh()->reference_paiement);
     }
 
     public function test_le_numero_du_payeur_est_masque_dans_la_reponse(): void
