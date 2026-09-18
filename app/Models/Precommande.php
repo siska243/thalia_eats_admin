@@ -23,6 +23,7 @@ class Precommande extends Model
     protected $casts = [
         'expires_at' => 'datetime',
         'paied_at' => 'datetime',
+        'paiement_initie_a' => 'datetime',
     ];
 
     public function user(): BelongsTo

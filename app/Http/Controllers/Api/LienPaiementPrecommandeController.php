@@ -136,9 +136,10 @@ class LienPaiementPrecommandeController extends Controller
             }
         }
 
-        // Une initiation deja partie interdit la suivante : sans ce garde, le
-        // telephone du client sonne deux fois pour la meme commande.
-        if ($this->paiements->initiationEnVol($precommande)) {
+        // Une sollicitation deja partie interdit la suivante : sans ce garde, le
+        // telephone du client sonne deux fois pour la meme commande. Le garde
+        // ne s'applique qu'au mobile money — voir sollicitationEnVol().
+        if ($this->paiements->sollicitationEnVol($precommande, $method)) {
             return ApiResponse::BAD_REQUEST(
                 'paiement_deja_initie',
                 'Paiement déjà lancé',

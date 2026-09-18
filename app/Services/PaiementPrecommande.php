@@ -138,7 +138,7 @@ class PaiementPrecommande
     }
 
     /**
-     * Une initiation est-elle encore en vol ?
+     * Une sollicitation mobile money est-elle encore en vol ?
      *
      * Une pre-commande ne se ferme qu'a la reception du webhook. Entre l'appel
      * a la passerelle et cette confirmation, rien n'empechait un second POST de
@@ -146,20 +146,30 @@ class PaiementPrecommande
      * commande, et s'il confirmait la premiere sollicitation, la reference
      * enregistree n'etait plus celle qui avait ete payee.
      *
-     * `updated_at` fait office d'horodatage : c'est la sauvegarde qui a pose
-     * `reference_paiement` qui l'a mis a jour. Au-dela du delai, on suppose la
-     * premiere sollicitation perdue et on laisse reessayer.
+     * LE GARDE NE VAUT QUE POUR LE MOBILE MONEY, deliberement. La carte n'a pas
+     * ce probleme : elle se regle sur la page de la passerelle, qui est
+     * idempotente de fait, et aucun telephone ne sonne. Or le parcours carte
+     * revient : le client part sur la page FlexPay, fait retour arriere, hesite,
+     * la redirection echoue — et reclique. Le refuser lui couterait sa commande,
+     * avec en prime une consigne absurde (« regardez votre telephone ») pour un
+     * combine qui ne sonnera jamais. La carte est le chemin des gros montants,
+     * il y a meme un minimum : on ne bloque pas.
+     *
+     * L'horodatage est `paiement_initie_a`, pose par nous quand l'appel part.
+     * Ni `reference_paiement` — il vient de `orderNumber`, que la passerelle
+     * peut ne pas fournir, et le garde serait alors aveugle — ni `updated_at`,
+     * qui bouge a la moindre sauvegarde. Au-dela du delai, on suppose la
+     * sollicitation perdue et on laisse reessayer.
      */
-    public function initiationEnVol(Precommande $precommande): bool
+    public function sollicitationEnVol(Precommande $precommande, string $method): bool
     {
-        if (blank($precommande->reference_paiement)) {
+        if ($method !== 'mobile' || blank($precommande->paiement_initie_a)) {
             return false;
         }
 
         $delai = (int) config('precommande.delai_relance_paiement_minutes');
 
-        return $precommande->updated_at !== null
-            && $precommande->updated_at->greaterThan(now()->subMinutes($delai));
+        return $precommande->paiement_initie_a->greaterThan(now()->subMinutes($delai));
     }
 
     /**
@@ -187,14 +197,24 @@ class PaiementPrecommande
             'description' => 'Paiement pré-commande Thalia Eats',
         ], $method);
 
-        // La reference de la PREMIERE initiation reussie ne se reecrit jamais.
-        // Si le client relance et confirme finalement la sollicitation d'avant,
-        // ecraser laisserait en base une reference qui ne correspond a aucun
-        // paiement. Le webhook, lui, ne s'appuie pas dessus : il retrouve la
-        // commande par `refernce` et repose ensuite la reference du
-        // prestataire — rien ne depend donc de cette ecriture-ci.
-        if ((empty($result['code']) || $result['code'] == 0) && blank($precommande->reference_paiement)) {
-            $precommande->reference_paiement = $result['orderNumber'] ?? null;
+        if (empty($result['code']) || $result['code'] == 0) {
+            // L'horodatage ne depend que de nous : une initiation acceptee
+            // laisse une trace meme quand la passerelle ne renvoie pas
+            // d'`orderNumber`. C'est le seul etat sur lequel le garde de
+            // relance s'appuie — s'appuyer sur un champ que la passerelle peut
+            // omettre rendait le garde aveugle exactement quand il sert.
+            $precommande->paiement_initie_a = now();
+
+            // La reference de la PREMIERE initiation reussie ne se reecrit
+            // jamais. Si le client relance et confirme finalement la
+            // sollicitation d'avant, ecraser laisserait en base une reference
+            // qui ne correspond a aucun paiement. Le webhook, lui, ne s'appuie
+            // pas dessus : il retrouve la commande par `refernce` et repose
+            // ensuite la reference du prestataire.
+            if (blank($precommande->reference_paiement)) {
+                $precommande->reference_paiement = $result['orderNumber'] ?? null;
+            }
+
             $precommande->save();
         }
 

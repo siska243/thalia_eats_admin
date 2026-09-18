@@ -637,6 +637,50 @@ class LienPaiementFrontTest extends TestCase
         $this->assertSame('TEST-ORDER-1', $p->fresh()->reference_paiement);
     }
 
+    public function test_la_carte_n_est_jamais_bloquee_par_le_garde_de_relance(): void
+    {
+        // Le client part sur la page FlexPay, fait retour arriere, hesite, la
+        // redirection echoue — et reclique. La carte se regle sur la page de la
+        // passerelle : aucun telephone ne sonne, rien a proteger, et lui
+        // repondre « regardez votre telephone » serait une consigne absurde
+        // doublee d'une commande perdue.
+        $this->reponseFlexPay([
+            'code' => 0, 'orderNumber' => 'TEST-ORDER-CARTE', 'url' => 'https://cardpayment.flexpay.cd/pay/xyz',
+        ]);
+
+        $p = Precommande::factory()->create(['total' => 5500]);
+        $url = $this->lien($p);
+
+        $this->postJson($url, ['method' => 'cart'])->assertStatus(200);
+
+        $this->postJson($url, ['method' => 'cart'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.url', 'https://cardpayment.flexpay.cd/pay/xyz');
+    }
+
+    public function test_une_initiation_sans_order_number_arme_quand_meme_le_garde(): void
+    {
+        // L'unique etat du garde ne doit pas etre un champ que la passerelle
+        // peut ne pas fournir : sinon il devient aveugle exactement quand il
+        // sert, et le double appel redevient possible.
+        $this->reponseFlexPay(['code' => 0, 'message' => 'Transaction initiee']);
+
+        $p = Precommande::factory()->create(['total' => 5500]);
+        $url = $this->lien($p);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200);
+
+        $this->assertNull($p->fresh()->reference_paiement);
+        $this->assertNotNull($p->fresh()->paiement_initie_a);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'paiement_deja_initie');
+
+        Http::assertSentCount(1);
+    }
+
     public function test_le_numero_du_payeur_est_masque_dans_la_reponse(): void
     {
         $p = Precommande::factory()->create();
