@@ -1,0 +1,71 @@
+# Contexte de construction. Tout ce qui est ici reste hors de l'image.
+
+.git
+.gitignore
+.github
+
+# Reinstalle par Composer dans l'etape « vendor ».
+vendor
+node_modules
+
+# Monte depuis l'hote au demarrage : le copier gonflerait l'image de 29 Mo et
+# figerait les televersements dans une couche.
+storage
+public/images
+public/documents
+public/storage
+
+# Secrets et configuration locale.
+.env
+.env.*
+*.pem
+*.p12
+*.key
+apple.key
+certificate.p12
+aps.pem
+
+# Sauvegardes de base committees dans le depot.
+*.sql
+
+# Outils de developpement inutiles a l'execution.
+tests
+phpunit.xml
+.phpunit.result.cache
+
+# Caches generes sur la machine de developpement. packages.php et services.php
+# y sont, et le jour ou un config.php s'y trouverait, ce sont les identifiants
+# de la base locale qui entreraient dans une couche de l'image. L'entrypoint
+# recree ce dossier et regenere tout au demarrage.
+bootstrap/cache/*
+!bootstrap/cache/.gitignore
+docs
+.superpowers
+Makefile
+script-run.sh
+README.md
+
+# Le pipeline d'assets n'est pas utilise : aucune vue n'appelle @vite, et les
+# assets de Filament sont deja publies dans public/css et public/js.
+package.json
+package-lock.json
+vite.config.js
+postcss.config.js
+tailwind.config.js
+resources/js
+resources/css
+
+# Le Dockerfile ne copie de deploy/ que php.ini, nginx.conf,
+# nginx-forwarded.conf, supervisord.conf et entrypoint.sh. Tout le reste du
+# dossier — compose, script, vhosts, documentation, secrets — n'a rien a faire
+# dans l'image.
+deploy/docker-compose.yml
+deploy/deploy.sh
+deploy/.env
+deploy/.env.example
+deploy/.env.production
+deploy/.env.production.example
+deploy/DEPLOIEMENT.md
+deploy/apache-thalia-http.conf
+deploy/apache-apres-certbot.md
+deploy/rsync-exclude.txt

@@ -9,6 +9,7 @@
 .env
 .env.backup
 .env.production
+.env.testing
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -19,4 +20,20 @@ yarn-error.log
 /.idea
 /.vscode
 *.sql
+!database/schema/*.sql
 /storage/firebase_credentials.json
+
+# --- Deploiement conteneurise ---
+# Le dossier deploy/ est versionne : c'est par git qu'il atteint le serveur.
+# Trois choses en sont exclues, et doivent l'etre.
+
+# Les deux .env RENSEIGNES. Seuls .env.example et .env.production.example
+# voyagent. Les motifs .env et .env.production ci-dessus les couvrent deja
+# — sans « / » initial, ils s'appliquent a tous les niveaux — ces lignes les
+# rendent explicites pour qui relit ce fichier.
+/deploy/.env
+/deploy/.env.production
+
+# Les dumps de base. *.sql etait deja couvert, pas *.sql.gz.
+*.sql.gz
+/deploy/transfert/

@@ -66,7 +66,14 @@ class RestaurantController extends Controller
         $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
             $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
-            });
+            })
+                // Precharge les produits en les restreignant au restaurant :
+                // sans cela la ressource remontait toute la sous-categorie,
+                // donc les plats des autres restaurants qui la partagent.
+                ->with(['product' => function ($subQuery) use ($restaurantId) {
+                    $subQuery->where('restaurant_id', $restaurantId)
+                        ->where('is_active', true);
+                }]);
         }])->whereHas('sub_category_product', function ($query) use ($restaurantId) {
             return $query->whereHas('product', function ($subQuery) use ($restaurantId) {
                 $subQuery->where('restaurant_id', $restaurantId);
@@ -79,7 +86,13 @@ class RestaurantController extends Controller
     {
         try {
             //code...
-            $menu = SubCategoryProduct::with(['product'])
+            $menu = SubCategoryProduct::query()
+                // Meme contrainte que dans categorie() : la sous-categorie est
+                // partagee entre restaurants, ses produits ne le sont pas.
+                ->with(['product' => function ($query) use ($restaurant) {
+                    $query->where('restaurant_id', $restaurant->id)
+                        ->where('is_active', true);
+                }])
                 ->where('slug', $slug)
                 ->whereHas('product', function ($query) use ($restaurant) {
                     $query->where('restaurant_id', $restaurant->id);
@@ -117,6 +130,10 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()->where('status_id', 2)
+                // Une commande annulee n'est pas a preparer : le restaurateur
+                // engageait des ingredients et du temps pour un plat que
+                // personne ne viendrait chercher.
+                ->nonAnnulee()
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
@@ -140,6 +157,10 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()->where('status_id', 2)
+                // Une commande annulee n'est pas a preparer : le restaurateur
+                // engageait des ingredients et du temps pour un plat que
+                // personne ne viendrait chercher.
+                ->nonAnnulee()
                 ->whereNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
@@ -163,6 +184,10 @@ class RestaurantController extends Controller
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
 
             $commande = Commande::query()->where('status_id', 2)
+                // Une commande annulee n'est pas a preparer : le restaurateur
+                // engageait des ingredients et du temps pour un plat que
+                // personne ne viendrait chercher.
+                ->nonAnnulee()
                 ->whereNotNull('accepted_at')
                 ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
@@ -257,10 +282,28 @@ class RestaurantController extends Controller
 
             DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','ONLY_FULL_GROUP_BY'));");
 
-            $current_order = Commande::query()->where('status_id', 2)->count();
-            $current_order_accepted = Commande::query()->where('status_id', 2)->whereNot('accepted_at')->count();;
-            $order_cancelation = Commande::query()->where('status_id', 4)->count();
-            $order_delivery = Commande::query()->where('status_id', 3)->count();
+            /*
+             * Ces quatre compteurs interrogeaient Commande sans aucune
+             * contrainte de restaurant : chaque restaurateur voyait donc le
+             * total de la plateforme, celui de ses concurrents compris.
+             *
+             * whereNot('accepted_at') etait par ailleurs un usage errone —
+             * whereNot attend une colonne, un operateur et une valeur, ou une
+             * closure. L'intention etait whereNotNull.
+             */
+            $pourCeRestaurant = fn () => Commande::query()
+                ->whereHas('commande_products', fn ($q) => $q->whereHas(
+                    'product',
+                    fn ($q) => $q->where('restaurant_id', $restaurant->id)
+                ));
+
+            $current_order = $pourCeRestaurant()->where('status_id', 2)->count();
+            $current_order_accepted = $pourCeRestaurant()
+                ->where('status_id', 2)
+                ->whereNotNull('accepted_at')
+                ->count();
+            $order_cancelation = $pourCeRestaurant()->where('status_id', 4)->count();
+            $order_delivery = $pourCeRestaurant()->where('status_id', 3)->count();
             $status = Status::query()->get();
 
             return ApiResponse::GET_DATA([

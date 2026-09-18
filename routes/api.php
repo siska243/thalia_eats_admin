@@ -71,6 +71,10 @@ Route::get('/not-auth', [AuthController::class, 'notlogin'])
     ->middleware('guest')
     ->name('login');
 
+Route::post('/resend-activation', [AuthController::class, 'resendActivation'])->name('api.resend-activation');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.forgot-password');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('api.reset-password');
+
 Route::post('/refresh', [AuthController::class, 'refresh'])->name('api.refresh');
 
 Route::post('/logout', [AuthController::class, 'logout'])->name('api.logout')
@@ -87,6 +91,12 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
 
     });
     Route::post('/update/expo/token', [UserAccountController::class, 'expo']);
+
+    // Carnet d'adresses de livraison. La table existait depuis l'origine mais
+    // n'etait alimentee nulle part.
+    Route::get('/addresses', [\App\Http\Controllers\Api\UserAddressController::class, 'index']);
+    Route::post('/addresses', [\App\Http\Controllers\Api\UserAddressController::class, 'store']);
+    Route::delete('/addresses/{slug}', [\App\Http\Controllers\Api\UserAddressController::class, 'destroy']);
 
     Route::prefix('/commande')->controller(CommandeController::class)->group(function () {
 
@@ -131,7 +141,39 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
     Route::post('/delivery-confirm-reception-order', [DeliveryController::class, 'confirmReceptionRestaurant']);
     Route::get('/delivery-dash', [DeliveryController::class, 'dashRestaurant']);
 
+    Route::middleware(['assistant.emetteur', 'throttle:assistants'])->prefix('/assistants')
+        ->controller(\App\Http\Controllers\Api\AssistantTokenController::class)
+        ->group(function () {
+            Route::post('/', 'store');
+            Route::get('/', 'index');
+            Route::delete('/{uid}', 'destroy');
+        });
 
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['ability:catalogue:lire', 'throttle:agent-lecture'])->group(function () {
+        Route::get('/products/search', [\App\Http\Controllers\Api\ProductSearchController::class, 'index']);
+    });
+
+    Route::middleware(['ability:devis:calculer', 'throttle:agent-devis'])->group(function () {
+        Route::post('/quote', [\App\Http\Controllers\Api\QuotationController::class, 'quote']);
+        Route::post('/budget-suggestions', [\App\Http\Controllers\Api\QuotationController::class, 'budgetSuggestions']);
+    });
+
+    Route::middleware(['ability:precommande:creer', 'throttle:agent-ecriture'])->group(function () {
+        Route::post('/precommandes', [\App\Http\Controllers\Api\PrecommandeController::class, 'store']);
+    });
+
+    Route::middleware(['ability:precommande:lire', 'throttle:agent-lecture'])->group(function () {
+        Route::get('/precommandes', [\App\Http\Controllers\Api\PrecommandeController::class, 'index']);
+        Route::get('/precommandes/{uid}', [\App\Http\Controllers\Api\PrecommandeController::class, 'show']);
+        Route::get('/user/adresses-recentes', [\App\Http\Controllers\Api\AdresseRecenteController::class, 'index']);
+    });
+});
+
+Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecriture'])->group(function () {
+    Route::post('/precommandes/{uid}/paiement', [\App\Http\Controllers\Api\PrecommandeController::class, 'payer']);
 });
 
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {

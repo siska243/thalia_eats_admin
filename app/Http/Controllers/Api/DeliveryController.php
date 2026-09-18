@@ -24,6 +24,7 @@ use Exception;
 use Flowframe\Trend\Trend;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class DeliveryController extends Controller
@@ -35,6 +36,28 @@ class DeliveryController extends Controller
         return RestaurantResource::collection($restaurant);
     }
 
+    /**
+     * Definition unique d'une course en cours pour un livreur.
+     *
+     * Elle etait ecrite deux fois — dans currentOrderDelivery et dans le
+     * controle d'acceptation — avec des criteres differents. Un livreur
+     * portant une commande annulee voyait donc « Ma course » vide tout en
+     * etant refuse a l'acceptation, sans aucun moyen de se debloquer.
+     */
+    private function courseEnCours(DelivreryDriver $livreur)
+    {
+        return Commande::query()
+            ->where('status_id', 2)
+            ->whereNotNull('accepted_at')
+            ->where('delivrery_driver_id', $livreur->id)
+            ->whereHas('commande_products')
+            // Une commande annulee ou deja remise n'est plus une course. Le
+            // statut ne suffit pas : l'annulation depuis l'admin renseigne
+            // cancel_at sans toujours faire passer status_id a 4.
+            ->whereNull('cancel_at')
+            ->whereNull('delivery_at');
+    }
+
     public function currentOrderDelivery()
     {
         try {
@@ -43,12 +66,8 @@ class DeliveryController extends Controller
 
             if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
 
-            $commande = Commande::query()
-                ->where('status_id', 2)
-                ->whereNotNull('accepted_at')
-                ->where('delivrery_driver_id', $restaurant->id)
-                ->whereHas('commande_products')
-                //->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+            $commande = $this->courseEnCours($restaurant)
+                ->with(['user', 'status', 'town', 'product.product.restaurant', 'product.currency'])
                 ->orderBy('updated_at', 'desc')
                 ->first();
 
@@ -71,10 +90,29 @@ class DeliveryController extends Controller
 
 
             $commande = Commande::query()
+                ->with([
+                    // Sans ce prechargement, CommandeResource declenche une
+                    // rafale de requetes par ligne : la ressource lit product
+                    // et user via whenLoaded dont la valeur par defaut est
+                    // evaluee immediatement, ce qui charge la relation au lieu
+                    // de l'omettre.
+                    'user',
+                    'status',
+                    'town',
+                    'product.product.restaurant',
+                    'product.currency',
+                ])
                 ->where('status_id', 2)
                 ->whereNotNull('accepted_at')
                 ->whereNull('delivrery_driver_id')
                 ->whereHas('commande_products')
+                // Une commande annulee ou deja remise n'est plus une course.
+                // Le statut ne suffit pas : l'annulation depuis l'admin
+                // renseigne cancel_at sans toujours faire passer status_id a 4,
+                // et une course de juillet 2025 restait ainsi affichee comme
+                // « en cours » au livreur.
+                ->whereNull('cancel_at')
+                ->whereNull('delivery_at')
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
@@ -98,7 +136,15 @@ class DeliveryController extends Controller
 
             $status = Status::query()->where('id', '>', 2)->pluck('id');
 
-            $commande = Commande::query()->whereIn('status_id', $status)
+            $commande = Commande::query()
+                ->with(['user', 'status', 'town', 'product.product.restaurant', 'product.currency'])
+                ->whereIn('status_id', $status)
+                // Une commande annulee n'est pas une course : le livreur ne
+                // l'a pas faite, et elle n'a pas a figurer dans son historique.
+                // Le statut ne suffit pas, l'annulation depuis l'admin
+                // renseigne cancel_at sans toujours passer status_id a 4.
+                ->whereNull('cancel_at')
+                ->where('status_id', '!=', 4)
                 ->orderBy('updated_at', 'desc')
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->whereHas('commande_products')
@@ -117,14 +163,18 @@ class DeliveryController extends Controller
     {
         try {
 
-            $restaurant = $this->getCurrentRestaurant();
+            $livreur = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (!$livreur) return ApiResponse::NOT_FOUND('Oups', 'Livreur introuvable');
 
+            // getCurrentRestaurant() n'existe que dans RestaurantController :
+            // l'appel levait une Error, que le catch (Exception) ne rattrape
+            // pas. GET /api/user/delivery-dash repondait donc 500 a chaque
+            // fois. Le tableau de bord est celui du livreur, pas d'un
+            // restaurant — il est desormais borne a ses propres courses.
             $commande = Commande::query()
                 ->where('status_id', '>', 1)
-                //>whereNotNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)));
+                ->where('delivrery_driver_id', $livreur->id);
 
 
             $columns = ['global_price', 'price_delivery', 'price_service'];
@@ -168,10 +218,21 @@ class DeliveryController extends Controller
 
             DB::statement("SET sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY','ONLY_FULL_GROUP_BY'));");
 
-            $current_order = Commande::query()->where('status_id', 2)->count();
-            $current_order_accepted = Commande::query()->where('status_id', 2)->whereNot('accepted_at')->count();;
-            $order_cancelation = Commande::query()->where('status_id', 4)->count();
-            $order_delivery = Commande::query()->where('status_id', 3)->count();
+            // Ces compteurs etaient globaux : chaque livreur voyait l'activite
+            // de toute la plateforme. Et whereNot('accepted_at') comparait la
+            // colonne a la chaine vide au lieu de tester sa nullite, ce qui
+            // renvoyait toujours tout.
+            $pourCeLivreur = fn () => Commande::query()
+                ->where('delivrery_driver_id', $livreur->id);
+
+            $current_order = $pourCeLivreur()->where('status_id', 2)->nonAnnulee()->count();
+            $current_order_accepted = $pourCeLivreur()
+                ->where('status_id', 2)
+                ->nonAnnulee()
+                ->whereNull('accepted_at')
+                ->count();
+            $order_cancelation = $pourCeLivreur()->where('status_id', Commande::STATUT_ANNULEE)->count();
+            $order_delivery = $pourCeLivreur()->where('status_id', 3)->count();
             $status = Status::query()->get();
 
             return ApiResponse::GET_DATA([
@@ -202,10 +263,7 @@ class DeliveryController extends Controller
 
             $uid_order = $request->input('uid_order');
 
-            $check_have_cmd = Commande::query()->where('status_id', 2)
-                ->whereNotNull('accepted_at')
-                ->whereHas('commande_products')
-                ->where('delivrery_driver_id', $restaurant->id)->first();
+            $check_have_cmd = $this->courseEnCours($restaurant)->first();
 
             if ($check_have_cmd) return ApiResponse::BAD_REQUEST('', 'Oups', 'Vous avez déja une commande en cours');
 
@@ -256,7 +314,20 @@ class DeliveryController extends Controller
 
             if (!$code) return ApiResponse::BAD_REQUEST('', 'Oups!!', "Le code de la recuperation de la commande est obligatoire");
 
-            if (!$commande) return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
+            if ($minutes = $this->codeLockRemaining('reception', $uid_order)) {
+                return ApiResponse::TOO_MANY_ATTEMPTS(
+                    'Saisie bloquee',
+                    "Trop de codes errones. Reessayez dans {$minutes} minutes."
+                );
+            }
+
+            if (!$commande) {
+                $this->registerCodeFailure('reception', $uid_order);
+
+                return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
+            }
+
+            $this->clearCodeFailures('reception', $uid_order);
 
 
             $commande->time_delivery = Carbon::parse($time)->format('H:i:s');
@@ -298,7 +369,20 @@ class DeliveryController extends Controller
 
             if (!$code) return ApiResponse::BAD_REQUEST('', 'Oups!!', "Le code de livraison de la commande est obligatoire");
 
-            if (!$commande) return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
+            if ($minutes = $this->codeLockRemaining('livraison', $uid_order)) {
+                return ApiResponse::TOO_MANY_ATTEMPTS(
+                    'Saisie bloquee',
+                    "Trop de codes errones. Reessayez dans {$minutes} minutes."
+                );
+            }
+
+            if (!$commande) {
+                $this->registerCodeFailure('livraison', $uid_order);
+
+                return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
+            }
+
+            $this->clearCodeFailures('livraison', $uid_order);
 
 
             $user = CurrentHelpers::getUserByOrder($commande);
@@ -326,6 +410,72 @@ class DeliveryController extends Controller
 
             return ApiResponse::SERVER_ERROR($e);
         }
+    }
+
+    /** Codes errones toleres avant blocage de la saisie. */
+    public const MAX_CODE_ATTEMPTS = 3;
+
+    /** Duree du blocage, en secondes. */
+    public const CODE_LOCK_SECONDS = 25 * 60;
+
+    private function codeCacheKeys(string $step, $uid_order): array
+    {
+        $driver = $this->getUser()?->id;
+
+        return [
+            "driver-code-attempts:{$step}:{$driver}:{$uid_order}",
+            "driver-code-lock:{$step}:{$driver}:{$uid_order}",
+        ];
+    }
+
+    /**
+     * Minutes restantes avant de pouvoir ressaisir un code, ou null si la
+     * saisie est ouverte.
+     *
+     * Le verrou vit dans le cache plutot que dans une colonne : il est
+     * temporaire par nature, et rien d'autre n'a besoin de le lire.
+     */
+    private function codeLockRemaining(string $step, $uid_order): ?int
+    {
+        [, $lockKey] = $this->codeCacheKeys($step, $uid_order);
+
+        $until = Cache::get($lockKey);
+
+        if (!$until) return null;
+
+        return max((int) ceil(($until - Carbon::now()->timestamp) / 60), 1);
+    }
+
+    /**
+     * Enregistre un code refuse. Au troisieme, la saisie est bloquee pour
+     * CODE_LOCK_SECONDS a compter de cette tentative.
+     */
+    private function registerCodeFailure(string $step, $uid_order): void
+    {
+        [$attemptsKey, $lockKey] = $this->codeCacheKeys($step, $uid_order);
+
+        $attempts = (int) Cache::get($attemptsKey, 0) + 1;
+
+        if ($attempts >= self::MAX_CODE_ATTEMPTS) {
+            Cache::forget($attemptsKey);
+            Cache::put(
+                $lockKey,
+                Carbon::now()->addSeconds(self::CODE_LOCK_SECONDS)->timestamp,
+                Carbon::now()->addSeconds(self::CODE_LOCK_SECONDS)
+            );
+
+            return;
+        }
+
+        Cache::put($attemptsKey, $attempts, Carbon::now()->addSeconds(self::CODE_LOCK_SECONDS));
+    }
+
+    private function clearCodeFailures(string $step, $uid_order): void
+    {
+        [$attemptsKey, $lockKey] = $this->codeCacheKeys($step, $uid_order);
+
+        Cache::forget($attemptsKey);
+        Cache::forget($lockKey);
     }
 
     public function getUser()

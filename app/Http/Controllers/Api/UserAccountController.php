@@ -77,17 +77,17 @@ class UserAccountController extends Controller
 
 
         if (!Hash::check($request->current_password, $password)) {
-            return ApiResponse::BAD_REQUEST('oups', 'Password', 'Veuillez saisir le mot de correcte');
+            return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Votre mot de passe actuel est incorrect");
         }
 
         // return [$request->password,$request->confirm_password];
-        if ($request->password !== $request->confirm_password) return ApiResponse::BAD_REQUEST('Oups', 'Error password', 'Le mot de passe ne correspond pas');
+        if ($request->password !== $request->confirm_password) return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Les deux mots de passe ne sont pas identiques");
 
         $user = auth()->user();
         $user->password = Hash::make($request->password);
 
         $user->save();
-        return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Updated', 'Mot de passe mis à jour');
+        return ApiResponse::SUCCESS_DATA(new UserResource($user), "Mot de passe modifié", "Votre mot de passe a été mis à jour.");
 
     }
 
@@ -103,8 +103,8 @@ class UserAccountController extends Controller
             $number_street = $request->input('number_street');
             $town = $request->input('town');
 
-            if (!$principal_adress) return ApiResponse::BAD_REQUEST('oups', 'Adresse', 'Veuillez saisir votre adresse');
-            if (!$town) return ApiResponse::BAD_REQUEST('oups', 'Adresse', 'Veuillez saisir votre commune');
+            if (!$principal_adress) return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir votre adresse");
+            if (!$town) return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez choisir votre commune");
 
             $user = auth()->user();
             $user->principal_adresse = $principal_adress;
@@ -117,7 +117,7 @@ class UserAccountController extends Controller
 
             $user->save();
 
-            return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Updated', 'Votre adresse mis à jour');
+            return ApiResponse::SUCCESS_DATA(new UserResource($user), "Adresse mise à jour", "Votre adresse a été enregistrée.");
         } catch (Exception $e) {
 
             return ApiResponse::SERVER_ERROR($e);
@@ -138,7 +138,7 @@ class UserAccountController extends Controller
 
             $user->save();
 
-            return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Updated', 'account updated');
+            return ApiResponse::SUCCESS_DATA(new UserResource($user), "Profil mis à jour", "Vos informations ont été enregistrées.");
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }

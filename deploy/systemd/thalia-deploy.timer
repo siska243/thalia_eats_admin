@@ -1,0 +1,19 @@
+[Unit]
+Description=Vérifie la branche prod toutes les deux minutes
+
+[Timer]
+# Deux minutes après le démarrage, puis toutes les deux minutes. Sans
+# changement de commit, le passage ne coûte qu'un `git fetch`.
+OnBootSec=2min
+OnUnitActiveSec=2min
+
+# Laisse systemd regrouper les réveils : inutile d'être à la seconde.
+AccuracySec=15s
+
+# Pas de Persistent= : cette option ne s'applique qu'aux declencheurs
+# calendaires (OnCalendar=). systemd l'ignore pour un timer monotone.
+
+Unit=thalia-deploy.service
+
+[Install]
+WantedBy=timers.target

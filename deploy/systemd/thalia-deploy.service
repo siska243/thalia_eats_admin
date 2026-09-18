@@ -1,0 +1,25 @@
+[Unit]
+Description=Thalia Eats — déploiement depuis la branche suivie
+Documentation=file:/srv/thalia-eats/code/deploy/DEPLOIEMENT.md
+# Docker doit être prêt : le script construit et démarre des conteneurs.
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+
+# À REMPLACER par l'utilisateur propriétaire de /srv/thalia-eats, celui qui
+# est dans le groupe docker. Ne pas mettre root : le clone git utilise sa clé
+# de déploiement, dans son ~/.ssh/config.
+User=REMPLACER_PAR_VOTRE_UTILISATEUR
+
+WorkingDirectory=/srv/thalia-eats/code
+ExecStart=/srv/thalia-eats/code/deploy/auto-deploy.sh
+
+# Le build peut durer plusieurs minutes au premier passage.
+TimeoutStartSec=20min
+
+# La sortie part dans journald : journalctl -u thalia-deploy -f
+StandardOutput=journal
+StandardError=journal

@@ -34,6 +34,14 @@ Route::get('/auth/google', [\App\Http\Controllers\Api\GoogleAuthController::clas
 Route::get('/auth/google/register', [\App\Http\Controllers\Api\GoogleAuthController::class, 'register']);
 Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthController::class, 'callback']);
 
+Route::get('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'show'])
+    ->name('precommande.paiement')
+    ->middleware(['signed', 'throttle:lien-paiement']);
+
+Route::post('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'initier'])
+    ->name('precommande.paiement.initier')
+    ->middleware(['signed', 'throttle:lien-paiement']);
+
 
 
 
