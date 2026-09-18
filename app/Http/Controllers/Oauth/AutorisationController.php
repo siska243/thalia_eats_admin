@@ -23,20 +23,26 @@ use Illuminate\Support\Facades\Hash;
 class AutorisationController extends Controller
 {
     /**
-     * Ce qu'un assistant peut faire, et ce qu'il ne pourra jamais faire.
+     * Ce que chaque capacité autorise, dit au client.
      *
-     * Ces deux listes sont reprises MOT POUR MOT de la page web
+     * Les phrases sont reprises MOT POUR MOT de la page web
      * (`components/account/AssistantsConnectes.jsx`) et de l'écran mobile
      * (`app/custom-screens/assistants.tsx`). Trois promesses différentes selon
      * l'écran seraient pires que pas de promesse du tout.
      *
-     * @var array<int, string>
+     * La table est indexée par capacité, et non une liste figée, parce que la
+     * page doit annoncer exactement ce qui sera accordé : un client qui ne
+     * demande que la lecture du catalogue ne reçoit que ça, et ne doit pas
+     * lire quatre promesses dont trois ne le concernent pas.
+     *
+     * @var array<string, string>
      */
-    public const AUTORISE = [
-        'Chercher des plats et des restaurants',
-        "Calculer le prix d'une commande, livraison comprise",
-        'Préparer une pré-commande',
-        "Suivre l'état de vos commandes",
+    public const CAPACITES = [
+        'catalogue:lire' => 'Chercher des plats et des restaurants',
+        'devis:calculer' => "Calculer le prix d'une commande, livraison comprise",
+        'precommande:creer' => 'Préparer une pré-commande',
+        'precommande:lire' => "Suivre l'état de vos commandes",
+        'commande:lire' => "Suivre l'état de vos commandes",
     ];
 
     /**
@@ -54,6 +60,20 @@ class AutorisationController extends Controller
      * le navigateur et l'assistant. Soixante secondes, c'est large.
      */
     private const SECONDES_DE_VALIDITE = 60;
+
+    /**
+     * Une empreinte bcrypt qui ne correspond à aucun mot de passe.
+     *
+     * `Hash::check()` ne s'exécute que si un compte existe : sans ceci, une
+     * adresse inconnue répondrait en moins d'une milliseconde là où un compte
+     * réel coûte un bcrypt entier. Les deux pages ont beau être identiques à
+     * l'octet près, le chronomètre dirait laquelle des deux adresses existe.
+     *
+     * NE PAS SUPPRIMER ce calcul « inutile » : son résultat est jeté, c'est
+     * son temps d'exécution qui est utile. Le coût doit suivre
+     * `config('hashing.bcrypt.rounds')`, aujourd'hui 10.
+     */
+    private const EMPREINTE_FACTICE = '$2y$10$k7NqlevMl.hMk4Q2TRT0leNN6LacBzZGsWcTXLUyPsGI03N7zAbsK';
 
     public function show(Request $request): Response|RedirectResponse
     {
@@ -102,10 +122,18 @@ class AutorisationController extends Controller
 
         $utilisateur = $email === '' ? null : User::query()->where('email', $email)->first();
 
+        // Le bcrypt a lieu dans les deux cas : contre le vrai mot de passe, ou
+        // contre une empreinte factice dont le résultat est jeté. Voir
+        // EMPREINTE_FACTICE — c'est le temps d'exécution qui compte.
+        $identifiantsValides = Hash::check(
+            $motDePasse,
+            $utilisateur->password ?? self::EMPREINTE_FACTICE
+        ) && $utilisateur !== null && $motDePasse !== '';
+
         // Un message distinct par champ permettrait d'énumérer les comptes :
         // « email inconnu » dirait qu'une adresse n'existe pas, et « mot de
         // passe incorrect » qu'elle existe. Réponse unique, comme AuthController.
-        if (! $utilisateur || $motDePasse === '' || ! Hash::check($motDePasse, $utilisateur->password)) {
+        if (! $identifiantsValides) {
             return $this->pageConsentement($request, $client, 'Email ou mot de passe incorrect');
         }
 
@@ -237,13 +265,59 @@ class AutorisationController extends Controller
         return array_values(array_unique(preg_split('/\s+/', trim($scope)) ?: []));
     }
 
+    /**
+     * L'hôte vers lequel le code partira, extrait côté serveur de la
+     * redirection déjà validée — jamais d'une valeur affichable fournie par le
+     * client.
+     *
+     * C'est la seule chose de cette page qui ne puisse pas mentir.
+     * L'enregistrement est ouvert et `client_name` est du texte libre : rien
+     * n'empêche quelqu'un de s'enregistrer sous le nom « Claude » avec une
+     * redirection à lui. Le lien qu'il envoie alors à sa victime est
+     * authentique, sur le vrai domaine, en TLS valide. Ce qui casse l'attaque,
+     * c'est que la victime lise vers OÙ elle sera renvoyée.
+     */
+    private function hoteDestination(string $redirectUri): string
+    {
+        $parties = parse_url($redirectUri);
+
+        $hote = (string) ($parties['host'] ?? '');
+
+        if (isset($parties['port'])) {
+            $hote .= ':'.$parties['port'];
+        }
+
+        return $hote;
+    }
+
+    /**
+     * Les phrases correspondant aux capacités réellement accordées, dans
+     * l'ordre de l'enum et sans doublon.
+     *
+     * @param  array<int, string>  $scopes
+     * @return array<int, string>
+     */
+    private function promesses(array $scopes): array
+    {
+        $phrases = [];
+
+        foreach (self::CAPACITES as $capacite => $phrase) {
+            if (in_array($capacite, $scopes, true)) {
+                $phrases[$phrase] = true;
+            }
+        }
+
+        return array_keys($phrases);
+    }
+
     private function pageConsentement(Request $request, OauthClient $client, ?string $erreur = null): Response
     {
-        return response()->view('oauth.autorisation', [
+        return $this->sansEncadrement(response()->view('oauth.autorisation', [
             'client' => $client,
             'erreur' => $erreur,
             'email' => (string) $request->input('email', ''),
-            'autorise' => self::AUTORISE,
+            'destination' => $this->hoteDestination((string) $request->input('redirect_uri')),
+            'autorise' => $this->promesses($this->scopesDemandes($request)),
             'jamais' => self::JAMAIS,
             'parametres' => [
                 'client_id' => (string) $request->input('client_id'),
@@ -255,15 +329,30 @@ class AutorisationController extends Controller
                 'scope' => $request->input('scope'),
                 'resource' => $request->input('resource'),
             ],
-        ]);
+        ]));
     }
 
     private function pageErreur(string $titre, string $message): Response
     {
-        return response()->view('oauth.erreur', [
+        return $this->sansEncadrement(response()->view('oauth.erreur', [
             'titre' => $titre,
             'message' => $message,
-        ], 400);
+        ], 400));
+    }
+
+    /**
+     * Interdit l'encadrement de la page.
+     *
+     * C'est un formulaire de mot de passe : chargé dans une iframe invisible
+     * au-dessus d'une page attirante, il fait signer un consentement a qui
+     * croyait cliquer ailleurs. `X-Frame-Options` double la directive CSP pour
+     * les navigateurs qui ne la connaissent pas encore.
+     */
+    private function sansEncadrement(Response $reponse): Response
+    {
+        return $reponse
+            ->header('Content-Security-Policy', "frame-ancestors 'none'")
+            ->header('X-Frame-Options', 'DENY');
     }
 
     private function redirigerAvecErreur(string $redirectUri, string $code, string $description, mixed $state): RedirectResponse

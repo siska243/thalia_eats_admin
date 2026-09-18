@@ -24,6 +24,8 @@
         .oui::before { content: "✓ "; color: #2e7d32; font-weight: 700; }
         .non::before { content: "✕ "; color: #c62828; font-weight: 700; }
         .discret { color: #777; font-size: 13px; }
+        .avertissement { background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 14px; line-height: 1.5; }
+        .destination { display: block; margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; font-weight: 700; word-break: break-all; }
     </style>
 </head>
 <body>
@@ -35,8 +37,27 @@
         une commande à votre place — vous gardez la main sur le paiement.
     </p>
 
+    {{-- Le nom ci-dessus est celui que l'application s'est donné elle-même, et
+         n'importe qui peut s'enregistrer sous n'importe quel nom. L'hôte est
+         extrait côté serveur de la redirection enregistrée : c'est la seule
+         chose de cette page qui ne puisse pas mentir. Si le client ne le
+         reconnaît pas, il doit s'arrêter là. --}}
+    <div class="avertissement">
+        Thalia n'a pas vérifié cette application. Le nom affiché ci-dessus est celui qu'elle
+        s'est donné. Si vous continuez, votre accès sera envoyé à :
+        <span class="destination">{{ $destination }}</span>
+    </div>
+
+    <p class="discret">
+        Si vous ne reconnaissez pas cette adresse, fermez cette page sans saisir votre mot
+        de passe.
+    </p>
+
     <div class="bloc">
-        <strong style="font-size:14px">Ce qu'un assistant peut faire</strong>
+        {{-- « cette application » et non « un assistant » : la liste n'est plus
+             la liste complète des capacités, mais exactement celles que ce
+             client-là recevra. --}}
+        <strong style="font-size:14px">Ce que cette application pourra faire</strong>
         <ul>
             @foreach ($autorise as $ligne)
                 <li class="oui">{{ $ligne }}</li>

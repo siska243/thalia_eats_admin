@@ -60,9 +60,15 @@ class EnregistrementController extends Controller
             return $this->refus('invalid_client_metadata', 'Seul le type de réponse « code » est proposé.');
         }
 
+        $nom = $this->nomAffichable($valide['client_name']);
+
+        if ($nom === '') {
+            return $this->refus('invalid_client_metadata', 'Le nom du client est vide une fois normalisé.');
+        }
+
         $client = new OauthClient;
         $client->client_id = 'thalia-'.Str::random(40);
-        $client->client_name = $valide['client_name'];
+        $client->client_name = $nom;
         $client->redirect_uris = array_values($valide['redirect_uris']);
         $client->grant_types = ['authorization_code'];
         $client->response_types = ['code'];
@@ -80,6 +86,27 @@ class EnregistrementController extends Controller
             'response_types' => $client->response_types,
             'token_endpoint_auth_method' => $client->token_endpoint_auth_method,
         ], 201)->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * Le nom qu'un client s'est donné, rendu affichable.
+     *
+     * Ce nom est auto-proclamé et arrive d'un enregistrement ouvert : il finit
+     * en évidence sur une page qui demande un mot de passe. Un nom de trois
+     * cents caractères, ou truffé de caractères de contrôle et de sauts de
+     * ligne, pousserait hors de l'écran l'hôte de destination — la seule chose
+     * qui, sur cette page, ne ment pas.
+     *
+     * La normalisation a lieu ici, à l'écriture : le nom est stocké propre, et
+     * sert aussi de nom au jeton dans la liste des assistants du client.
+     */
+    private function nomAffichable(string $nom): string
+    {
+        // Caractères de contrôle et séparateurs Unicode remplacés par une
+        // espace, puis espaces consécutives écrasées.
+        $propre = preg_replace('/[\p{C}\p{Z}]+/u', ' ', $nom) ?? '';
+
+        return mb_substr(trim($propre), 0, 60);
     }
 
     private function refus(string $code, string $description): JsonResponse
