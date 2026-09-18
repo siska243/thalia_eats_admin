@@ -53,6 +53,10 @@ git log --oneline "$LOCAL..$DISTANT" | sed 's/^/    /'
 if ! git diff --quiet || ! git diff --cached --quiet; then
     note "REFUS : des fichiers suivis sont modifiés sur le serveur"
     git status --short | sed 's/^/    /'
+    note "ce refus gèle TOUS les déploiements suivants tant qu'il dure."
+    note "remettez ces fichiers en l'état (git checkout -- <fichier>) ou"
+    note "committez-les. Un réglage propre à cette machine n'a rien à faire"
+    note "dans un fichier suivi : voir DEPLOIEMENT.md section 10c."
     etat "REFUS — arbre de travail modifié sur le serveur"
     exit 1
 fi
