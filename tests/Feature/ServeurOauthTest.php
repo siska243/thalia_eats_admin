@@ -102,7 +102,10 @@ class ServeurOauthTest extends TestCase
         $this->assertSame(['none'], $reponse->json('token_endpoint_auth_methods_supported'));
         $this->assertSame(TokenAbility::agent(), $reponse->json('scopes_supported'));
 
-        $emetteur = rtrim((string) config('app.url'), '/');
+        // L'origine vient d'une configuration dédiée, JAMAIS d'APP_URL, que ce
+        // projet documente comme non maintenue comme origine publique.
+        $emetteur = rtrim((string) config('oauth.origine'), '/');
+        $this->assertSame('https://app.thaliaeats.com', $emetteur);
         $this->assertSame($emetteur, $reponse->json('issuer'));
         $this->assertSame($emetteur.'/oauth/authorize', $reponse->json('authorization_endpoint'));
         $this->assertSame($emetteur.'/oauth/token', $reponse->json('token_endpoint'));
@@ -327,6 +330,208 @@ class ServeurOauthTest extends TestCase
         $corps = substr($html, $debut, $fin - $debut);
 
         return str_replace([$email, csrf_token()], ['ADRESSE', 'CSRF'], $corps);
+    }
+
+    public function test_les_metadonnees_ne_sont_pas_servies_si_l_origine_n_est_pas_en_https(): void
+    {
+        // Une découverte silencieusement fausse est pire qu'une erreur : le
+        // client suivrait des adresses en clair sans que rien ne le signale.
+        config(['oauth.origine' => 'http://127.0.0.1:8000']);
+
+        $this->getJson('/.well-known/oauth-authorization-server')
+            ->assertStatus(500)
+            ->assertJson(['error' => 'server_error']);
+    }
+
+    public function test_les_metadonnees_ne_derivent_pas_d_app_url(): void
+    {
+        config(['app.url' => 'https://tunnel-ngrok-jetable.test']);
+
+        $reponse = $this->getJson('/.well-known/oauth-authorization-server');
+
+        $reponse->assertStatus(200);
+        $this->assertSame('https://app.thaliaeats.com', $reponse->json('issuer'));
+    }
+
+    // ------------------------------------------------- Le nom auto-proclamé du client
+
+    public function test_le_nom_du_client_est_normalise_a_l_enregistrement(): void
+    {
+        // Ce nom finit en évidence sur une page qui demande un mot de passe :
+        // sauts de ligne et longueur démesurée pousseraient hors de l'écran
+        // l'hôte de destination, seule chose de la page qui ne ment pas.
+        $reponse = $this->postJson('/oauth/register', [
+            'client_name' => "  Claude\n\n\tassistant   de\x07 Thalia ".str_repeat('x', 200),
+            'redirect_uris' => [self::REDIRECTION],
+        ]);
+
+        $reponse->assertStatus(201);
+
+        $nom = $reponse->json('client_name');
+        $this->assertSame(60, mb_strlen($nom));
+        $this->assertStringStartsWith('Claude assistant de Thalia ', $nom);
+        $this->assertDoesNotMatchRegularExpression('/[\p{C}]/u', $nom);
+    }
+
+    public function test_un_nom_vide_une_fois_normalise_est_refuse(): void
+    {
+        $this->postJson('/oauth/register', [
+            'client_name' => "\n\t   ",
+            'redirect_uris' => [self::REDIRECTION],
+        ])->assertStatus(400)->assertJson(['error' => 'invalid_client_metadata']);
+    }
+
+    public function test_le_nom_du_client_est_echappe_sur_la_page(): void
+    {
+        $clientId = $this->enregistrerClient([self::REDIRECTION], '<script>alert(1)</script>');
+
+        $reponse = $this->get('/oauth/authorize?'.http_build_query($this->parametresAutorisation($clientId)));
+
+        $reponse->assertStatus(200);
+        $this->assertStringNotContainsString('<script>alert(1)</script>', $reponse->getContent());
+        $reponse->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false);
+    }
+
+    public function test_la_page_affiche_l_hote_vers_lequel_l_acces_partira(): void
+    {
+        // L'attaque que ceci casse : l'enregistrement est ouvert et le nom est
+        // du texte libre. N'importe qui s'enregistre sous le nom « Claude »
+        // avec une redirection à lui, et envoie à sa victime un lien
+        // AUTHENTIQUE, sur le vrai domaine, en TLS valide. Sans la destination
+        // affichée, la victime n'a rien à l'écran pour faire la différence.
+        $clientId = $this->enregistrerClient(['https://claude-ai-connect.example/cb'], 'Claude');
+
+        $reponse = $this->get('/oauth/authorize?'.http_build_query(
+            $this->parametresAutorisation($clientId, ['redirect_uri' => 'https://claude-ai-connect.example/cb'])
+        ));
+
+        $reponse->assertStatus(200);
+        $reponse->assertSee('claude-ai-connect.example');
+        $reponse->assertSee("Thalia n'a pas vérifié cette application", false);
+
+        // L'hôte est extrait côté serveur de la redirection enregistrée, pas
+        // d'une valeur d'affichage que le client fournirait.
+        $reponse->assertDontSee('app.thaliaeats.com');
+    }
+
+    public function test_les_pages_oauth_refusent_d_etre_encadrees(): void
+    {
+        $clientId = $this->enregistrerClient();
+
+        $consentement = $this->get('/oauth/authorize?'.http_build_query($this->parametresAutorisation($clientId)));
+        $erreur = $this->get('/oauth/authorize?'.http_build_query($this->parametresAutorisation('inconnu')));
+
+        foreach ([$consentement, $erreur] as $reponse) {
+            $this->assertSame("frame-ancestors 'none'", $reponse->headers->get('Content-Security-Policy'));
+            $this->assertSame('DENY', $reponse->headers->get('X-Frame-Options'));
+        }
+    }
+
+    // ---------------------------------------------------- Paramètres manquants
+
+    public function test_un_code_challenge_absent_est_refuse(): void
+    {
+        $clientId = $this->enregistrerClient();
+
+        $parametres = $this->parametresAutorisation($clientId);
+        unset($parametres['code_challenge']);
+
+        $reponse = $this->get('/oauth/authorize?'.http_build_query($parametres));
+
+        $reponse->assertStatus(302);
+        parse_str((string) parse_url($reponse->headers->get('Location'), PHP_URL_QUERY), $query);
+        $this->assertSame('invalid_request', $query['error']);
+        $this->assertArrayNotHasKey('code', $query);
+    }
+
+    public function test_un_redirect_uri_absent_affiche_une_erreur_et_ne_redirige_pas(): void
+    {
+        $clientId = $this->enregistrerClient();
+
+        $parametres = $this->parametresAutorisation($clientId);
+        unset($parametres['redirect_uri']);
+
+        $reponse = $this->get('/oauth/authorize?'.http_build_query($parametres));
+
+        $reponse->assertStatus(400);
+        $this->assertNull($reponse->headers->get('Location'));
+    }
+
+    // ------------------------------------------------------------------- CSRF
+
+    public function test_le_post_d_autorisation_exige_un_jeton_csrf(): void
+    {
+        // VerifyCsrfToken se désactive lui-même quand l'application tourne en
+        // environnement « testing » : tous les autres tests de cette classe
+        // postent donc sans jeton, et passeraient encore si quelqu'un ajoutait
+        // « oauth/authorize » aux exemptions. On rend le middleware actif pour
+        // que cette protection soit réellement tenue par un test.
+        $clientId = $this->enregistrerClient();
+        $utilisateur = User::factory()->create();
+
+        $this->app->instance('env', 'production');
+
+        $this->post('/oauth/authorize', $this->parametresAutorisation($clientId) + [
+            'email' => $utilisateur->email,
+            'password' => 'password',
+            'decision' => 'autoriser',
+        ])->assertStatus(419);
+
+        $this->assertDatabaseCount('oauth_authorization_codes', 0);
+    }
+
+    public function test_les_routes_machine_restent_hors_csrf(): void
+    {
+        // L'autre moitié du contrat : un logiciel n'a pas de session d'où tirer
+        // un jeton. Ces deux-là doivent rester exemptées.
+        $this->app->instance('env', 'production');
+
+        $this->postJson('/oauth/register', [
+            'client_name' => 'Claude',
+            'redirect_uris' => [self::REDIRECTION],
+        ])->assertStatus(201);
+
+        $this->postJson('/oauth/token', ['grant_type' => 'refresh_token'])
+            ->assertStatus(400)
+            ->assertJson(['error' => 'unsupported_grant_type']);
+    }
+
+    // -------------------------------------------- Portée réellement accordée
+
+    public function test_une_portee_restreinte_est_annoncee_et_delivree_telle_quelle(): void
+    {
+        $clientId = $this->enregistrerClient();
+        $utilisateur = User::factory()->create();
+
+        $page = $this->get('/oauth/authorize?'.http_build_query(
+            $this->parametresAutorisation($clientId, ['scope' => 'catalogue:lire'])
+        ));
+
+        // La page annonce exactement ce qui sera accordé, pas la liste complète.
+        $page->assertStatus(200);
+        $page->assertSee('Chercher des plats et des restaurants', false);
+        $page->assertDontSee('Préparer une pré-commande', false);
+
+        $code = $this->obtenirCode($utilisateur, $clientId, ['scope' => 'catalogue:lire']);
+
+        $reponse = $this->postJson('/oauth/token', [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'redirect_uri' => self::REDIRECTION,
+            'client_id' => $clientId,
+            'code_verifier' => self::VERIFIER,
+        ]);
+
+        $reponse->assertStatus(200);
+        $this->assertSame('catalogue:lire', $reponse->json('scope'));
+        $this->assertSame(['catalogue:lire'], $utilisateur->tokens()->firstOrFail()->abilities);
+
+        // Et le jeton n'ouvre que cette porte-là.
+        $jeton = $reponse->json('access_token');
+        $this->withHeader('Authorization', 'Bearer '.$jeton)
+            ->getJson('/api/products/search?q=poulet')->assertStatus(200);
+        $this->withHeader('Authorization', 'Bearer '.$jeton)
+            ->postJson('/api/quote', [])->assertStatus(403);
     }
 
     public function test_un_refus_redirige_avec_access_denied(): void
