@@ -41,6 +41,17 @@ class Vehicle extends Model
         return $this->hasMany(Booking::class, 'vehicle_id');
     }
 
+    /**
+     * Le chauffeur attitre.
+     *
+     * Une valeur par defaut, pas une affectation ferme : celle-ci vit sur la
+     * reservation, parce qu'un vehicule change de conducteur selon les jours.
+     */
+    public function defaultChauffeur(): BelongsTo
+    {
+        return $this->belongsTo(Chauffeur::class, 'default_chauffeur_id');
+    }
+
     /** Les vehicules qu'on peut proposer a la reservation. */
     public function scopeRentable(Builder $query): Builder
     {

@@ -2,11 +2,15 @@
 
 namespace App\Filament\Resources\BookingResource\RelationManagers;
 
+use Filament\Schemas\Schema;
+use Filament\Actions\CreateAction;
+use Filament\Actions\Action;
+use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
 use App\Models\BookingPayment;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
@@ -30,9 +34,9 @@ class PaymentsRelationManager extends RelationManager
 
     protected static ?string $pluralModelLabel = 'paiements';
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Select::make('kind')
                 ->label('Nature')
                 ->options([
@@ -147,21 +151,21 @@ class PaymentsRelationManager extends RelationManager
             ])
             ->defaultSort('created_at', 'desc')
             ->headerActions([
-                Tables\Actions\CreateAction::make()
+                CreateAction::make()
                     ->label('Saisir un paiement')
-                    ->mutateFormDataUsing(function (array $data): array {
+                    ->mutateDataUsing(function (array $data): array {
                         $data['currency_id'] ??= $this->getOwnerRecord()->currency_id;
 
                         return $data;
                     }),
             ])
-            ->actions([
+            ->recordActions([
                 /*
                  * L'administrateur peut declarer une transaction payee : un
                  * webhook perdu ou un encaissement au comptoir ne doivent pas
                  * laisser une reservation coincee.
                  */
-                Tables\Actions\Action::make('markPaid')
+                Action::make('markPaid')
                     ->label('Marquer payé')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
@@ -173,8 +177,8 @@ class PaymentsRelationManager extends RelationManager
                         'failure_reason' => null,
                     ])),
 
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ]);
     }
 }

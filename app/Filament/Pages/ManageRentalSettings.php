@@ -2,10 +2,10 @@
 
 namespace App\Filament\Pages;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
 use App\Settings\RentalSettings;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Pages\SettingsPage;
 
 /**
@@ -17,9 +17,9 @@ use Filament\Pages\SettingsPage;
  */
 class ManageRentalSettings extends SettingsPage
 {
-    protected static ?string $navigationIcon = 'heroicon-o-adjustments-horizontal';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
-    protected static ?string $navigationGroup = 'Location';
+    protected static string | \UnitEnum | null $navigationGroup = 'Location';
 
     protected static ?string $title = 'Réglages de la location';
 
@@ -29,9 +29,9 @@ class ManageRentalSettings extends SettingsPage
 
     protected static string $settings = RentalSettings::class;
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Section::make('Paiement')
                 ->columns(2)
                 ->schema([

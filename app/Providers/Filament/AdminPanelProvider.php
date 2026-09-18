@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Http\Middleware\SetAdminLocale;
 use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -52,7 +53,7 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->maxContentWidth('full')
             ->middleware([
-                \App\Http\Middleware\SetAdminLocale::class,
+                SetAdminLocale::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,

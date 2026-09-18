@@ -2,15 +2,23 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Filters\TrashedFilter;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+use App\Filament\Resources\VehicleResource\Pages\ListVehicles;
+use App\Filament\Resources\VehicleResource\Pages\CreateVehicle;
+use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
 use App\Filament\Resources\VehicleResource\Pages;
 use App\Models\Vehicle;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
@@ -25,9 +33,9 @@ class VehicleResource extends Resource
 {
     protected static ?string $model = Vehicle::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-truck';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-truck';
 
-    protected static ?string $navigationGroup = 'Location';
+    protected static string | \UnitEnum | null $navigationGroup = 'Location';
 
     protected static ?string $label = 'Véhicule';
 
@@ -35,9 +43,9 @@ class VehicleResource extends Resource
 
     protected static ?int $navigationSort = 1;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Section::make('Le véhicule')
                 ->description('Ce que le client voit dans le catalogue.')
                 ->columns(2)
@@ -99,6 +107,14 @@ class VehicleResource extends Resource
                         ->preload()
                         ->required(),
 
+                    Select::make('default_chauffeur_id')
+                        ->label('Chauffeur attitré')
+                        ->relationship('defaultChauffeur', 'full_name')
+                        ->native(false)
+                        ->searchable()
+                        ->preload()
+                        ->helperText("Le conducteur habituel. Il pré-remplit les réservations de ce véhicule, sans les figer : l'affectation se change au cas par cas."),
+
                     Toggle::make('is_active')
                         ->label('Proposé à la location')
                         ->helperText("Décoché, le véhicule disparaît du catalogue sans toucher aux réservations déjà prises.")
@@ -126,6 +142,11 @@ class VehicleResource extends Resource
                     ->searchable(['brand', 'model', 'plate_number'])
                     ->sortable(),
 
+                TextColumn::make('defaultChauffeur.full_name')
+                    ->label('Chauffeur attitré')
+                    ->placeholder('aucun')
+                    ->toggleable(),
+
                 TextColumn::make('seats')
                     ->label('Places')
                     ->alignCenter()
@@ -149,15 +170,15 @@ class VehicleResource extends Resource
             ->defaultSort('brand')
             ->filters([
                 TernaryFilter::make('is_active')->label('Au catalogue'),
-                Tables\Filters\TrashedFilter::make(),
+                TrashedFilter::make(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                    Tables\Actions\RestoreBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
                 ]),
             ]);
     }
@@ -171,9 +192,9 @@ class VehicleResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListVehicles::route('/'),
-            'create' => Pages\CreateVehicle::route('/create'),
-            'edit' => Pages\EditVehicle::route('/{record}/edit'),
+            'index' => ListVehicles::route('/'),
+            'create' => CreateVehicle::route('/create'),
+            'edit' => EditVehicle::route('/{record}/edit'),
         ];
     }
 }

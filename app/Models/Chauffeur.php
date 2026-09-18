@@ -40,6 +40,12 @@ class Chauffeur extends Model
         return $this->hasMany(Booking::class, 'chauffeur_id');
     }
 
+    /** Les vehicules dont il est le conducteur habituel. */
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(Vehicle::class, 'default_chauffeur_id');
+    }
+
     /**
      * Les chauffeurs qu'on peut affecter.
      *

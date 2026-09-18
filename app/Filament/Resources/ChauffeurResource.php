@@ -2,15 +2,24 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\TrashedFilter;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+use App\Filament\Resources\ChauffeurResource\Pages\ListChauffeurs;
+use App\Filament\Resources\ChauffeurResource\Pages\CreateChauffeur;
+use App\Filament\Resources\ChauffeurResource\Pages\EditChauffeur;
 use App\Filament\Resources\ChauffeurResource\Pages;
 use App\Models\Chauffeur;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\IconColumn;
@@ -25,9 +34,9 @@ class ChauffeurResource extends Resource
 {
     protected static ?string $model = Chauffeur::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-identification';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-identification';
 
-    protected static ?string $navigationGroup = 'Location';
+    protected static string | \UnitEnum | null $navigationGroup = 'Location';
 
     protected static ?string $label = 'Chauffeur';
 
@@ -35,9 +44,9 @@ class ChauffeurResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Section::make('Identité')
                 ->columns(2)
                 ->schema([
@@ -129,19 +138,19 @@ class ChauffeurResource extends Resource
             ->filters([
                 TernaryFilter::make('is_active')->label('En service'),
 
-                Tables\Filters\Filter::make('licence_expired')
+                Filter::make('licence_expired')
                     ->label('Permis périmé')
                     ->query(fn (Builder $query) => $query->whereDate('licence_expires_at', '<', now())),
 
-                Tables\Filters\TrashedFilter::make(),
+                TrashedFilter::make(),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                    Tables\Actions\RestoreBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
                 ]),
             ]);
     }
@@ -155,9 +164,9 @@ class ChauffeurResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListChauffeurs::route('/'),
-            'create' => Pages\CreateChauffeur::route('/create'),
-            'edit' => Pages\EditChauffeur::route('/{record}/edit'),
+            'index' => ListChauffeurs::route('/'),
+            'create' => CreateChauffeur::route('/create'),
+            'edit' => EditChauffeur::route('/{record}/edit'),
         ];
     }
 }
