@@ -28,4 +28,22 @@ return [
 
     'visibilite_jours' => (int) env('PRECOMMANDE_VISIBILITE_JOURS', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Plafond de pré-commandes actives par client
+    |--------------------------------------------------------------------------
+    |
+    | Compte les pré-commandes EN ATTENTE et non expirées, jamais le total
+    | historique : un client qui en a payé cent doit pouvoir en créer une
+    | cent-unième. Le plafond se libère donc tout seul, par paiement ou par
+    | expiration, sans que personne n'ait à intervenir.
+    |
+    | Il existe parce qu'un assistant crée sans effort : une boucle maladroite,
+    | et le client reçoit quarante liens de paiement. Chaque pré-commande fige
+    | aussi un prix, donc chacune est un engagement commercial de Thalia.
+    |
+    */
+
+    'plafond_actives' => (int) env('PRECOMMANDE_PLAFOND_ACTIVES', 8),
+
 ];
