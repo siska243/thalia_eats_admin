@@ -138,6 +138,31 @@ class PaiementPrecommande
     }
 
     /**
+     * Une initiation est-elle encore en vol ?
+     *
+     * Une pre-commande ne se ferme qu'a la reception du webhook. Entre l'appel
+     * a la passerelle et cette confirmation, rien n'empechait un second POST de
+     * rappeler FlexPay : le telephone du client sonnait deux fois pour la meme
+     * commande, et s'il confirmait la premiere sollicitation, la reference
+     * enregistree n'etait plus celle qui avait ete payee.
+     *
+     * `updated_at` fait office d'horodatage : c'est la sauvegarde qui a pose
+     * `reference_paiement` qui l'a mis a jour. Au-dela du delai, on suppose la
+     * premiere sollicitation perdue et on laisse reessayer.
+     */
+    public function initiationEnVol(Precommande $precommande): bool
+    {
+        if (blank($precommande->reference_paiement)) {
+            return false;
+        }
+
+        $delai = (int) config('precommande.delai_relance_paiement_minutes');
+
+        return $precommande->updated_at !== null
+            && $precommande->updated_at->greaterThan(now()->subMinutes($delai));
+    }
+
+    /**
      * Appelle FlexPay avec le total fige et enregistre la reference de
      * paiement.
      *
@@ -162,7 +187,13 @@ class PaiementPrecommande
             'description' => 'Paiement pré-commande Thalia Eats',
         ], $method);
 
-        if (empty($result['code']) || $result['code'] == 0) {
+        // La reference de la PREMIERE initiation reussie ne se reecrit jamais.
+        // Si le client relance et confirme finalement la sollicitation d'avant,
+        // ecraser laisserait en base une reference qui ne correspond a aucun
+        // paiement. Le webhook, lui, ne s'appuie pas dessus : il retrouve la
+        // commande par `refernce` et repose ensuite la reference du
+        // prestataire — rien ne depend donc de cette ecriture-ci.
+        if ((empty($result['code']) || $result['code'] == 0) && blank($precommande->reference_paiement)) {
             $precommande->reference_paiement = $result['orderNumber'] ?? null;
             $precommande->save();
         }

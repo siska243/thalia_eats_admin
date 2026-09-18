@@ -52,8 +52,16 @@ class RouteServiceProvider extends ServiceProvider
 
         RateLimiter::for('assistants', fn (Request $request) => Limit::perMinute(5)->by($request->user()?->id ?: $request->ip()));
 
-        // La signature n'identifie pas l'appelant : on compte par IP.
-        RateLimiter::for('lien-paiement', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+        // La signature n'identifie pas l'appelant : on compte par IP, mais
+        // l'IP seule ne suffit pas. Sous le partage d'adresses des operateurs
+        // congolais, des milliers de vrais clients sortent derriere une meme
+        // adresse : dix ouvertures de page par minute pour toute une ville
+        // bloquerait des paiements legitimes. La cle porte donc aussi
+        // l'identifiant de pre-commande — deux clients differents paient deux
+        // pre-commandes differentes et ne se genent plus, tandis qu'un meme
+        // lien martele reste limite.
+        RateLimiter::for('lien-paiement', fn (Request $request) => Limit::perMinute(10)
+            ->by($request->ip().'|'.$request->route('uid')));
 
         $this->routes(function () {
             Route::middleware('api')
