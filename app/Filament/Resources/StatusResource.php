@@ -12,8 +12,8 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Guava\FilamentIconPicker\Forms\IconPicker;
-use Guava\FilamentIconPicker\Tables\IconColumn;
+use Guava\FilamentIconPicker\Forms\Components\IconPicker;
+use Guava\FilamentIconPicker\Tables\Columns\IconColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
