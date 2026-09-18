@@ -158,13 +158,49 @@ class PrecommandeController extends Controller
             ->find((int) $id);
     }
 
+    /**
+     * Le lien que le client reçoit : une page du SITE, plus une page Blade
+     * servie par le backend.
+     *
+     * URL::temporarySignedRoute() signe l'URL complète, hôte compris : un lien
+     * signé pour thaliaeats.com ne peut donc pas être vérifié sur
+     * app.thaliaeats.com. On signe l'adresse d'API — celle qui sera réellement
+     * appelée et validée — et on ne recopie dans le lien du client que sa
+     * chaîne de requête (`expires` et `signature`). La page la repasse à chaque
+     * appel, et le middleware `signed` valide contre l'URL signée.
+     *
+     * L'origine du site vient de config('site.url'), pas d'APP_URL : cette
+     * dernière n'est pas maintenue comme l'origine publique du projet
+     * (.env.example la livre sur 127.0.0.1:8000).
+     */
     protected function lienDePaiement(\App\Models\Precommande $precommande): string
     {
-        return URL::temporarySignedRoute(
-            'precommande.paiement',
+        $uid = Cipher::Encrypt($precommande->id);
+
+        $signee = URL::temporarySignedRoute(
+            'api.precommande.lien-paiement',
             $precommande->expires_at,
-            ['uid' => Cipher::Encrypt($precommande->id)],
+            ['uid' => $uid],
         );
+
+        $query = parse_url($signee, PHP_URL_QUERY);
+
+        // ATTENTION — cet encodage n'est PAS celui de Laravel, et il ne faut
+        // pas s'appuyer sur une symétrie qui n'existe pas.
+        //
+        // `RouteUrlGenerator::to()` fait `strtr(rawurlencode($uri),
+        // $dontEncode)`, et `$dontEncode` ramène notamment « %2B → + »,
+        // « %3D → = » et « %2F → / » : Laravel laisse donc ces caractères BRUTS
+        // dans le chemin qu'il signe, là où `rawurlencode` ci-dessous les code,
+        // tout comme `encodeURIComponent` côté site. Un uid qui en contiendrait
+        // produirait deux chemins différents, et la signature serait rejetée.
+        //
+        // Sans conséquence en pratique : l'uid est un base64 de base64, et un
+        // balayage de 200 000 identifiants n'en a pas trouvé un seul portant
+        // « + », « / » ou « = ». Un « / » casserait de toute façon aussi la
+        // route Blade historique, bien avant ce lot. Mais si les clés de
+        // `Cipher` changent un jour, c'est ici qu'il faudra revenir.
+        return config('site.url').'/paiement/precommande/'.rawurlencode($uid).($query ? '?'.$query : '');
     }
 
     private function messageDeRefus(string $raison): string

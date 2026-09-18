@@ -46,4 +46,23 @@ return [
 
     'plafond_actives' => (int) env('PRECOMMANDE_PLAFOND_ACTIVES', 8),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Délai avant de pouvoir relancer un paiement
+    |--------------------------------------------------------------------------
+    |
+    | Une pré-commande ne se ferme qu'à la réception du webhook. Entre l'appel
+    | à la passerelle et cette confirmation, rien n'empêchait un second POST de
+    | rappeler FlexPay : le téléphone du client sonnait deux fois pour la même
+    | commande, et s'il confirmait la première sollicitation, la référence
+    | enregistrée n'était plus celle qui avait été payée.
+    |
+    | Pendant ce délai, une initiation déjà partie interdit la suivante et le
+    | client est invité à regarder son téléphone. Au-delà, on suppose la
+    | première sollicitation perdue et on laisse réessayer.
+    |
+    */
+
+    'delai_relance_paiement_minutes' => (int) env('PRECOMMANDE_DELAI_RELANCE_MINUTES', 5),
+
 ];
