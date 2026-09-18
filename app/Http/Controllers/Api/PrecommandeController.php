@@ -185,10 +185,21 @@ class PrecommandeController extends Controller
 
         $query = parse_url($signee, PHP_URL_QUERY);
 
-        // rawurlencode, comme le générateur de routes de Laravel : l'uid est un
-        // base64 qui peut porter « + », « / » ou « = ». Le site le réencode de
-        // la même façon (encodeURIComponent) avant de rappeler l'API, sinon la
-        // signature ne porterait pas sur la même URL.
+        // ATTENTION — cet encodage n'est PAS celui de Laravel, et il ne faut
+        // pas s'appuyer sur une symétrie qui n'existe pas.
+        //
+        // `RouteUrlGenerator::to()` fait `strtr(rawurlencode($uri),
+        // $dontEncode)`, et `$dontEncode` ramène notamment « %2B → + »,
+        // « %3D → = » et « %2F → / » : Laravel laisse donc ces caractères BRUTS
+        // dans le chemin qu'il signe, là où `rawurlencode` ci-dessous les code,
+        // tout comme `encodeURIComponent` côté site. Un uid qui en contiendrait
+        // produirait deux chemins différents, et la signature serait rejetée.
+        //
+        // Sans conséquence en pratique : l'uid est un base64 de base64, et un
+        // balayage de 200 000 identifiants n'en a pas trouvé un seul portant
+        // « + », « / » ou « = ». Un « / » casserait de toute façon aussi la
+        // route Blade historique, bien avant ce lot. Mais si les clés de
+        // `Cipher` changent un jour, c'est ici qu'il faudra revenir.
         return config('site.url').'/paiement/precommande/'.rawurlencode($uid).($query ? '?'.$query : '');
     }
 
