@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Restaurant;
+use App\Helpers\ImageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,7 +22,6 @@ class RestaurantResource extends JsonResource
     {
         // return parent::toArray($request);
 
-        $host = $request->server('HTTP_HOST');
         return [
             'name' => $this->resource->name,
             'adresse' => $this->resource->adresse,
@@ -34,7 +34,7 @@ class RestaurantResource extends JsonResource
             'whatsapp' => $this->resource->whatsapp,
             'location'=> $this->resource->location,
             'commune' => $this->whenNotNull(new TownResource($this->resource->town)),
-            'image' => 'https://' . $host . '/images/' . $this->resource->banniere
+            'image' => ImageUrl::make($request, $this->resource->banniere)
         ];
     }
 }
