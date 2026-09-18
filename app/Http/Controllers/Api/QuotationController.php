@@ -66,7 +66,7 @@ class QuotationController extends Controller
             return ApiResponse::NOT_FOUND('Oups', 'Cette ville de livraison est introuvable');
         }
 
-        $currency = Currency::query()->where('slug', $request->input('currency'))->first();
+        $currency = Currency::parSlugOuCode($request->input('currency'));
 
         if (! $currency) {
             return ApiResponse::NOT_FOUND('Oups', 'Cette devise est introuvable');
