@@ -48,7 +48,7 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-| Délai avant de pouvoir relancer un paiement
+    | Délai avant de pouvoir relancer un paiement
     |--------------------------------------------------------------------------
     |
     | Une pré-commande ne se ferme qu'à la réception du webhook. Entre l'appel

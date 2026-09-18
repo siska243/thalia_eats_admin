@@ -658,6 +658,33 @@ class LienPaiementFrontTest extends TestCase
             ->assertJsonPath('data.url', 'https://cardpayment.flexpay.cd/pay/xyz');
     }
 
+    public function test_un_essai_par_carte_ne_bloque_pas_un_mobile_money_suivant(): void
+    {
+        // Le meme defaut que carte -> carte, atteint par l'autre porte :
+        // l'armement du garde etait indifferent a la methode alors que sa
+        // lecture est reservee au mobile money. Le client cliquait « Payer par
+        // carte », arrivait sur la page FlexPay, hesitait, revenait, choisissait
+        // le mobile money — et se faisait refuser cinq minutes avec « regardez
+        // votre telephone », pour un combine qui n'avait jamais sonne.
+        $this->reponseFlexPay([
+            'code' => 0, 'orderNumber' => 'TEST-ORDER-CARTE', 'url' => 'https://cardpayment.flexpay.cd/pay/xyz',
+        ]);
+
+        $p = Precommande::factory()->create(['total' => 5500]);
+        $url = $this->lien($p);
+
+        $this->postJson($url, ['method' => 'cart'])->assertStatus(200);
+
+        // Un essai carte ne doit rien armer : le garde ne lit que le mobile.
+        $this->assertNull($p->fresh()->paiement_initie_a);
+
+        $this->reponseFlexPay(['code' => 0, 'orderNumber' => 'TEST-ORDER-MOBILE']);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.method', 'mobile');
+    }
+
     public function test_une_initiation_sans_order_number_arme_quand_meme_le_garde(): void
     {
         // L'unique etat du garde ne doit pas etre un champ que la passerelle

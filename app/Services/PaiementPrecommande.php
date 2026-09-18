@@ -163,13 +163,29 @@ class PaiementPrecommande
      */
     public function sollicitationEnVol(Precommande $precommande, string $method): bool
     {
-        if ($method !== 'mobile' || blank($precommande->paiement_initie_a)) {
+        if (! $this->methodeSurveillee($method) || blank($precommande->paiement_initie_a)) {
             return false;
         }
 
         $delai = (int) config('precommande.delai_relance_paiement_minutes');
 
         return $precommande->paiement_initie_a->greaterThan(now()->subMinutes($delai));
+    }
+
+    /**
+     * La methode de paiement que le garde de relance surveille.
+     *
+     * UNE SEULE DEFINITION, lue par `sollicitationEnVol()` ET par l'armement
+     * dans `initierFlexPay()`. Les deux doivent dire la meme chose : armer plus
+     * largement qu'on ne lit rouvre le defaut par l'autre porte. C'est
+     * exactement ce qui s'est produit — l'armement etait indifferent a la
+     * methode, donc un essai par CARTE armait le garde, et le mobile money
+     * suivant se faisait refuser cinq minutes avec « regardez votre
+     * telephone », pour un combine qui n'avait jamais sonne.
+     */
+    private function methodeSurveillee(string $method): bool
+    {
+        return $method === 'mobile';
     }
 
     /**
@@ -203,7 +219,13 @@ class PaiementPrecommande
             // d'`orderNumber`. C'est le seul etat sur lequel le garde de
             // relance s'appuie — s'appuyer sur un champ que la passerelle peut
             // omettre rendait le garde aveugle exactement quand il sert.
-            $precommande->paiement_initie_a = now();
+            //
+            // On n'arme QUE pour la methode que le garde lit. Armer plus
+            // largement qu'on ne lit rouvre le defaut par l'autre porte : un
+            // essai par carte bloquait le mobile money suivant.
+            if ($this->methodeSurveillee($method)) {
+                $precommande->paiement_initie_a = now();
+            }
 
             // La reference de la PREMIERE initiation reussie ne se reecrit
             // jamais. Si le client relance et confirme finalement la
