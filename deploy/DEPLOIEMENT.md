@@ -928,6 +928,27 @@ applications du serveur.
 `ProxyTimeout 120` est utile ici aussi : le transport MCP « streamable HTTP »
 garde un flux SSE ouvert pendant la session.
 
+**Discretion sur la pile.** Le connecteur ne publie plus « Server: uvicorn » :
+c'est supprime a la source (`server_header=False`), donc vrai meme pour qui
+joindrait le conteneur directement. Apache, lui, annonce encore sa version, et
+ses pages d'erreur affichent « Apache/2.4.63 (Ubuntu) » — une version exacte
+vaut mieux qu'un nom de serveur pour qui cherche une faille connue. Cela se
+regle globalement, une fois, pour les onze applications de la machine :
+
+```apache
+# /etc/apache2/conf-enabled/security.conf
+ServerTokens Prod
+ServerSignature Off
+```
+
+```bash
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl -sI https://mcp.thaliaeats.com/healthz | grep -i '^server'
+```
+
+Ce n'est pas une protection : cacher un nom n'empeche aucune attaque, et il ne
+faut pas s'en croire protege. C'est retirer une indication gratuite.
+
 Puis, comme en section 7 : `a2ensite`, `apache2ctl configtest`,
 `apache2ctl -S` (le vhost MCP ne doit pas devenir le serveur par défaut),
 `systemctl reload apache2`, et enfin `certbot --apache` pour le vhost 443.
