@@ -59,3 +59,35 @@ Route::post('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecom
 
 
 
+
+/*
+|--------------------------------------------------------------------------
+| Serveur d'autorisation OAuth 2.1 pour les assistants
+|--------------------------------------------------------------------------
+|
+| Ces routes sont dans le groupe « web » et non dans l'API : la page
+| d'autorisation est une vraie page HTML, avec un formulaire, une session et un
+| jeton CSRF. Les deux routes que l'assistant appelle en machine à machine
+| (`register` et `token`) sont exemptées de CSRF dans VerifyCsrfToken — un
+| logiciel n'a pas de session d'où tirer un jeton.
+|
+*/
+
+Route::get('/.well-known/oauth-authorization-server', [\App\Http\Controllers\Oauth\MetadonneesController::class, 'show'])
+    ->name('oauth.metadonnees');
+
+Route::post('/oauth/register', [\App\Http\Controllers\Oauth\EnregistrementController::class, 'store'])
+    ->name('oauth.register')
+    ->middleware('throttle:oauth-enregistrement');
+
+Route::get('/oauth/authorize', [\App\Http\Controllers\Oauth\AutorisationController::class, 'show'])
+    ->name('oauth.authorize')
+    ->middleware('throttle:oauth-autorisation');
+
+Route::post('/oauth/authorize', [\App\Http\Controllers\Oauth\AutorisationController::class, 'store'])
+    ->name('oauth.authorize.store')
+    ->middleware('throttle:oauth-connexion');
+
+Route::post('/oauth/token', [\App\Http\Controllers\Oauth\JetonController::class, 'store'])
+    ->name('oauth.token')
+    ->middleware('throttle:oauth-jeton');

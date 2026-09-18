@@ -925,6 +925,21 @@ curl -s http://127.0.0.1:8097/healthz   # ok
 >
 > `deploy.sh` ne lit pas ce fichier : mettre a jour le connecteur se fait a la
 > main, avec les commandes ci-dessus.
+>
+> **Corollaire qui a coute un 503 le jour meme.** Un service absent du fichier
+> que Compose lit est un ORPHELIN. `deploy.sh` portait `--remove-orphans` :
+> chaque deploiement du backend supprimait donc le conteneur du connecteur, et
+> `mcp.thaliaeats.com` rendait 503 jusqu'a relance manuelle. Le drapeau a ete
+> retire ; ne le remettez pas, et n'ajoutez pas non plus `-f
+> docker-compose.mcp.yml` a `deploy.sh` — ce serait recreer le couplage que la
+> separation vient de defaire.
+>
+> Si le connecteur est tombe :
+>
+> ```bash
+> cd /srv/thalia-eats/code/deploy
+> docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d mcp
+> ```
 
 ### 12c. Apache
 
@@ -943,6 +958,27 @@ applications du serveur.
 
 `ProxyTimeout 120` est utile ici aussi : le transport MCP « streamable HTTP »
 garde un flux SSE ouvert pendant la session.
+
+**Discretion sur la pile.** Le connecteur ne publie plus « Server: uvicorn » :
+c'est supprime a la source (`server_header=False`), donc vrai meme pour qui
+joindrait le conteneur directement. Apache, lui, annonce encore sa version, et
+ses pages d'erreur affichent « Apache/2.4.63 (Ubuntu) » — une version exacte
+vaut mieux qu'un nom de serveur pour qui cherche une faille connue. Cela se
+regle globalement, une fois, pour les onze applications de la machine :
+
+```apache
+# /etc/apache2/conf-enabled/security.conf
+ServerTokens Prod
+ServerSignature Off
+```
+
+```bash
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl -sI https://mcp.thaliaeats.com/healthz | grep -i '^server'
+```
+
+Ce n'est pas une protection : cacher un nom n'empeche aucune attaque, et il ne
+faut pas s'en croire protege. C'est retirer une indication gratuite.
 
 Puis, comme en section 7 : `a2ensite`, `apache2ctl configtest`,
 `apache2ctl -S` (le vhost MCP ne doit pas devenir le serveur par défaut),

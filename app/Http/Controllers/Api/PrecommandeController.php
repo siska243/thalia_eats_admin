@@ -209,6 +209,7 @@ class PrecommandeController extends Controller
             PrecommandeRefusee::AUCUN_TARIF_LIVRAISON => 'Nous ne livrons pas encore dans cette zone.',
             PrecommandeRefusee::PANIER_HORS_TRANCHE => 'Ce panier dépasse nos tranches de livraison. Réduisez la commande ou passez par l\'application.',
             PrecommandeRefusee::REFERENCE_INDISPONIBLE => 'Une erreur technique empêche la création de la pré-commande, réessayez.',
+            PrecommandeRefusee::TROP_DE_PRECOMMANDES => 'Vous avez déjà '.config('precommande.plafond_actives').' commandes en attente de paiement. Payez-en une ou attendez qu\'elles expirent avant d\'en créer une autre.',
             'multi_restaurant' => 'Une commande ne peut contenir que des plats d\'un seul restaurant.',
             'devises_melangees' => 'Tous les plats doivent être dans la même devise.',
             'panier_vide' => 'Veuillez indiquer au moins un produit.',
