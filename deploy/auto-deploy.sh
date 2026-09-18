@@ -40,12 +40,40 @@ git fetch --quiet origin "$BRANCHE"
 LOCAL="$(git rev-parse HEAD)"
 DISTANT="$(git rev-parse "origin/$BRANCHE")"
 
-if [ "$LOCAL" = "$DISTANT" ]; then
+# Comparer deux commits ne dit RIEN de ce qui tourne.
+#
+# deploy.sh fait le `git pull` AVANT de (re)construire les conteneurs. Si le
+# pull reussit et que la suite echoue — une variable manquante, un build casse,
+# une image qui ne demarre pas — le depot est a jour pendant que les anciens
+# conteneurs tournent encore. Au passage suivant, LOCAL vaut DISTANT : le
+# veilleur se croit a jour et ne rejoue jamais. Le serveur reste alors
+# silencieusement fige, avec du code neuf sur le disque et l'ancienne version
+# servie aux clients.
+#
+# C'est arrive le 18 septembre 2026. Le fichier d'etat portait « ÉCHEC », et
+# le veilleur sortait en silence toutes les deux minutes sans rien tenter.
+#
+# On relit donc notre propre dernier verdict : tant qu'il n'est pas OK, il y a
+# quelque chose a finir, meme sans commit nouveau.
+DERNIER="$(cat "$ETAT" 2>/dev/null || true)"
+
+case "$DERNIER" in
+    *"| OK"*) TERMINE=true ;;
+    "")       TERMINE=true ;;   # jamais deploye : le commit fait foi
+    *)        TERMINE=false ;;  # ÉCHEC, REFUS, EN ATTENTE
+esac
+
+if [ "$LOCAL" = "$DISTANT" ] && [ "$TERMINE" = true ]; then
     exit 0
 fi
 
-note "nouveau commit sur $BRANCHE : ${LOCAL:0:8} -> ${DISTANT:0:8}"
-git log --oneline "$LOCAL..$DISTANT" | sed 's/^/    /'
+if [ "$LOCAL" = "$DISTANT" ]; then
+    note "code deja a jour, mais le dernier passage n'a pas abouti — on rejoue"
+    note "    $DERNIER"
+else
+    note "nouveau commit sur $BRANCHE : ${LOCAL:0:8} -> ${DISTANT:0:8}"
+    git log --oneline "$LOCAL..$DISTANT" | sed 's/^/    /'
+fi
 
 # Un fichier suivi modifié à la main sur le serveur ferait échouer le
 # `git pull --ff-only` de deploy.sh au milieu du déploiement. Autant le voir
@@ -65,6 +93,8 @@ fi
 # et des paiements réels. Ça ne se fait pas sans quelqu'un devant l'écran : on
 # laisse donc tourner la version en place, et on le dit fort. L'opérateur
 # livrera avec `./deploy.sh --migrate`.
+# Plage vide quand on rejoue sans commit nouveau : aucune migration a compter,
+# et c'est correct — celles du lot precedent sont deja passees ou deja refusees.
 MIGRATIONS="$(git diff --name-only --diff-filter=A "$LOCAL" "$DISTANT" -- database/migrations | wc -l)"
 
 if [ "$MIGRATIONS" -gt 0 ]; then
