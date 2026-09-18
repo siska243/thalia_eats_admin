@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Throwable;
 use App\Models\Precommande;
 use App\Wrappers\Cipher;
 use App\Wrappers\FlexPay;
@@ -211,7 +212,7 @@ class PaiementPrecommandeController extends Controller
     {
         try {
             return (new LibPhoneNumber($phone))->checkValidationNumber();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return false;
         }
     }

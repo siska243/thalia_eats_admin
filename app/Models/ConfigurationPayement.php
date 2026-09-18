@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\ConfigurationPayementFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ConfigurationPayement extends Model
 {
-    /** @use HasFactory<\Database\Factories\ConfigurationPayementFactory> */
+    /** @use HasFactory<ConfigurationPayementFactory> */
     use HasFactory,SoftDeletes;
 
     protected $fillable=[

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Precommande;
+use App\Services\ConversionPrecommande;
 use App\Events\PayementEvent;
 use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
@@ -45,7 +47,7 @@ class PayementController extends Controller
 
             try {
                 $result = FlexPay::checkPaiement($orderNumber);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
 
                 return ApiResponse::SERVER_ERROR($e);
             }
@@ -163,7 +165,7 @@ class PayementController extends Controller
                         // n'importe quel total. Le montant est lu sur la
                         // transaction VERIFIEE, jamais sur la requete : c'est
                         // tout l'interet.
-                        $precommande = \App\Models\Precommande::query()
+                        $precommande = Precommande::query()
                             ->where('refernce', $reference)
                             ->first();
 
@@ -196,7 +198,7 @@ class PayementController extends Controller
                             );
                         }
 
-                        $order = app(\App\Services\ConversionPrecommande::class)
+                        $order = app(ConversionPrecommande::class)
                             ->convertirSiPossible($reference);
                     }
 

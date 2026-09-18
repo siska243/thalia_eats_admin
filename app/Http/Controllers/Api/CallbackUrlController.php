@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use Exception;
 use App\Enums\CallBackEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DelivreryPriceResource;
@@ -54,7 +55,7 @@ class CallbackUrlController extends Controller
             return ApiResponse::GET_DATA(['clientSecret' => $client_secret]);
 
         }
-        catch(\Exception $e){
+        catch(Exception $e){
             return ApiResponse::SERVER_ERROR($e);
         }
 

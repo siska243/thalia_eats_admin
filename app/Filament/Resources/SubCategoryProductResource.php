@@ -2,14 +2,18 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Schemas\Schema;
+use App\Filament\Resources\SubCategoryProductResource\Pages\EditSubCategoryProduct;
+use App\Filament\Resources\SubCategoryProductResource\Pages\ManageProducts;
+use App\Filament\Resources\SubCategoryProductResource\Pages\ListSubCategoryProducts;
+use App\Filament\Resources\SubCategoryProductResource\Pages\CreateSubCategoryProduct;
 use App\Filament\Resources\SubCategoryProductResource\Pages;
 use App\Filament\Resources\SubCategoryProductResource\RelationManagers;
 use App\Models\CategoryProduct;
 use App\Models\SubCategoryProduct;
 use Filament\Pages\Page;
-use Filament\Pages\SubNavigationPosition;
 use Filament\Forms\Components\{Grid, Section, TextInput, Textarea, Toggle, Select};
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\{CreateAction, DeleteBulkAction, EditAction, ViewAction, DeleteAction, BulkActionGroup};
 use Filament\Tables\Table;
@@ -23,17 +27,17 @@ class SubCategoryProductResource extends Resource
 {
     protected static ?string $model = SubCategoryProduct::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
     protected static ?string $navigationLabel = "Sous Categorie";
-    protected static ?string $navigationGroup = "Produits";
+    protected static string | \UnitEnum | null $navigationGroup = "Produits";
 
-    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
 
-        return $form->schema([
-            Section::make()
+        return $schema->components([
+            \Filament\Schemas\Components\Section::make()
                 ->columns(2)
                 ->schema([
                 Select::make('category_product_id')->label('Categorie')
@@ -74,18 +78,18 @@ class SubCategoryProductResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                EditAction::make(),
-                ViewAction::make()
+            ->recordActions([
+                \Filament\Actions\EditAction::make(),
+                \Filament\Actions\ViewAction::make()
 
             ])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+            ->toolbarActions([
+                \Filament\Actions\BulkActionGroup::make([
+                    \Filament\Actions\DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                CreateAction::make(),
+                \Filament\Actions\CreateAction::make(),
             ]);
     }
 
@@ -100,8 +104,8 @@ class SubCategoryProductResource extends Resource
     {
         return $page->generateNavigationItems([
             // ...
-            Pages\EditSubCategoryProduct::class,
-            Pages\ManageProducts::class,
+            EditSubCategoryProduct::class,
+            ManageProducts::class,
 
         ]);
     }
@@ -109,10 +113,10 @@ class SubCategoryProductResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListSubCategoryProducts::route('/'),
-            'create' => Pages\CreateSubCategoryProduct::route('/create'),
-            'edit' => Pages\EditSubCategoryProduct::route('/{record}/edit'),
-            'products'=>Pages\ManageProducts::route('/{record}/products'),
+            'index' => ListSubCategoryProducts::route('/'),
+            'create' => CreateSubCategoryProduct::route('/create'),
+            'edit' => EditSubCategoryProduct::route('/{record}/edit'),
+            'products'=>ManageProducts::route('/{record}/products'),
         ];
     }
 }

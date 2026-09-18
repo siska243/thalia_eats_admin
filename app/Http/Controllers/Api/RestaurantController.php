@@ -47,7 +47,7 @@ class RestaurantController extends Controller
             $product = Product::with(['restaurant', "currency", "sub_category_product"])
                 ->where('slug', $slug)->first();
             return new ProductResource($product);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }

@@ -2,6 +2,9 @@
 
 namespace App\Wrappers;
 
+use libphonenumber\PhoneNumber;
+use libphonenumber\NumberParseException;
+use libphonenumber\PhoneNumberFormat;
 use libphonenumber\PhoneNumberUtil;
 
 class LibPhoneNumber
@@ -22,12 +25,12 @@ class LibPhoneNumber
 
     }
 
-    public function numberProto():\libphonenumber\PhoneNumber|\libphonenumber\NumberParseException
+    public function numberProto():PhoneNumber|NumberParseException
     {
         try {
             return $this->instance()->parse($this->phoneNumber, $this->code);
 
-        } catch (\libphonenumber\NumberParseException $e) {
+        } catch (NumberParseException $e) {
             return $e;
         }
     }
@@ -39,21 +42,21 @@ class LibPhoneNumber
 
     public function phoneInternational():string
     {
-        return $this->instance()->format($this->numberProto(), \libphonenumber\PhoneNumberFormat::INTERNATIONAL);
+        return $this->instance()->format($this->numberProto(), PhoneNumberFormat::INTERNATIONAL);
 
     }
 
     public function phoneNational():string
     {
 
-        return $this->instance()->format($this->numberProto(), \libphonenumber\PhoneNumberFormat::NATIONAL);
+        return $this->instance()->format($this->numberProto(), PhoneNumberFormat::NATIONAL);
 
     }
 
     public function phoneE164():string
     {
 
-        return $this->instance()->format($this->numberProto(), \libphonenumber\PhoneNumberFormat::E164);
+        return $this->instance()->format($this->numberProto(), PhoneNumberFormat::E164);
 
     }
 }

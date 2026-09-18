@@ -145,7 +145,7 @@ class PrecommandeController extends Controller
             ->find((int) $id);
     }
 
-    protected function lienDePaiement(\App\Models\Precommande $precommande): string
+    protected function lienDePaiement(Precommande $precommande): string
     {
         return URL::temporarySignedRoute(
             'precommande.paiement',

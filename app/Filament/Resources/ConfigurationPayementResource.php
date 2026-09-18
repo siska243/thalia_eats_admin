@@ -2,11 +2,22 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Resources\ConfigurationPayementResource\Pages\ListConfigurationPayements;
+use App\Filament\Resources\ConfigurationPayementResource\Pages\CreateConfigurationPayement;
+use App\Filament\Resources\ConfigurationPayementResource\Pages\EditConfigurationPayement;
 use App\Filament\Resources\ConfigurationPayementResource\Pages;
 use App\Filament\Resources\ConfigurationPayementResource\RelationManagers;
 use App\Models\ConfigurationPayement;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -17,34 +28,34 @@ class ConfigurationPayementResource extends Resource
 {
     protected static ?string $model = ConfigurationPayement::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function getNavigationGroup(): ?string
     {
         return 'System Tools';
     }
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Textarea::make('token')
+        return $schema
+            ->components([
+                Textarea::make('token')
                     ->required()
                     ->columnSpanFull(),
-                Forms\Components\Textarea::make('token_key')
+                Textarea::make('token_key')
                     ->required()
                     ->columnSpanFull(),
-                Forms\Components\Toggle::make('active')
+                Toggle::make('active')
                     ->required(),
-                Forms\Components\TextInput::make('environment')
+                TextInput::make('environment')
                     ->required()
                     ->maxLength(255)
                     ->default('production'),
-                Forms\Components\TextInput::make('url')
+                TextInput::make('url')
                     ->maxLength(255),
-                Forms\Components\Textarea::make('url_doc')
+                Textarea::make('url_doc')
                     ->columnSpanFull(),
-                Forms\Components\Select::make('user_id')
+                Select::make('user_id')
                     ->relationship('user', 'name')
                     ->required(),
             ]);
@@ -54,26 +65,26 @@ class ConfigurationPayementResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('url')
+                TextColumn::make('url')
                     ->label('Title')
                     ->searchable(),
-                Tables\Columns\ToggleColumn::make('active')
+                ToggleColumn::make('active')
                    ,
-                Tables\Columns\TextColumn::make('environment')
+                TextColumn::make('environment')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('user.name')
+                TextColumn::make('user.name')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('deleted_at')
+                TextColumn::make('deleted_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -81,12 +92,12 @@ class ConfigurationPayementResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
+            ->recordActions([
                 //Tables\Actions\EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -101,9 +112,9 @@ class ConfigurationPayementResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListConfigurationPayements::route('/'),
-            'create' => Pages\CreateConfigurationPayement::route('/create'),
-            'edit' => Pages\EditConfigurationPayement::route('/{record}/edit'),
+            'index' => ListConfigurationPayements::route('/'),
+            'create' => CreateConfigurationPayement::route('/create'),
+            'edit' => EditConfigurationPayement::route('/{record}/edit'),
         ];
     }
 }

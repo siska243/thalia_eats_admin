@@ -2,6 +2,14 @@
 
 namespace App\Filament\Resources\RestaurantResource\Pages;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
 use App\Filament\Resources\CommandeResource;
 use App\Filament\Resources\ProductResource;
 use App\Filament\Resources\RestaurantResource;
@@ -12,20 +20,13 @@ use App\Models\SubCategoryProduct;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Tables;
 use Filament\Tables\Actions\ActionGroup;
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\CreateAction;
-use Filament\Tables\Actions\DeleteAction;
-use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Tables\Actions\EditAction;
-use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
@@ -39,17 +40,17 @@ class ManageProducts extends ManageRelatedRecords
 
     protected static string $relationship = 'product';
 
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
 
     public static function getNavigationLabel(): string
     {
         return 'Products';
     }
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema(
+        return $schema
+            ->components(
                 [
                     Section::make()->schema(
                         [
@@ -128,21 +129,21 @@ class ManageProducts extends ManageRelatedRecords
             ->filters([
                 //
             ])
-            ->actions([
+            ->recordActions([
 
-                Tables\Actions\Action::make("edit")->url(fn(Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))->label(__("Edit")),
+                Action::make("edit")->url(fn(Product $record): string => ProductResource::getUrl('edit', ['record' => $record]))->label(__("Edit")),
                 ViewAction::make(),
                 DeleteAction::make(),
 
 
             ])
-            ->bulkActions([
+            ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make()
+                CreateAction::make()
                 ->label(__("Create Product"))
                 ->url(fn(): string => ProductResource::getUrl('create', ['record' => $this->record->id]))
                 ->icon('heroicon-o-plus')
