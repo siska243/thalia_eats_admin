@@ -22,8 +22,11 @@ class RedirectionOauth implements ValidationRule
     /**
      * Les hôtes pour lesquels `http://` reste acceptable. `localhost` n'est
      * volontairement pas résolu : c'est la chaîne littérale qui est autorisée.
+     *
+     * `parse_url` rend l'adresse IPv6 AVEC ses crochets (`[::1]`) : lister
+     * aussi `::1` serait du code mort, jamais atteint.
      */
-    private const HOTES_LOCAUX = ['127.0.0.1', '[::1]', '::1', 'localhost'];
+    private const HOTES_LOCAUX = ['127.0.0.1', '[::1]', 'localhost'];
 
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
