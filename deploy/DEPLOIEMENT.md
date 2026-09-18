@@ -925,6 +925,21 @@ curl -s http://127.0.0.1:8097/healthz   # ok
 >
 > `deploy.sh` ne lit pas ce fichier : mettre a jour le connecteur se fait a la
 > main, avec les commandes ci-dessus.
+>
+> **Corollaire qui a coute un 503 le jour meme.** Un service absent du fichier
+> que Compose lit est un ORPHELIN. `deploy.sh` portait `--remove-orphans` :
+> chaque deploiement du backend supprimait donc le conteneur du connecteur, et
+> `mcp.thaliaeats.com` rendait 503 jusqu'a relance manuelle. Le drapeau a ete
+> retire ; ne le remettez pas, et n'ajoutez pas non plus `-f
+> docker-compose.mcp.yml` a `deploy.sh` — ce serait recreer le couplage que la
+> separation vient de defaire.
+>
+> Si le connecteur est tombe :
+>
+> ```bash
+> cd /srv/thalia-eats/code/deploy
+> docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d mcp
+> ```
 
 ### 12c. Apache
 
