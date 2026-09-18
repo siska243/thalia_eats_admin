@@ -685,6 +685,27 @@ class LienPaiementFrontTest extends TestCase
             ->assertJsonPath('data.method', 'mobile');
     }
 
+    public function test_le_mobile_en_vol_ne_bloque_pas_la_carte(): void
+    {
+        // La quatrieme sequence, et la seule qui n'avait pas de test. C'est
+        // precisement cette asymetrie que la branche a deja cassee deux fois :
+        // le garde ne surveille que le mobile money, il ne doit donc jamais
+        // refuser une carte, meme une sollicitation mobile encore en vol.
+        $p = Precommande::factory()->create(['total' => 5500]);
+        $url = $this->lien($p);
+
+        $this->postJson($url, ['method' => 'mobile', 'phone' => '+243810000000'])
+            ->assertStatus(200);
+
+        $this->reponseFlexPay([
+            'code' => 0, 'orderNumber' => 'TEST-ORDER-CARTE', 'url' => 'https://cardpayment.flexpay.cd/pay/xyz',
+        ]);
+
+        $this->postJson($url, ['method' => 'cart'])
+            ->assertStatus(200)
+            ->assertJsonPath('data.url', 'https://cardpayment.flexpay.cd/pay/xyz');
+    }
+
     public function test_une_initiation_sans_order_number_arme_quand_meme_le_garde(): void
     {
         // L'unique etat du garde ne doit pas etre un champ que la passerelle
