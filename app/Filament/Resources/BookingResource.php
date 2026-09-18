@@ -209,6 +209,12 @@ class BookingResource extends Resource
                     Select::make('status')
                         ->label('Statut')
                         ->native(false)
+                        /*
+                         * Une reservation nait en attente de paiement, meme
+                         * creee depuis l'administration : c'est le paiement
+                         * qui retient le vehicule, pas la saisie.
+                         */
+                        ->default(Booking::STATUS_PENDING_PAYMENT)
                         ->options([
                             Booking::STATUS_PENDING_PAYMENT => 'En attente de paiement',
                             Booking::STATUS_CONFIRMED => 'Confirmée',

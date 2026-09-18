@@ -52,6 +52,7 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->maxContentWidth('full')
             ->middleware([
+                \App\Http\Middleware\SetAdminLocale::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
