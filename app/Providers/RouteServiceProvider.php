@@ -55,6 +55,41 @@ class RouteServiceProvider extends ServiceProvider
         // La signature n'identifie pas l'appelant : on compte par IP.
         RateLimiter::for('lien-paiement', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
 
+        // OAuth : aucune de ces routes n'est authentifiée au moment où elle est
+        // appelée, l'IP est donc la seule cle disponible.
+
+        // L'enregistrement dynamique crée une ligne en base sans qu'aucun
+        // humain n'intervienne : sans limite, on remplit la table.
+        RateLimiter::for('oauth-enregistrement', fn (Request $request) => Limit::perHour(20)->by($request->ip()));
+
+        RateLimiter::for('oauth-autorisation', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
+
+        // Celui-ci vérifie des mots de passe. C'est le seul endroit de
+        // l'application où un formulaire public teste des identifiants : sans
+        // limite, la page d'autorisation devient un banc d'essai de mots de passe.
+        //
+        // Deux contraintes, parce qu'elles ne couvrent pas la même attaque :
+        // celle par IP arrête qui essaie beaucoup de comptes depuis un point,
+        // celle par compte arrête qui vise UNE adresse en répartissant ses
+        // tentatives sur autant d'adresses IP qu'il veut. Sans la seconde, la
+        // première ne protège aucun compte en particulier.
+        RateLimiter::for('oauth-connexion', function (Request $request) {
+            $limites = [
+                Limit::perMinute(5)->by($request->ip()),
+                Limit::perHour(30)->by($request->ip()),
+            ];
+
+            $compte = self::cleDeCompte($request);
+
+            if ($compte !== null) {
+                $limites[] = Limit::perHour(10)->by($compte);
+            }
+
+            return $limites;
+        });
+
+        RateLimiter::for('oauth-jeton', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
+
         $this->routes(function () {
             Route::middleware('api')
                 ->prefix('api')
@@ -63,6 +98,29 @@ class RouteServiceProvider extends ServiceProvider
             Route::middleware('web')
                 ->group(base_path('routes/web.php'));
         });
+    }
+
+    /**
+     * La clé de limitation du compte visé par une tentative de connexion OAuth.
+     *
+     * L'adresse est normalisée (sinon « Client@X » et « client@x » seraient
+     * deux compteurs distincts pour un même compte) puis hachée : une clé de
+     * limiteur finit en clair dans le cache, et la liste des adresses qu'on a
+     * essayé d'attaquer n'a rien à y faire.
+     *
+     * Rend null quand aucune adresse n'est fournie : une requête sans e-mail
+     * échouera de toute façon, et lui donner un compteur commun offrirait de
+     * quoi saturer ce compteur pour bloquer les autres.
+     */
+    private static function cleDeCompte(Request $request): ?string
+    {
+        $email = $request->input('email');
+
+        if (! is_string($email) || trim($email) === '') {
+            return null;
+        }
+
+        return 'oauth-compte:'.hash('sha256', mb_strtolower(trim($email)));
     }
 
     /**
