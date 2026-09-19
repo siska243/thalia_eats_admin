@@ -178,6 +178,28 @@ class RentalApiTest extends TestCase
             ->assertJsonPath('data.quote.total', 50);
     }
 
+    /**
+     * Le slug n'est pas accepte a la place de l'identifiant chiffre.
+     *
+     * Le parcours mobile navigue au slug, et c'est en l'envoyant ici qu'un
+     * vehicule parfaitement existant s'est retrouve « introuvable ». Le test
+     * fixe le contrat plutot que de le laisser se redecouvrir a l'usage.
+     */
+    public function test_reserver_exige_l_identifiant_chiffre_du_vehicule(): void
+    {
+        $this->connecte();
+
+        $this->postJson('/api/rental/bookings', array_merge($this->creneau(), [
+            'vehicle' => $this->vehicle->slug,
+            'pickup_location' => 'Gombe',
+        ]))->assertStatus(404);
+
+        $this->postJson('/api/rental/bookings', array_merge($this->creneau(), [
+            'vehicle' => Cipher::Encrypt($this->vehicle->id),
+            'pickup_location' => 'Gombe',
+        ]))->assertSuccessful();
+    }
+
     public function test_une_fiche_inconnue_rend_404(): void
     {
         $this->getJson('/api/rental/vehicles/pas-un-vehicule')->assertStatus(404);
