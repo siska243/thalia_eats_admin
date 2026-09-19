@@ -131,6 +131,58 @@ class RentalApiTest extends TestCase
             ->assertJsonPath('data.0.available', false);
     }
 
+    /** La fiche s'ouvre sans creneau, comme celle d'un restaurant. */
+    public function test_la_fiche_s_ouvre_sans_creneau(): void
+    {
+        $this->getJson('/api/rental/vehicles/'.$this->vehicle->slug)
+            ->assertSuccessful()
+            ->assertJsonPath('data.slug', $this->vehicle->slug)
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.quote', null);
+    }
+
+    /** Avec un creneau, elle porte le prix et la disponibilite sur ces heures. */
+    public function test_la_fiche_avec_un_creneau_porte_le_prix(): void
+    {
+        $this->getJson('/api/rental/vehicles/'.$this->vehicle->slug.'?'.http_build_query($this->creneau()))
+            ->assertSuccessful()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.quote.total', 50)
+            ->assertJsonPath('data.quote.deposit', 5);
+    }
+
+    /**
+     * Un vehicule pris sur le creneau se dit indisponible, sans disparaitre.
+     *
+     * Le drapeau du catalogue est calcule sur l'instant : il ne peut pas dire
+     * si le vehicule est libre sur des heures futures. C'est la fiche qui
+     * tranche, une fois le creneau choisi.
+     */
+    public function test_la_fiche_dit_indisponible_sur_un_creneau_pris(): void
+    {
+        Booking::query()->create(array_merge($this->creneau(), [
+            'user_id' => User::factory()->create()->id,
+            'vehicle_id' => $this->vehicle->id,
+            'pickup_location' => 'Gombe',
+            'hourly_rate' => 10, 'duration_hours' => 5,
+            'total' => 50, 'deposit' => 5, 'balance' => 45,
+            'currency_id' => $this->currency->id,
+            'status' => Booking::STATUS_CONFIRMED,
+        ]));
+
+        $this->getJson('/api/rental/vehicles/'.$this->vehicle->slug.'?'.http_build_query($this->creneau()))
+            ->assertSuccessful()
+            ->assertJsonPath('data.available', false)
+            // Le prix reste annonce : le client doit savoir ce que couterait
+            // ce creneau avant d'en essayer un autre.
+            ->assertJsonPath('data.quote.total', 50);
+    }
+
+    public function test_une_fiche_inconnue_rend_404(): void
+    {
+        $this->getJson('/api/rental/vehicles/pas-un-vehicule')->assertStatus(404);
+    }
+
     /** La recherche porte sur la marque et le modele, comme /list-restaurant sur le nom. */
     public function test_le_catalogue_se_cherche_par_marque(): void
     {

@@ -91,6 +91,59 @@ class VehicleController extends Controller
     }
 
     /**
+     * Une fiche vehicule, comme /list-restaurant/{slug}.
+     *
+     * Le creneau reste facultatif : on ouvre la fiche pour regarder la
+     * voiture, et le prix n'apparait qu'une fois les heures choisies. Fourni,
+     * il rend le devis ET dit si le vehicule est libre sur ces heures precises
+     * — ce que le drapeau `available` du catalogue, calcule sur l'instant, ne
+     * peut pas dire.
+     */
+    public function show(VehicleSearchRequest $request, string $slug): JsonResponse
+    {
+        $vehicle = Vehicle::query()
+            ->rentable()
+            ->with('currency')
+            ->where('slug', $slug)
+            ->first();
+
+        if (! $vehicle) {
+            return ApiResponse::NOT_FOUND('Oups', 'Ce véhicule est introuvable');
+        }
+
+        $startsAt = $request->filled('starts_at')
+            ? Carbon::parse($request->input('starts_at'))
+            : null;
+
+        $endsAt = $request->filled('ends_at')
+            ? Carbon::parse($request->input('ends_at'))
+            : null;
+
+        $ligne = (new VehicleResource($vehicle))->toArray($request);
+
+        if (! $startsAt || ! $endsAt) {
+            return ApiResponse::GET_DATA(['data' => array_merge($ligne, [
+                'available' => ! $this->vehiculesEnCourse()->contains($vehicle->id),
+                'quote' => null,
+            ])]);
+        }
+
+        $libre = $this->availability->isVehicleAvailable($vehicle, $startsAt, $endsAt);
+        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt);
+
+        return ApiResponse::GET_DATA(['data' => array_merge($ligne, [
+            'available' => $libre,
+            'quote' => [
+                'duration_hours' => $quote->durationHours,
+                'total' => $quote->total,
+                'deposit' => $quote->deposit,
+                'balance' => $quote->balance,
+                'currency' => $quote->currency,
+            ],
+        ])]);
+    }
+
+    /**
      * Recherche par marque et modele, comme /list-restaurant sur le nom.
      *
      * Elle porte sur la liste deja chargee plutot que sur une clause SQL : le

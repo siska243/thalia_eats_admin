@@ -201,6 +201,7 @@ Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecritur
  * seulement a son proprietaire.
  */
 Route::get('/rental/vehicles', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'index']);
+Route::get('/rental/vehicles/{slug}', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'show']);
 
 Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
     Route::controller(\App\Http\Controllers\Api\Rental\BookingController::class)
