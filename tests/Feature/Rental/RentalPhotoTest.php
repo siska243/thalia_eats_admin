@@ -8,6 +8,7 @@ use App\Models\Chauffeur;
 use App\Models\Currency;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Settings\RentalSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
@@ -35,6 +36,18 @@ class RentalPhotoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        /*
+         * Les reglages sont declares ici : un autre test de la suite vide la
+         * table `settings`, et le calcul du prix tombe alors en 500. Passe
+         * seul, ce test ne l'aurait jamais montre.
+         */
+        RentalSettings::fake([
+            'deposit_percentage' => 10.0,
+            'refund_percentage' => 100.0,
+            'minimum_hours' => 1.0,
+            'pickup_code_max_attempts' => 3,
+        ], loadMissingValues: false);
 
         Storage::fake('uploads_image');
         Storage::fake('local');
