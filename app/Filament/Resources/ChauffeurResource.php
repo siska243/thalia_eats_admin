@@ -2,30 +2,28 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Tables\Filters\Filter;
-use Filament\Tables\Filters\TrashedFilter;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
-use App\Filament\Resources\ChauffeurResource\Pages\ListChauffeurs;
 use App\Filament\Resources\ChauffeurResource\Pages\CreateChauffeur;
 use App\Filament\Resources\ChauffeurResource\Pages\EditChauffeur;
-use App\Filament\Resources\ChauffeurResource\Pages;
+use App\Filament\Resources\ChauffeurResource\Pages\ListChauffeurs;
 use App\Models\Chauffeur;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -34,9 +32,9 @@ class ChauffeurResource extends Resource
 {
     protected static ?string $model = Chauffeur::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-identification';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-identification';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Location';
+    protected static string|\UnitEnum|null $navigationGroup = 'Location';
 
     protected static ?string $label = 'Chauffeur';
 
@@ -71,8 +69,11 @@ class ChauffeurResource extends Resource
                         ->required()
                         ->maxLength(255),
 
+                    // Meme disque que la photo du vehicule, pour la meme
+                    // raison : `uploads_image` est servi sous `/images`.
                     FileUpload::make('photo')
                         ->label('Photo')
+                        ->disk('uploads_image')
                         ->image()
                         ->imageEditor()
                         ->avatar()
@@ -81,7 +82,7 @@ class ChauffeurResource extends Resource
                 ]),
 
             Section::make('Permis')
-                ->description("Un permis périmé retire automatiquement le chauffeur des affectations possibles.")
+                ->description('Un permis périmé retire automatiquement le chauffeur des affectations possibles.')
                 ->columns(2)
                 ->schema([
                     TextInput::make('licence_number')
@@ -89,7 +90,7 @@ class ChauffeurResource extends Resource
                         ->maxLength(255),
 
                     DatePicker::make('licence_expires_at')
-                        ->label("Expire le")
+                        ->label('Expire le')
                         ->native(false)
                         ->displayFormat('d/m/Y'),
 
@@ -104,7 +105,7 @@ class ChauffeurResource extends Resource
     {
         return $table
             ->columns([
-                ImageColumn::make('photo')->label('')->circular(),
+                ImageColumn::make('photo')->label('')->disk('uploads_image')->circular(),
 
                 TextColumn::make('full_name')
                     ->label('Chauffeur')

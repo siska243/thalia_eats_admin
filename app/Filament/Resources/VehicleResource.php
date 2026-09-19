@@ -2,29 +2,27 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Tables\Filters\TrashedFilter;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
-use App\Filament\Resources\VehicleResource\Pages\ListVehicles;
 use App\Filament\Resources\VehicleResource\Pages\CreateVehicle;
 use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
-use App\Filament\Resources\VehicleResource\Pages;
+use App\Filament\Resources\VehicleResource\Pages\ListVehicles;
 use App\Models\Vehicle;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -33,9 +31,9 @@ class VehicleResource extends Resource
 {
     protected static ?string $model = Vehicle::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-truck';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-truck';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Location';
+    protected static string|\UnitEnum|null $navigationGroup = 'Location';
 
     protected static ?string $label = 'Véhicule';
 
@@ -81,8 +79,18 @@ class VehicleResource extends Resource
                         ->rows(3)
                         ->columnSpanFull(),
 
+                    /*
+                     * Le disque est obligatoire : sans lui, Filament ecrit sur
+                     * le disque par defaut (`storage/app`), que le serveur web
+                     * ne sert pas — alors que l'API annonce l'image sous
+                     * `/images/…` via ImageUrl. Le fichier partait donc a un
+                     * endroit, l'adresse pointait ailleurs, et aucune photo ne
+                     * s'affichait. `uploads_image` a pour racine
+                     * `public/images`, c'est le disque des photos de plats.
+                     */
                     FileUpload::make('image')
                         ->label('Photo')
+                        ->disk('uploads_image')
                         ->image()
                         ->imageEditor()
                         ->directory('vehicles')
@@ -117,7 +125,7 @@ class VehicleResource extends Resource
 
                     Toggle::make('is_active')
                         ->label('Proposé à la location')
-                        ->helperText("Décoché, le véhicule disparaît du catalogue sans toucher aux réservations déjà prises.")
+                        ->helperText('Décoché, le véhicule disparaît du catalogue sans toucher aux réservations déjà prises.')
                         ->default(true),
                 ]),
         ]);
@@ -127,7 +135,7 @@ class VehicleResource extends Resource
     {
         return $table
             ->columns([
-                ImageColumn::make('image')->label('')->circular(),
+                ImageColumn::make('image')->label('')->disk('uploads_image')->circular(),
 
                 TextColumn::make('reference')
                     ->label('Référence')
@@ -154,7 +162,7 @@ class VehicleResource extends Resource
 
                 TextColumn::make('hourly_rate')
                     ->label('Tarif horaire')
-                    ->formatStateUsing(fn ($state, Vehicle $record) => number_format((float) $state, 2, ',', ' ') . ' ' . $record->currency?->code)
+                    ->formatStateUsing(fn ($state, Vehicle $record) => number_format((float) $state, 2, ',', ' ').' '.$record->currency?->code)
                     ->sortable(),
 
                 TextColumn::make('bookings_count')
