@@ -2,6 +2,7 @@
 
 namespace App\Wrappers;
 
+use Exception;
 use Illuminate\Support\Facades\Http;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
@@ -46,7 +47,7 @@ class FirebasePushNotification
 
         try {
             $messaging->send($message);
-        } catch (\Exception $exception) {
+        } catch (Exception $exception) {
 
         }
 
@@ -89,7 +90,7 @@ class FirebasePushNotification
                 self::sendNotification($token, $title, $content);
             });
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
 
         }
 

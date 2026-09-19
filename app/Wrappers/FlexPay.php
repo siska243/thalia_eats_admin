@@ -2,6 +2,7 @@
 
 namespace App\Wrappers;
 
+use Exception;
 use App\Models\ConfigurationPayement;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -63,7 +64,7 @@ class FlexPay
                 return $response->json();
             }
             return $response->json();
-        } catch (\Exception $exception) {
+        } catch (Exception $exception) {
             return $exception;
         }
     }

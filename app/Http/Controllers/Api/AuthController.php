@@ -125,7 +125,7 @@ class AuthController extends Controller
                 "Votre compte est activé. Vous pouvez maintenant passer commande."
             );
         }
-        catch (\Exception $e) {
+        catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }

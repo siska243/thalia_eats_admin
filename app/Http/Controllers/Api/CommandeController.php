@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use Throwable;
 use App\Enums\CallBackEnum;
 use App\Events\PayementEvent;
 use App\Helpers\CurrentHelpers;
@@ -585,7 +586,7 @@ class CommandeController extends Controller
 
                 return ApiResponse::GET_DATA($status_paiement);
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -765,7 +766,7 @@ class CommandeController extends Controller
                         ]);
                     }
                 }
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 // Le canal « quotation » est peut-être précisément ce qui vient
                 // d'échouer : ne jamais laisser la récupération relever.
                 try {
@@ -773,7 +774,7 @@ class CommandeController extends Controller
                         'commande' => $commande->refernce,
                         'message' => $e->getMessage(),
                     ]);
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     // Rien à faire : une commande ne peut pas échouer à cause
                     // de la mesure.
                 }
@@ -1036,7 +1037,7 @@ class CommandeController extends Controller
             return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
 
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }

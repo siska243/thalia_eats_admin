@@ -2,18 +2,28 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ColorColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\StatusResource\Pages\ListStatuses;
+use App\Filament\Resources\StatusResource\Pages\CreateStatus;
+use App\Filament\Resources\StatusResource\Pages\EditStatus;
 use App\Filament\Resources\StatusResource\Pages;
 use App\Filament\Resources\StatusResource\RelationManagers;
 use App\Models\Status;
 use Filament\Forms;
 use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Guava\FilamentIconPicker\Forms\IconPicker;
-use Guava\FilamentIconPicker\Tables\IconColumn;
+use Guava\IconPicker\Forms\Components\IconPicker;
+use Guava\IconPicker\Tables\Columns\IconColumn;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -21,17 +31,17 @@ class StatusResource extends Resource
 {
     protected static ?string $model = Status::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-minus-circle';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-minus-circle';
 
     protected static ?string $label = "Status";
     protected static ?string $navigationLabel = "Status";
-    protected static ?string $navigationGroup = "Parametre";
-    public static function form(Form $form): Form
+    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
+        return $schema
+            ->components([
                 //
-                Forms\Components\Section::make()
+                Section::make()
                     ->columns(2)
                     ->schema([
                     TextInput::make('title'),
@@ -49,23 +59,23 @@ class StatusResource extends Resource
             ->columns([
                 //
                 IconColumn::make('icon'),
-                Tables\Columns\TextColumn::make('title'),
-                Tables\Columns\ColorColumn::make('color'),
-                Tables\Columns\ColorColumn::make('bg_color')
+                TextColumn::make('title'),
+                ColorColumn::make('color'),
+                ColorColumn::make('bg_color')
             ])
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -79,9 +89,9 @@ class StatusResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListStatuses::route('/'),
-            'create' => Pages\CreateStatus::route('/create'),
-            'edit' => Pages\EditStatus::route('/{record}/edit'),
+            'index' => ListStatuses::route('/'),
+            'create' => CreateStatus::route('/create'),
+            'edit' => EditStatus::route('/{record}/edit'),
         ];
     }
 }

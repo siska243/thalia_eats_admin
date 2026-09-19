@@ -2,11 +2,22 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\PaimentMethodResource\Pages\ListPaimentMethods;
+use App\Filament\Resources\PaimentMethodResource\Pages\CreatePaimentMethod;
+use App\Filament\Resources\PaimentMethodResource\Pages\EditPaimentMethod;
 use App\Filament\Resources\PaimentMethodResource\Pages;
 use App\Filament\Resources\PaimentMethodResource\RelationManagers;
 use App\Models\PaimentMethod;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -17,15 +28,15 @@ class PaimentMethodResource extends Resource
 {
     protected static ?string $model = PaimentMethod::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-credit-card';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-credit-card';
     protected static ?string $navigationLabel = "Methode de paiement";
-    protected static ?string $navigationGroup = "Parametre";
-    public static function form(Form $form): Form
+    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Section::make()->schema([
-                    Forms\Components\TextInput::make('title')
+        return $schema
+            ->components([
+                Section::make()->schema([
+                    TextInput::make('title')
                         ->required()
                         ->maxLength(255)
                 ])
@@ -37,14 +48,14 @@ class PaimentMethodResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('title')
+                TextColumn::make('title')
                     ->searchable(),
-                Tables\Columns\ToggleColumn::make('is_active'),
-                Tables\Columns\TextColumn::make('created_at')
+                ToggleColumn::make('is_active'),
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -52,16 +63,16 @@ class PaimentMethodResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -75,9 +86,9 @@ class PaimentMethodResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListPaimentMethods::route('/'),
-            'create' => Pages\CreatePaimentMethod::route('/create'),
-            'edit' => Pages\EditPaimentMethod::route('/{record}/edit'),
+            'index' => ListPaimentMethods::route('/'),
+            'create' => CreatePaimentMethod::route('/create'),
+            'edit' => EditPaimentMethod::route('/{record}/edit'),
         ];
     }
 }

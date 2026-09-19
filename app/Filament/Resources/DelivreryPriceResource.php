@@ -2,11 +2,21 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\DelivreryPriceResource\Pages\ListDelivreryPrices;
+use App\Filament\Resources\DelivreryPriceResource\Pages\CreateDelivreryPrice;
+use App\Filament\Resources\DelivreryPriceResource\Pages\EditDelivreryPrice;
 use App\Filament\Resources\DelivreryPriceResource\Pages;
 use App\Filament\Resources\DelivreryPriceResource\RelationManagers;
 use App\Models\DelivreryPrice;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\ToggleColumn;
@@ -18,32 +28,32 @@ class DelivreryPriceResource extends Resource
 {
     protected static ?string $model = DelivreryPrice::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-banknotes';
-    protected static ?string $navigationGroup = "Livraison";
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-banknotes';
+    protected static string | \UnitEnum | null $navigationGroup = "Livraison";
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('town_id')
+        return $schema
+            ->components([
+                Select::make('town_id')
                     ->required()
                     ->preload()
                     ->searchable()
                     ->relationship('town', 'title'),
-                Forms\Components\TextInput::make('interval_pricing')
+                TextInput::make('interval_pricing')
                     ->required()
                     ->numeric(),
 
-                Forms\Components\TextInput::make('interval_max_price')
+                TextInput::make('interval_max_price')
                     ->required()
                     ->numeric(),
-                Forms\Components\TextInput::make('frais')->label('Frais Livraison')
+                TextInput::make('frais')->label('Frais Livraison')
                     ->required()
                     ->numeric(),
-                Forms\Components\TextInput::make('service_price')->label('Frais service')
+                TextInput::make('service_price')->label('Frais service')
                     ->required()
                     ->numeric(),
-                Forms\Components\Select::make('currency_id')
+                Select::make('currency_id')
                     ->relationship('currency', 'title')
                     ->required(),
             ]);
@@ -53,35 +63,35 @@ class DelivreryPriceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('town.title')->label('Commune')
+                TextColumn::make('town.title')->label('Commune')
                     ->badge()
                     ->searchable()
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('interval_pricing')
+                TextColumn::make('interval_pricing')
                     ->label('Interval prix minimum')
                     ->numeric()
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('interval_max_price')
+                TextColumn::make('interval_max_price')
                     ->label('Interval prix maximum')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('frais')->label('Frais livraison')
+                TextColumn::make('frais')->label('Frais livraison')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('service_price')->label('Frais service')
+                TextColumn::make('service_price')->label('Frais service')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('currency.title')->label('Devise')
+                TextColumn::make('currency.title')->label('Devise')
                     ->numeric()
                     ->sortable(),
                 ToggleColumn::make('is_active'),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -89,16 +99,16 @@ class DelivreryPriceResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -112,9 +122,9 @@ class DelivreryPriceResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListDelivreryPrices::route('/'),
-            'create' => Pages\CreateDelivreryPrice::route('/create'),
-            'edit' => Pages\EditDelivreryPrice::route('/{record}/edit'),
+            'index' => ListDelivreryPrices::route('/'),
+            'create' => CreateDelivreryPrice::route('/create'),
+            'edit' => EditDelivreryPrice::route('/{record}/edit'),
         ];
     }
 }
