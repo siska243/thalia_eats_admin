@@ -5,13 +5,31 @@ namespace App\Http\Controllers\Api\Rental;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Rental\VehicleSearchRequest;
 use App\Http\Resources\Rental\VehicleResource;
+use App\Models\Booking;
+use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
 use App\Services\Rental\VehicleAvailability;
 use App\Wrappers\ApiResponse;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 
-/** Le catalogue des vehicules de location. */
+/**
+ * Le catalogue des vehicules de location.
+ *
+ * Il se consulte de deux facons, comme la liste des restaurants :
+ *
+ * - SANS creneau, c'est une vitrine. Tous les vehicules proposes a la
+ *   location, avec leur tarif horaire, et un drapeau `available` qui dit
+ *   lesquels sont en course a cet instant. Les indisponibles sont rendus
+ *   quand meme, pour etre grises plutot que caches : un vehicule pris ce
+ *   matin sera peut-etre libre demain, et le retirer du catalogue laisserait
+ *   croire qu'il n'existe pas.
+ *
+ * - AVEC un creneau, c'est une recherche. Seuls les vehicules libres sur ces
+ *   heures, chacun avec le prix de ce creneau, calcule par le meme service
+ *   que la reservation : le montant annonce est celui qui sera facture.
+ */
 class VehicleController extends Controller
 {
     public function __construct(
@@ -19,36 +37,91 @@ class VehicleController extends Controller
         private readonly BookingPricing $pricing,
     ) {}
 
-    /**
-     * Les vehicules libres sur un creneau, avec leur prix pour ce creneau.
-     *
-     * Le prix accompagne chaque vehicule : sans lui, le client compare des
-     * tarifs horaires et decouvre le total une fois son choix fait. Il est
-     * calcule par le meme service que la reservation, donc le montant annonce
-     * est celui qui sera facture.
-     */
     public function index(VehicleSearchRequest $request): JsonResponse
     {
-        $startsAt = Carbon::parse($request->input('starts_at'));
-        $endsAt = Carbon::parse($request->input('ends_at'));
+        $search = $request->input('search');
 
-        $data = $this->availability
-            ->availableVehicles($startsAt, $endsAt)
-            ->map(function ($vehicle) use ($request, $startsAt, $endsAt) {
+        $startsAt = $request->filled('starts_at')
+            ? Carbon::parse($request->input('starts_at'))
+            : null;
+
+        $endsAt = $request->filled('ends_at')
+            ? Carbon::parse($request->input('ends_at'))
+            : null;
+
+        $vehicles = $startsAt && $endsAt
+            ? $this->availability->availableVehicles($startsAt, $endsAt)
+            : Vehicle::query()->rentable()->with('currency')->get();
+
+        $vehicles = $this->filtrer($vehicles, $search);
+
+        // Un seul appel pour tout le catalogue : demander vehicule par
+        // vehicule s'il est libre ferait une requete par ligne affichee.
+        $enCourse = $startsAt ? collect() : $this->vehiculesEnCourse();
+
+        $data = $vehicles->map(function (Vehicle $vehicle) use ($request, $startsAt, $endsAt, $enCourse) {
+            $ligne = (new VehicleResource($vehicle))->toArray($request);
+
+            if ($startsAt && $endsAt) {
                 $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt);
 
-                return array_merge(
-                    (new VehicleResource($vehicle))->toArray($request),
-                    ['quote' => [
+                return array_merge($ligne, [
+                    // Ils sortent tous de availableVehicles : ils sont libres
+                    // sur ce creneau, par construction.
+                    'available' => true,
+                    'quote' => [
                         'duration_hours' => $quote->durationHours,
                         'total' => $quote->total,
                         'deposit' => $quote->deposit,
                         'balance' => $quote->balance,
                         'currency' => $quote->currency,
-                    ]],
-                );
-            });
+                    ],
+                ]);
+            }
 
-        return ApiResponse::GET_DATA(['data' => $data]);
+            return array_merge($ligne, [
+                'available' => ! $enCourse->contains($vehicle->id),
+                // Sans creneau, il n'y a pas de total a annoncer : seul le
+                // tarif horaire a un sens, et il est deja dans la ressource.
+                'quote' => null,
+            ]);
+        });
+
+        return ApiResponse::GET_DATA(['data' => $data->values()]);
+    }
+
+    /**
+     * Recherche par marque et modele, comme /list-restaurant sur le nom.
+     *
+     * Elle porte sur la liste deja chargee plutot que sur une clause SQL : le
+     * chemin avec creneau passe par `availableVehicles`, qui rend une
+     * collection, pas une requete. Filtrer aux deux endroits differemment
+     * aurait donne deux comportements de recherche selon qu'un creneau est
+     * fourni ou non.
+     */
+    private function filtrer(Collection $vehicles, ?string $search): Collection
+    {
+        if (! $search) {
+            return $vehicles;
+        }
+
+        $terme = mb_strtolower(trim($search));
+
+        return $vehicles->filter(
+            fn (Vehicle $vehicle) => str_contains(
+                mb_strtolower("{$vehicle->brand} {$vehicle->model} {$vehicle->description}"),
+                $terme,
+            )
+        );
+    }
+
+    /** Les vehicules occupes a cet instant precis. */
+    private function vehiculesEnCourse()
+    {
+        return Booking::query()
+            ->holding()
+            ->overlapping(now(), now())
+            ->pluck('vehicle_id')
+            ->unique();
     }
 }

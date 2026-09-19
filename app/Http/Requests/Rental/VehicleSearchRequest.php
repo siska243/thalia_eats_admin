@@ -5,11 +5,15 @@ namespace App\Http\Requests\Rental;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * La recherche de vehicules disponibles.
+ * La consultation du catalogue de vehicules.
  *
- * Le creneau est obligatoire : afficher un catalogue sans savoir quand le
- * client veut partir revient a lui montrer des voitures qu'il ne pourra pas
- * reserver.
+ * Le creneau est facultatif, comme la liste des restaurants n'exige pas
+ * d'heure de commande : on regarde d'abord les voitures, on choisit ses dates
+ * ensuite, sur la fiche. L'exiger ici obligeait le client a composer un
+ * creneau avant meme de savoir ce qui existe.
+ *
+ * Fourni, il fait calculer le prix du creneau et ne laisse que les vehicules
+ * libres — c'est ce dont la fiche a besoin.
  */
 class VehicleSearchRequest extends FormRequest
 {
@@ -22,8 +26,11 @@ class VehicleSearchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'starts_at' => ['required', 'date', 'after:now'],
-            'ends_at' => ['required', 'date', 'after:starts_at'],
+            // Les deux vont ensemble : un debut sans fin ne decrit pas un
+            // creneau, et le prix ne pourrait pas etre calcule.
+            'starts_at' => ['nullable', 'required_with:ends_at', 'date', 'after:now'],
+            'ends_at' => ['nullable', 'required_with:starts_at', 'date', 'after:starts_at'],
+            'search' => ['nullable', 'string', 'max:120'],
         ];
     }
 
@@ -31,9 +38,9 @@ class VehicleSearchRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'starts_at.required' => 'Indiquez à quelle heure vous souhaitez partir.',
+            'starts_at.required_with' => 'Indiquez à quelle heure vous souhaitez partir.',
             'starts_at.after' => 'La date de départ doit être à venir.',
-            'ends_at.required' => 'Indiquez à quelle heure vous comptez rendre le véhicule.',
+            'ends_at.required_with' => 'Indiquez à quelle heure vous comptez rendre le véhicule.',
             'ends_at.after' => 'La fin doit suivre le début.',
         ];
     }

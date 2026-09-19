@@ -79,11 +79,76 @@ class RentalApiTest extends TestCase
         $reponse->assertJsonPath('data.0.quote.balance', 45);
     }
 
-    public function test_le_catalogue_exige_un_creneau(): void
+    /**
+     * Le catalogue se consulte sans creneau, comme la liste des restaurants.
+     *
+     * On regarde les voitures d'abord, on choisit ses dates ensuite, sur la
+     * fiche. L'exiger ici obligeait le client a composer un creneau avant
+     * meme de savoir ce qui existe.
+     */
+    public function test_le_catalogue_se_consulte_sans_creneau(): void
     {
-        $this->connecte();
+        $reponse = $this->getJson('/api/rental/vehicles');
 
-        $this->getJson('/api/rental/vehicles')->assertStatus(422);
+        $reponse->assertSuccessful();
+        $reponse->assertJsonPath('data.0.slug', $this->vehicle->slug);
+        // Pas de creneau, donc pas de total a annoncer : seul le tarif
+        // horaire a un sens.
+        $reponse->assertJsonPath('data.0.quote', null);
+        $reponse->assertJsonPath('data.0.available', true);
+    }
+
+    /** Un debut sans fin ne decrit pas un creneau : le prix serait incalculable. */
+    public function test_un_creneau_incomplet_est_refuse(): void
+    {
+        $this->getJson('/api/rental/vehicles?starts_at='.urlencode($this->creneau()['starts_at']))
+            ->assertStatus(422);
+    }
+
+    /**
+     * Un vehicule en course reste au catalogue, marque indisponible.
+     *
+     * Le retirer laisserait croire qu'il n'existe pas, alors qu'il sera
+     * peut-etre libre demain. Le client le voit grise et peut ouvrir sa fiche.
+     */
+    public function test_un_vehicule_en_course_reste_visible_mais_indisponible(): void
+    {
+        Booking::query()->create([
+            'user_id' => User::factory()->create()->id,
+            'vehicle_id' => $this->vehicle->id,
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+            'pickup_location' => 'Gombe',
+            'hourly_rate' => 10, 'duration_hours' => 2,
+            'total' => 20, 'deposit' => 2, 'balance' => 18,
+            'currency_id' => $this->currency->id,
+            'status' => Booking::STATUS_IN_PROGRESS,
+        ]);
+
+        $this->getJson('/api/rental/vehicles')
+            ->assertSuccessful()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.available', false);
+    }
+
+    /** La recherche porte sur la marque et le modele, comme /list-restaurant sur le nom. */
+    public function test_le_catalogue_se_cherche_par_marque(): void
+    {
+        Vehicle::query()->create([
+            'brand' => 'Suzuki', 'model' => 'Alto',
+            'plate_number' => 'KIN-0099', 'hourly_rate' => 5,
+            'currency_id' => $this->currency->id,
+        ]);
+
+        $this->getJson('/api/rental/vehicles?search=suzuki')
+            ->assertSuccessful()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.brand', 'Suzuki');
+
+        $this->getJson('/api/rental/vehicles?search=land')
+            ->assertSuccessful()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.brand', 'Toyota');
     }
 
     public function test_le_catalogue_cache_un_vehicule_deja_pris(): void
