@@ -28,7 +28,12 @@ class DepositPayment
     /**
      * @return array{ok: bool, raison?: string, message?: string, url?: string, orderNumber?: string}
      */
-    public function initier(Booking $booking, string $method, string $phone): array
+    /**
+     * @param  array{success_url?: ?string, error_url?: ?string, cancel_url?: ?string}  $retours
+     *                                                                                            Les adresses de retour dans l'application. Absentes, on retombe sur le
+     *                                                                                            site, ce qui reste le comportement d'un appelant qui ne les envoie pas.
+     */
+    public function initier(Booking $booking, string $method, string $phone, array $retours = []): array
     {
         if ($booking->status !== Booking::STATUS_PENDING_PAYMENT) {
             return ['ok' => false, 'raison' => 'acompte_non_attendu'];
@@ -37,6 +42,12 @@ class DepositPayment
         if (! $booking->starts_at?->isFuture()) {
             return ['ok' => false, 'raison' => 'creneau_passe'];
         }
+
+        $retours = [
+            'success_url' => $retours['success_url'] ?? null,
+            'error_url' => $retours['error_url'] ?? null,
+            'cancel_url' => $retours['cancel_url'] ?? null,
+        ];
 
         $result = FlexPay::sendData([
             // Le montant fige, jamais celui de la requete.
@@ -48,10 +59,12 @@ class DepositPayment
             // La reference porte le prefixe « R- » : c'est elle qui, au
             // retour, distingue une location d'une commande de repas.
             'reference' => $booking->reference,
+            // Le client ne decide pas ou son paiement est confirme : cette
+            // adresse est appelee de serveur a serveur.
             'callback_url' => config('flexpay.callback_url'),
-            'approve_url' => config('app.url'),
-            'cancel_url' => config('app.url'),
-            'decline_url' => config('app.url'),
+            'approve_url' => $retours['success_url'] ?: config('app.url'),
+            'cancel_url' => $retours['cancel_url'] ?: config('app.url'),
+            'decline_url' => $retours['error_url'] ?: config('app.url'),
             'language' => 'fr',
             'description' => 'Acompte location Thalia Eats',
         ], $method);

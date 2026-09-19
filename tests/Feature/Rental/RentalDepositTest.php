@@ -117,6 +117,56 @@ class RentalDepositTest extends TestCase
         $this->assertSame(Booking::STATUS_PENDING_PAYMENT, $booking->refresh()->status);
     }
 
+    /**
+     * Le client revient dans l'application, pas sur le site.
+     *
+     * Le paiement d'une commande de repas transmet ses adresses de retour de
+     * la meme facon. Sans elles, un paiement par carte deposait le client sur
+     * le site web a la fin, et il devait rouvrir l'application a la main.
+     */
+    public function test_les_adresses_de_retour_du_client_sont_transmises(): void
+    {
+        Http::fake([
+            '*' => Http::response(['code' => '0', 'orderNumber' => 'FX-1', 'url' => 'https://carte.flexpay.cd/p/1'], 200),
+        ]);
+
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->postJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id).'/deposit', [
+            'method' => 'cart',
+            'success_url' => 'thalia-eats-app://custom-screens/checkout?slug=success',
+            'error_url' => 'thalia-eats-app://custom-screens/checkout?slug=error',
+            'cancel_url' => 'thalia-eats-app://custom-screens/checkout?slug=cancel',
+        ])
+            ->assertSuccessful()
+            // La passerelle carte rend l'adresse de sa page de saisie.
+            ->assertJsonPath('data.url', 'https://carte.flexpay.cd/p/1');
+
+        Http::assertSent(function ($request) {
+            return $request['approve_url'] === 'thalia-eats-app://custom-screens/checkout?slug=success'
+                && $request['cancel_url'] === 'thalia-eats-app://custom-screens/checkout?slug=cancel'
+                && $request['decline_url'] === 'thalia-eats-app://custom-screens/checkout?slug=error'
+                // L'adresse du webhook ne vient jamais du client.
+                && $request['callback_url'] === config('flexpay.callback_url');
+        });
+    }
+
+    /** Sans adresses de retour, le comportement d'avant : on retombe sur le site. */
+    public function test_sans_adresses_de_retour_on_retombe_sur_le_site(): void
+    {
+        $this->passerelleAccepte();
+
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->postJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id).'/deposit', [
+            'method' => 'mobile', 'phone' => '+243810000000',
+        ])->assertSuccessful();
+
+        Http::assertSent(fn ($request) => $request['approve_url'] === config('app.url'));
+    }
+
     public function test_une_reservation_deja_confirmee_n_engage_rien(): void
     {
         $this->passerelleAccepte();

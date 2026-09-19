@@ -111,7 +111,9 @@ class BookingController extends Controller
             return ApiResponse::BAD_REQUEST('telephone_invalide', 'Oups', 'Numéro de téléphone invalide.');
         }
 
-        $resultat = $this->deposit->initier($booking, $method, $phone);
+        $resultat = $this->deposit->initier($booking, $method, $phone, $request->only([
+            'success_url', 'error_url', 'cancel_url',
+        ]));
 
         if (! $resultat['ok']) {
             return ApiResponse::BAD_REQUEST(
