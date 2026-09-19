@@ -250,9 +250,37 @@ class RentalApiTest extends TestCase
             ->assertJsonPath('error', 'annulation_impossible');
     }
 
-    public function test_l_api_exige_une_authentification(): void
+    /**
+     * Le catalogue se consulte sans compte.
+     *
+     * On regarde les voitures avant de decider d'en louer une : exiger un
+     * jeton pour voir les prix perdrait le visiteur avant qu'il ait une
+     * raison de s'inscrire.
+     */
+    public function test_le_catalogue_se_consulte_sans_compte(): void
+    {
+        $reponse = $this->getJson('/api/rental/vehicles?'.http_build_query($this->creneau()));
+
+        $reponse->assertSuccessful();
+        $reponse->assertJsonPath('data.0.quote.total', 50);
+    }
+
+    /** La plaque identifie une voiture sur la voie publique : pas au catalogue. */
+    public function test_le_catalogue_public_ne_montre_pas_la_plaque(): void
     {
         $this->getJson('/api/rental/vehicles?'.http_build_query($this->creneau()))
-            ->assertStatus(401);
+            ->assertSuccessful()
+            ->assertJsonMissing(['plate_number' => 'KIN-0001']);
+    }
+
+    /** Reserver, en revanche, demande un compte. */
+    public function test_reserver_exige_une_authentification(): void
+    {
+        $this->postJson('/api/rental/bookings', array_merge($this->creneau(), [
+            'vehicle' => Cipher::Encrypt($this->vehicle->id),
+            'pickup_location' => 'Gombe',
+        ]))->assertStatus(401);
+
+        $this->getJson('/api/rental/bookings')->assertStatus(401);
     }
 }

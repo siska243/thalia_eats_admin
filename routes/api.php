@@ -189,9 +189,20 @@ Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecritur
  * prevoit qu'un assistant le fasse. Ouvrir ces routes aux agents demandera de
  * declarer des abilities explicites, ce qui se verra en relecture.
  */
-Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
-    Route::get('/vehicles', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'index']);
+/*
+ * Le catalogue est public, comme celui des restaurants.
+ *
+ * On regarde les voitures avant de decider d'en louer une, et exiger un
+ * compte pour simplement voir les prix perdrait le visiteur avant qu'il ait
+ * une raison de s'inscrire. La reservation, elle, reste derriere le jeton.
+ *
+ * Rien de sensible ne sort : VehicleResource n'expose pas la plaque
+ * d'immatriculation, qui n'apparait qu'une fois la reservation faite et
+ * seulement a son proprietaire.
+ */
+Route::get('/rental/vehicles', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'index']);
 
+Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
     Route::controller(\App\Http\Controllers\Api\Rental\BookingController::class)
         ->prefix('/bookings')
         ->group(function () {
