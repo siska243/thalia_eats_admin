@@ -96,6 +96,25 @@ class BookingResource extends JsonResource
                 ? $this->resource->pickup_code
                 : null,
 
+            /*
+             * L'echeance de paiement, pour le decompte affiche au client.
+             *
+             * Rendue uniquement tant que la reservation attend vraiment son
+             * acompte — et `statutEffectif()` tranche, pas `status` : une
+             * ligne encore `pending_payment` en base mais deja depassee sort
+             * d'ici en `expired`, et donnerait sinon un decompte negatif a
+             * cote d'un statut qui dit le contraire.
+             *
+             * Sur une reservation confirmee, terminee ou annulee, la colonne
+             * garde en base la valeur posee a la creation : la rendre telle
+             * quelle ferait decompter une course deja payee. Comme pour la
+             * plaque et le chauffeur, c'est le serveur qui decide ce qui a un
+             * sens, pas l'ecran.
+             */
+            'expires_at' => $this->resource->statutEffectif() === Booking::STATUS_PENDING_PAYMENT
+                ? $this->resource->expires_at
+                : null,
+
             'confirmed_at' => $this->resource->confirmed_at,
             'picked_up_at' => $this->resource->picked_up_at,
             'completed_at' => $this->resource->completed_at,

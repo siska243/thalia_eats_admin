@@ -257,6 +257,55 @@ class ReservationUniqueEtExpirationTest extends TestCase
         $this->assertFalse($ancienne->estExpiree());
     }
 
+    public function test_l_api_rend_l_echeance_pour_le_decompte(): void
+    {
+        Sanctum::actingAs($this->client, ['*']);
+
+        $booking = $this->reserver();
+
+        $reponse = $this->getJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id))
+            ->assertSuccessful();
+
+        $reponse->assertJsonPath('data.status', Booking::STATUS_PENDING_PAYMENT);
+        // Meme format ISO que les autres dates de la ressource : c'est ce que
+        // les deux applications savent deja lire.
+        $this->assertSame(
+            $booking->expires_at->toJSON(),
+            $reponse->json('data.expires_at'),
+        );
+    }
+
+    public function test_l_echeance_disparait_des_que_la_reservation_est_depassee(): void
+    {
+        Sanctum::actingAs($this->client, ['*']);
+
+        $booking = $this->reserver();
+        $booking->forceFill(['expires_at' => now()->subMinute()])->saveQuietly();
+
+        $reponse = $this->getJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id))
+            ->assertSuccessful();
+
+        // Pas de decompte negatif a cote d'un statut qui dirait le contraire :
+        // la ressource dit « expired », et plus d'echeance.
+        $reponse->assertJsonPath('data.status', Booking::STATUS_EXPIRED);
+        $reponse->assertJsonPath('data.expires_at', null);
+    }
+
+    public function test_l_echeance_ne_sort_pas_sur_une_reservation_deja_tranchee(): void
+    {
+        Sanctum::actingAs($this->client, ['*']);
+
+        // La colonne garde en base la valeur posee a la creation : sans ce
+        // garde, l'application afficherait un decompte sur une course payee.
+        foreach ([Booking::STATUS_CONFIRMED, Booking::STATUS_COMPLETED, Booking::STATUS_CANCELLED] as $statut) {
+            $booking = $this->reservationBrute($statut, now()->addMinutes(10));
+
+            $this->getJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id))
+                ->assertSuccessful()
+                ->assertJsonPath('data.expires_at', null);
+        }
+    }
+
     public function test_l_acompte_est_refuse_sur_une_reservation_perimee(): void
     {
         $booking = $this->reserver();
