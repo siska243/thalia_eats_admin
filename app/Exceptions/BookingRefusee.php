@@ -25,8 +25,19 @@ class BookingRefusee extends Exception
     /** La commune de prise en charge n'est pas desservie par la location. */
     public const HORS_ZONE = 'hors_zone';
 
-    public function __construct(public readonly string $raison)
-    {
+    /** La duree demandee sort des bornes du mode de tarification. */
+    public const DUREE_HORS_BORNES = 'duree_hors_bornes';
+
+    /**
+     * @param  string|null  $messageClient  La phrase a montrer, quand elle
+     *                                      depend des reglages et ne peut
+     *                                      donc pas etre figee cote
+     *                                      controleur.
+     */
+    public function __construct(
+        public readonly string $raison,
+        public readonly ?string $messageClient = null,
+    ) {
         parent::__construct($raison);
     }
 }

@@ -82,6 +82,19 @@ class BookingCreator
                 throw new BookingRefusee(BookingRefusee::MODE_INDISPONIBLE);
             }
 
+            /*
+             * Les bornes de duree sont commerciales et viennent des reglages.
+             * Une course de 24 heures demandee a l'heure est refusee, pas
+             * rebasculee en journee en douce : le client a choisi un mode et
+             * un prix, et un autre prix n'est pas le sien.
+             */
+            if (! $this->pricing->dureeDansLesBornes($mode, $startsAt, $endsAt)) {
+                throw new BookingRefusee(
+                    BookingRefusee::DUREE_HORS_BORNES,
+                    $this->pricing->messageHorsBornes($mode),
+                );
+            }
+
             $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
         } catch (InvalidArgumentException) {
             throw new BookingRefusee(BookingRefusee::CRENEAU_INVALIDE);

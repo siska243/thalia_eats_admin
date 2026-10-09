@@ -7,6 +7,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\SettingsPage;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 /**
@@ -74,6 +75,54 @@ class ManageRentalSettings extends SettingsPage
                         ->maxValue(10)
                         ->required()
                         ->helperText('Au-delà, le code se bloque et seul un administrateur peut le débloquer.'),
+                ]),
+
+            Section::make('Durée de location')
+                ->description("Les bornes proposées par l'application, et refusées par l'API au-delà. Une course de 24 heures est une journée : le plafond horaire ne dépasse pas 23.")
+                ->columns(2)
+                ->schema([
+                    TextInput::make('hours_min')
+                        ->label('Durée minimale à l\'heure')
+                        ->suffix('heures')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(1)
+                        ->maxValue(23)
+                        ->live()
+                        ->required()
+                        ->helperText('Sous cette durée, la réservation à l\'heure est refusée.'),
+
+                    TextInput::make('hours_max')
+                        ->label('Durée maximale à l\'heure')
+                        ->suffix('heures')
+                        ->numeric()
+                        ->integer()
+                        // Jamais sous le minimum, et jamais au-dessus de 23 :
+                        // 24 heures sont une journee, qui se facture au tarif
+                        // journalier.
+                        ->minValue(fn (Get $get): int => max(1, (int) $get('hours_min')))
+                        ->maxValue(23)
+                        ->required()
+                        ->helperText('Au-delà, le client doit réserver à la journée. 23 au maximum.'),
+
+                    TextInput::make('days_min')
+                        ->label('Durée minimale à la journée')
+                        ->suffix('jours')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(1)
+                        ->live()
+                        ->required()
+                        ->helperText('Sous cette durée, la réservation à la journée est refusée.'),
+
+                    TextInput::make('days_max')
+                        ->label('Durée maximale à la journée')
+                        ->suffix('jours')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(fn (Get $get): int => max(1, (int) $get('days_min')))
+                        ->required()
+                        ->helperText('Au-delà, la location se négocie de la main à la main.'),
                 ]),
 
             Section::make('Marque et contact')

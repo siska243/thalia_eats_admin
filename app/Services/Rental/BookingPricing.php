@@ -118,6 +118,47 @@ class BookingPricing
         return max(1.0, (float) ceil($minutes / (60 * self::HEURES_PAR_JOUR)));
     }
 
+    /**
+     * La duree demandee tient-elle dans les bornes du mode ?
+     *
+     * La regle vit ici, avec le calcul des unites facturees : c'est la meme
+     * duree qui est comptee et qui est bornee. Sans ce controle, une course
+     * de 24 heures reservee a l'heure se facture 24 heures la ou la journee
+     * coute bien moins — c'est le prix qui viendrait du client.
+     */
+    public function dureeDansLesBornes(string $mode, Carbon $startsAt, Carbon $endsAt): bool
+    {
+        [$min, $max] = $this->bornes($mode);
+
+        $unites = $mode === self::MODE_DAILY
+            ? $this->billableDays($startsAt, $endsAt)
+            : $this->billableHours($startsAt, $endsAt);
+
+        return $unites >= $min && $unites <= $max;
+    }
+
+    /**
+     * Les bornes du mode, en unites facturees.
+     *
+     * @return array{0: int, 1: int} le minimum et le maximum
+     */
+    public function bornes(string $mode): array
+    {
+        return $mode === self::MODE_DAILY
+            ? [$this->settings->days_min, $this->settings->days_max]
+            : [$this->settings->hours_min, $this->settings->hours_max];
+    }
+
+    /** La phrase montree au client quand sa duree sort des bornes. */
+    public function messageHorsBornes(string $mode): string
+    {
+        [$min, $max] = $this->bornes($mode);
+
+        $unite = $mode === self::MODE_DAILY ? 'jours' : 'heures';
+
+        return "La durée doit être comprise entre {$min} et {$max} {$unite}.";
+    }
+
     public function refundFor(float $amountPaid): float
     {
         return round($amountPaid * $this->settings->refund_percentage / 100, 2);

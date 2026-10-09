@@ -60,6 +60,25 @@ class RentalSettings extends Settings
      */
     public string $out_of_zone_message;
 
+    /**
+     * Les bornes de duree d'une reservation, par mode de tarification.
+     *
+     * Elles sont commerciales, pas techniques : au-dela de 23 heures une
+     * course est une journee, et une journee coute bien moins cher que 24
+     * heures facturees a l'heure. Ecrites en dur dans le mobile, elles
+     * n'auraient protege que l'ecran — l'API, elle, acceptait la reservation
+     * de 24 heures au tarif horaire. Elles vivent donc ici et le serveur les
+     * applique.
+     */
+    public int $hours_min;
+
+    /** Plafond horaire. 24 heures est une journee, le maximum reste 23. */
+    public int $hours_max;
+
+    public int $days_min;
+
+    public int $days_max;
+
     public static function group(): string
     {
         return 'rental';

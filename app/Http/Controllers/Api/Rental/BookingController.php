@@ -80,7 +80,9 @@ class BookingController extends Controller
             return ApiResponse::BAD_REQUEST(
                 $e->raison,
                 'Oups',
-                $this->messageDeRefus($e->raison),
+                // Le message peut dependre des reglages (les bornes de
+                // duree) : le service le compose, le controleur le relaie.
+                $e->messageClient ?? $this->messageDeRefus($e->raison),
             );
         }
 
@@ -220,6 +222,7 @@ class BookingController extends Controller
             BookingRefusee::VEHICULE_INDISPONIBLE => 'Ce véhicule est déjà réservé sur ce créneau.',
             BookingRefusee::CRENEAU_INVALIDE => 'La fin doit suivre le début.',
             BookingRefusee::MODE_INDISPONIBLE => "Ce véhicule n'est pas proposé à la journée.",
+            BookingRefusee::DUREE_HORS_BORNES => "La durée demandée n'est pas autorisée.",
             // Le texte vient des reglages : c'est la meme phrase que celle
             // affichee a cote du bouton WhatsApp, et le commercial la change
             // sans livraison.
