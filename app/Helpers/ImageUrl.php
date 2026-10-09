@@ -29,8 +29,22 @@ use Illuminate\Http\Request;
  */
 class ImageUrl
 {
-    public static function make(Request $request, ?string $fichier): string
+    /*
+     * Rend null plutot qu'une URL quand le nom de fichier est vide. Les
+     * Resources testent `$this->image ? … : null`, ce qui laisse passer la
+     * chaine vide : l'API annoncait alors `/images/`, l'application chargeait
+     * cette adresse et recevait un 404, visible dans l'inspecteur ngrok. Le
+     * test est fait ici, a la definition, et non dans chacune des cinq
+     * Resources qui appellent ce helper.
+     */
+    public static function make(Request $request, ?string $fichier): ?string
     {
-        return $request->getSchemeAndHttpHost() . '/images/' . $fichier;
+        $fichier = trim((string) $fichier, " \t\n\r\0\x0B/");
+
+        if ($fichier === '') {
+            return null;
+        }
+
+        return $request->getSchemeAndHttpHost().'/images/'.$fichier;
     }
 }
