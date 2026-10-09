@@ -163,6 +163,39 @@ class BookingAdminFormTest extends TestCase
             ->assertHasFormErrors(['ends_at']);
     }
 
+    /**
+     * Les bornes de duree valent aussi en back-office.
+     *
+     * Arbitrage du proprietaire : meme l'administrateur ne depasse pas. Le
+     * message est celui que lit le client, pour que les deux cotes racontent
+     * la meme regle.
+     */
+    public function test_une_duree_hors_bornes_est_refusee(): void
+    {
+        Livewire::test(CreateBooking::class)
+            ->fillForm($this->formData([
+                'starts_at' => '2026-10-01 10:00:00',
+                'ends_at' => '2026-10-02 10:00:00',
+            ]))
+            ->call('create')
+            ->assertHasFormErrors(['ends_at']);
+
+        $this->assertSame(0, Booking::query()->count());
+    }
+
+    public function test_une_duree_dans_les_bornes_passe(): void
+    {
+        Livewire::test(CreateBooking::class)
+            ->fillForm($this->formData([
+                'starts_at' => '2026-10-01 10:00:00',
+                'ends_at' => '2026-10-02 09:00:00',
+            ]))
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('23.00', Booking::query()->latest('id')->first()->duration_hours);
+    }
+
     public function test_une_reservation_nait_en_attente_de_paiement(): void
     {
         // C'est le paiement qui retient le vehicule, pas la saisie.

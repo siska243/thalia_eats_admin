@@ -17,10 +17,10 @@ class BookingPayment extends Model
 {
     use HasFactory;
 
-    /** Les 10 % regles en ligne au moment de reserver. */
+    /** La part reglee en ligne au moment de reserver, `deposit_percentage`. */
     public const KIND_DEPOSIT = 'deposit';
 
-    /** Les 90 % restants, remis en especes au chauffeur. */
+    /** Le solde, remis en especes au chauffeur. */
     public const KIND_BALANCE = 'balance';
 
     protected $guarded = [];

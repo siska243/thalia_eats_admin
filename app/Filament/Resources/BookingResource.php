@@ -143,6 +143,32 @@ class BookingResource extends Resource
                                     $fail('Ce véhicule est déjà pris sur ce créneau.');
                                 }
                             };
+                        })
+
+                        /*
+                         * Les bornes de duree valent aussi en back-office :
+                         * l'administrateur ne depasse pas plus que le client.
+                         *
+                         * La regle n'est pas reecrite ici, elle est demandee a
+                         * `BookingPricing`, la ou les unites facturees sont
+                         * comptees. Deux definitions auraient diverge, et ce
+                         * depot a deja paye ce motif deux fois.
+                         */
+                        ->rule(function (Get $get) {
+                            return function (string $attribute, $value, callable $fail) use ($get) {
+                                $startsAt = $get('starts_at');
+
+                                if (! $startsAt || ! $value) {
+                                    return;
+                                }
+
+                                $mode = $get('pricing_mode') ?: BookingPricing::MODE_HOURLY;
+                                $pricing = app(BookingPricing::class);
+
+                                if (! $pricing->dureeDansLesBornes($mode, Carbon::parse($startsAt), Carbon::parse($value))) {
+                                    $fail($pricing->messageHorsBornes($mode));
+                                }
+                            };
                         }),
 
                     /*

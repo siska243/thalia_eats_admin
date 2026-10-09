@@ -8,8 +8,8 @@ use Illuminate\Database\Seeder;
 /**
  * Le moyen de paiement « especes ».
  *
- * Le solde d'une location — les 90 % restants — est remis en liquide au
- * chauffeur. Sans cette ligne, la trace de cet encaissement n'aurait aucun
+ * Le solde d'une location — ce qui reste apres l'acompte — est remis en
+ * liquide au chauffeur. Sans cette ligne, la trace de cet encaissement n'aurait aucun
  * moyen de paiement a designer, et le rapprochement de fin de journee
  * deviendrait impossible.
  *

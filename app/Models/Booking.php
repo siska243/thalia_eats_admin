@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Exceptions\BookingRefusee;
+use App\Services\Rental\BookingPricing;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -90,7 +92,7 @@ class Booking extends Model
     protected static function booted(): void
     {
         static::creating(function (self $booking) {
-            $booking->reference ??= 'R-' . Str::upper(Str::random(10));
+            $booking->reference ??= 'R-'.Str::upper(Str::random(10));
         });
 
         /*
@@ -102,6 +104,36 @@ class Booking extends Model
          * presenter comme vivante. On rend l'ecart impossible a l'ecriture
          * plutot que de le rattraper dans chaque lecture.
          */
+        /*
+         * Les bornes de duree sont tenues a l'ecriture, pas seulement par
+         * l'API et par le formulaire.
+         *
+         * C'est le seul point par ou passent tous les chemins de creation —
+         * `BookingCreator`, le back-office, un futur import. Un garde de plus
+         * haut ne protege que son propre chemin, et une reservation de 24
+         * heures facturee a l'heure coute au commerce la difference avec une
+         * journee.
+         *
+         * Le controle ne se declenche que si le creneau ou le mode bougent :
+         * changer le statut d'une reservation ancienne, prise avant la regle,
+         * ne doit pas devenir impossible.
+         */
+        static::saving(function (self $booking) {
+            $creneauTouche = $booking->isDirty(['starts_at', 'ends_at', 'pricing_mode']);
+
+            if ($creneauTouche && $booking->starts_at && $booking->ends_at) {
+                $mode = $booking->pricing_mode ?: BookingPricing::MODE_HOURLY;
+                $pricing = app(BookingPricing::class);
+
+                if (! $pricing->dureeDansLesBornes($mode, $booking->starts_at, $booking->ends_at)) {
+                    throw new BookingRefusee(
+                        BookingRefusee::DUREE_HORS_BORNES,
+                        $pricing->messageHorsBornes($mode),
+                    );
+                }
+            }
+        });
+
         static::saving(function (self $booking) {
             if ($booking->cancelled_at && $booking->status !== self::STATUS_CANCELLED) {
                 $booking->status = self::STATUS_CANCELLED;

@@ -35,8 +35,9 @@ return new class extends Migration
             $table->foreignIdFor(PaimentMethod::class, 'paiment_method_id')->nullable();
             $table->foreignIdFor(StatusPayement::class, 'status_payement_id')->nullable();
 
-            // « deposit » : les 10 % en ligne. « balance » : les 90 % en
-            // especes, remis au chauffeur.
+            // « deposit » : la part reglee en ligne, dont le pourcentage
+            // vient des reglages. « balance » : le solde en especes, remis
+            // au chauffeur.
             $table->string('kind');
 
             $table->decimal('amount', 10, 2);

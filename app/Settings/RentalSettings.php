@@ -14,7 +14,7 @@ use Spatie\LaravelSettings\Settings;
  */
 class RentalSettings extends Settings
 {
-    /** Part du total demandee a la reservation. Le devis fixe 10 %. */
+    /** Part du total demandee a la reservation, avant confirmation. */
     public float $deposit_percentage;
 
     /**

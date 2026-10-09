@@ -6,6 +6,7 @@ use App\Models\Booking;
 use App\Models\Currency;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Settings\RentalSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,6 +27,26 @@ class BookingModelTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        /*
+         * Les bornes de duree sont tenues par le modele : sans reglages, la
+         * moindre ecriture de reservation echoue. La liste doit etre complete,
+         * `loadMissingValues: false` ne va rien chercher en base.
+         */
+        RentalSettings::fake([
+            'deposit_percentage' => 20.0,
+            'refund_percentage' => 100.0,
+            'minimum_hours' => 1.0,
+            'pickup_code_max_attempts' => 3,
+            'hours_min' => 1,
+            'hours_max' => 23,
+            'days_min' => 1,
+            'days_max' => 30,
+            'whatsapp_number' => '',
+            'brand_food' => 'Thalia Eats',
+            'brand_rental' => 'Thalia Trans',
+            'out_of_zone_message' => 'Nous ne desservons pas encore cette commune.',
+        ], loadMissingValues: false);
 
         $this->currency = Currency::query()->create([
             'title' => 'Dollars', 'code' => 'USD', 'is_active' => 1,

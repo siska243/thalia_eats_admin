@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Rental;
 
+use App\Exceptions\BookingRefusee;
 use App\Models\Booking;
 use App\Models\Currency;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Settings\RentalSettings;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -136,6 +138,55 @@ class RentalDurationBoundsTest extends TestCase
             ->assertSuccessful();
 
         $this->assertSame(1.0, (float) Booking::query()->value('billed_units'));
+    }
+
+    /**
+     * Le modele tient la borne, quel que soit le chemin.
+     *
+     * L'API et le formulaire refusent plus tot et plus proprement ; ce garde
+     * est le dernier, celui qui vaut pour un import, une commande artisan ou
+     * un futur appelant qui ne passerait par aucun des deux.
+     */
+    public function test_le_modele_refuse_une_ecriture_hors_bornes(): void
+    {
+        $this->expectException(BookingRefusee::class);
+
+        Booking::query()->create([
+            'user_id' => $this->client->id,
+            'vehicle_id' => $this->vehicle->id,
+            'starts_at' => '2026-10-01 10:00:00',
+            'ends_at' => '2026-10-02 10:00:00',
+            'pickup_location' => 'Gombe',
+        ]);
+    }
+
+    /**
+     * Une reservation ancienne reste modifiable.
+     *
+     * Les lignes prises avant la regle sortent des bornes : bloquer leur
+     * changement de statut rendrait impossible de les terminer ou de les
+     * annuler, et le garde ferait plus de degats que le defaut qu'il corrige.
+     */
+    public function test_une_reservation_hors_bornes_deja_en_base_reste_modifiable(): void
+    {
+        $id = DB::table('bookings')->insertGetId([
+            'reference' => 'R-ANCIENNE', 'user_id' => $this->client->id,
+            'vehicle_id' => $this->vehicle->id,
+            'starts_at' => '2026-10-01 10:00:00',
+            'ends_at' => '2026-10-03 10:00:00',
+            'pickup_location' => 'Gombe',
+            'status' => Booking::STATUS_CONFIRMED,
+            'hourly_rate' => 10, 'duration_hours' => 48,
+            'total' => 480, 'deposit' => 96, 'balance' => 384,
+            'currency_id' => $this->vehicle->currency_id,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        Booking::query()->whereKey($id)->first()->update([
+            'status' => Booking::STATUS_COMPLETED,
+        ]);
+
+        $this->assertSame(Booking::STATUS_COMPLETED, Booking::query()->whereKey($id)->value('status'));
     }
 
     /**
