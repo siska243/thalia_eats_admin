@@ -42,6 +42,7 @@ class RentalDepositTest extends TestCase
             'hours_max' => 23,
             'days_min' => 1,
             'days_max' => 30,
+            'lead_time_minutes' => 30,
             'whatsapp_number' => '',
             'brand_food' => 'Thalia Eats',
             'brand_rental' => 'Thalia Trans',

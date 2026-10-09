@@ -159,6 +159,29 @@ class BookingPricing
         return "La durée doit être comprise entre {$min} et {$max} {$unite}.";
     }
 
+    /**
+     * Le depart respecte-t-il le delai de prevenance ?
+     *
+     * Ni dans le passe, ni dans l'instant : une course demande qu'on joigne
+     * un chauffeur et qu'il roule. La regle est rangee avec les bornes de
+     * duree parce que c'est la meme matiere — ce qu'un creneau a le droit
+     * d'etre — et qu'une seule classe doit pouvoir repondre pour toutes.
+     */
+    public function respecteLeDelaiDePrevenance(Carbon $startsAt): bool
+    {
+        return $startsAt->greaterThanOrEqualTo(
+            now()->addMinutes($this->settings->lead_time_minutes),
+        );
+    }
+
+    /** La phrase montree au client quand son depart est trop proche. */
+    public function messageDelaiDePrevenance(): string
+    {
+        $minutes = $this->settings->lead_time_minutes;
+
+        return "Le départ doit être prévu au moins {$minutes} minutes à l'avance.";
+    }
+
     public function refundFor(float $amountPaid): float
     {
         return round($amountPaid * $this->settings->refund_percentage / 100, 2);

@@ -44,6 +44,12 @@ class RentalConfigController extends Controller
                     'hours_max' => $settings->hours_max,
                     'days_min' => $settings->days_min,
                     'days_max' => $settings->days_max,
+                    /*
+                     * Le delai de prevenance, pour que l'ecran grise les
+                     * creneaux trop proches au lieu de laisser le client
+                     * composer une demande que l'API refusera.
+                     */
+                    'lead_time_minutes' => $settings->lead_time_minutes,
                 ],
                 /*
                  * L'identifiant brut, pas un uid chiffre : il repart tel quel

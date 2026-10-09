@@ -25,7 +25,14 @@ class BookingRequest extends FormRequest
     {
         return [
             'vehicle' => ['required', 'string'],
-            'starts_at' => ['required', 'date', 'after:now'],
+            /*
+             * Pas de `after:now` ici : le depart est juge par
+             * `BookingPricing`, qui tient le delai de prevenance. Deux regles
+             * pour la meme question donneraient deux refus differents selon
+             * qu'on est une minute ou vingt minutes trop tot, et c'est
+             * exactement le motif qui a deja produit des bugs ici.
+             */
+            'starts_at' => ['required', 'date'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
             // Le mode de tarification choisi. Absent, c'est l'heure.
             'pricing_mode' => ['nullable', Rule::in(BookingPricing::MODES)],
@@ -49,7 +56,6 @@ class BookingRequest extends FormRequest
     {
         return [
             'vehicle.required' => 'Choisissez un véhicule.',
-            'starts_at.after' => 'La date de départ doit être à venir.',
             'ends_at.after' => 'La fin doit suivre le début.',
             'pickup_location.required' => 'Indiquez où le chauffeur doit vous prendre en charge.',
             'pickup_town_id.exists' => 'Cette commune est inconnue.',

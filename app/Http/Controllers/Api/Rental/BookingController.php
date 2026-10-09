@@ -223,6 +223,9 @@ class BookingController extends Controller
             BookingRefusee::CRENEAU_INVALIDE => 'La fin doit suivre le début.',
             BookingRefusee::MODE_INDISPONIBLE => "Ce véhicule n'est pas proposé à la journée.",
             BookingRefusee::DUREE_HORS_BORNES => "La durée demandée n'est pas autorisée.",
+            // Filet seulement : le service compose la phrase, qui nomme le
+            // delai lu dans les reglages.
+            BookingRefusee::DELAI_PREVENANCE => 'Le départ demandé est trop proche.',
             // Le service compose le message : il nomme la réservation qui
             // bloque. Cette phrase n'est qu'un filet si la référence manque.
             BookingRefusee::RESERVATION_NON_REGLEE => "Vous avez déjà une réservation non réglée. Payez-la ou annulez-la avant d'en réserver une autre.",

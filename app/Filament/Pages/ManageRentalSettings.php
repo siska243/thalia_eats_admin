@@ -123,6 +123,15 @@ class ManageRentalSettings extends SettingsPage
                         ->minValue(fn (Get $get): int => max(1, (int) $get('days_min')))
                         ->required()
                         ->helperText('Au-delà, la location se négocie de la main à la main.'),
+
+                    TextInput::make('lead_time_minutes')
+                        ->label('Délai de prévenance')
+                        ->suffix('minutes')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(0)
+                        ->required()
+                        ->helperText("Délai minimal entre la réservation et le départ. L'API refuse un départ passé ou trop proche. Le back-office, lui, reste libre : une course prise au comptoir peut partir tout de suite."),
                 ]),
 
             Section::make('Marque et contact')

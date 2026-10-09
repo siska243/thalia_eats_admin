@@ -79,6 +79,15 @@ class RentalSettings extends Settings
 
     public int $days_max;
 
+    /**
+     * Le delai de prevenance, en minutes, entre maintenant et le depart.
+     *
+     * Une course ne se prend pas pour tout de suite : il faut joindre un
+     * chauffeur et le faire partir. Commercial, donc reglable : trente
+     * minutes aujourd'hui, autre chose le jour ou la flotte grandit.
+     */
+    public int $lead_time_minutes;
+
     public static function group(): string
     {
         return 'rental';

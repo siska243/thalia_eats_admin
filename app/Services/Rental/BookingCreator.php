@@ -124,6 +124,23 @@ class BookingCreator
                 );
             }
 
+            /*
+             * Ni dans le passe, ni dans l'instant.
+             *
+             * Le controle est ici, dans le chemin de l'API client, et pas
+             * dans le crochet du modele : un administrateur doit pouvoir
+             * enregistrer une course prise au comptoir qui part dans dix
+             * minutes. Les bornes de duree, elles, protegent un prix et
+             * valent pour tout le monde ; celle-ci protege une organisation,
+             * et le comptoir sait s'organiser.
+             */
+            if (! $this->pricing->respecteLeDelaiDePrevenance($startsAt)) {
+                throw new BookingRefusee(
+                    BookingRefusee::DELAI_PREVENANCE,
+                    $this->pricing->messageDelaiDePrevenance(),
+                );
+            }
+
             $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
         } catch (InvalidArgumentException) {
             throw new BookingRefusee(BookingRefusee::CRENEAU_INVALIDE);

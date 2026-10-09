@@ -29,6 +29,15 @@ class BookingRefusee extends Exception
     public const DUREE_HORS_BORNES = 'duree_hors_bornes';
 
     /**
+     * Le depart demande est passe, ou trop proche.
+     *
+     * Une course ne se prend pas pour tout de suite : il faut joindre un
+     * chauffeur. Le delai vit dans les reglages, et le message qui accompagne
+     * ce code le nomme.
+     */
+    public const DELAI_PREVENANCE = 'delai_prevenance';
+
+    /**
      * Le client a deja une reservation non reglee, encore valide.
      *
      * Une seule course en cours a la fois : il paie celle-la ou il l'annule.
