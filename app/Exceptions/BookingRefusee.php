@@ -29,6 +29,15 @@ class BookingRefusee extends Exception
     public const DUREE_HORS_BORNES = 'duree_hors_bornes';
 
     /**
+     * Le client a deja une reservation non reglee, encore valide.
+     *
+     * Une seule course en cours a la fois : il paie celle-la ou il l'annule.
+     * Le message qui accompagne ce code nomme la reservation concernee, sinon
+     * le client cherche laquelle le bloque dans une liste.
+     */
+    public const RESERVATION_NON_REGLEE = 'reservation_non_reglee';
+
+    /**
      * @param  string|null  $messageClient  La phrase a montrer, quand elle
      *                                      depend des reglages et ne peut
      *                                      donc pas etre figee cote

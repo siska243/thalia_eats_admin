@@ -67,7 +67,17 @@ class DepositWebhook
          * caisse, et relancer settleDeposit sur une reservation perdue lui
          * rendrait un vehicule attribue entre-temps.
          */
-        if ($booking->status !== Booking::STATUS_PENDING_PAYMENT) {
+        /*
+         * `expired` est accepte ici, alors qu'il est refuse a l'engagement du
+         * paiement.
+         *
+         * Le client a engage son acompte avant l'expiration ; la confirmation
+         * arrive apres, parce que mobile money prend parfois plusieurs
+         * minutes. Refuser serait encaisser son argent et lui rendre un
+         * « deja traite » : il a paye, il a sa voiture. C'est l'engagement qui
+         * ferme la porte, pas l'encaissement.
+         */
+        if (! in_array($booking->status, [Booking::STATUS_PENDING_PAYMENT, Booking::STATUS_EXPIRED], true)) {
             return ['code' => 'deja_traite', 'message' => 'Réservation déjà traitée'];
         }
 

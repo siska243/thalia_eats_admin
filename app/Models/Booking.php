@@ -46,6 +46,24 @@ class Booking extends Model
         self::STATUS_IN_PROGRESS,
     ];
 
+    /**
+     * Les statuts d'une course payee et pas encore finie.
+     *
+     * C'est ce qui ouvre l'acces a l'identite du vehicule et du chauffeur :
+     * le client a regle son acompte, il a le droit de savoir quelle voiture
+     * vient et qui conduit ; une fois la course terminee, il n'a plus rien a
+     * reconnaitre.
+     *
+     * La liste coincide aujourd'hui avec `HOLDING_STATUSES`, mais ce n'est
+     * qu'une coincidence : l'une dit qui retient un creneau, l'autre ce qu'on
+     * a le droit de montrer. Les confondre ferait fuiter un chauffeur le jour
+     * ou l'une des deux bougera.
+     */
+    public const COURSE_ENGAGEE = [
+        self::STATUS_CONFIRMED,
+        self::STATUS_IN_PROGRESS,
+    ];
+
     protected $guarded = [];
 
     /*
@@ -93,6 +111,23 @@ class Booking extends Model
     {
         static::creating(function (self $booking) {
             $booking->reference ??= 'R-'.Str::upper(Str::random(10));
+
+            /*
+             * Une reservation qui attend son acompte porte sa date de
+             * peremption des sa naissance.
+             *
+             * Ici et pas dans `BookingCreator` : le back-office cree aussi des
+             * reservations, et un futur import en creera d'autres. Un garde
+             * place dans un seul chemin de creation ne protege que celui-la,
+             * et une reservation sans `expires_at` bloquerait son client sans
+             * jamais expirer.
+             *
+             * Le delai vient de la configuration, partage avec les commandes
+             * de repas : la regle est la meme des deux cotes.
+             */
+            if ($booking->status === self::STATUS_PENDING_PAYMENT) {
+                $booking->expires_at ??= now()->addMinutes(self::delaiExpiration());
+            }
         });
 
         /*
@@ -190,10 +225,81 @@ class Booking extends Model
             ->where('ends_at', '>', $startsAt);
     }
 
+    /** Le delai, en minutes, avant qu'une reservation non reglee expire. */
+    public static function delaiExpiration(): int
+    {
+        return (int) config('expiration.minutes');
+    }
+
+    /**
+     * La reservation a-t-elle depasse son delai de paiement ?
+     *
+     * Calcule a la lecture, sans attendre la tache planifiee. Si le
+     * planificateur s'arrete — il l'a deja fait, personne ne s'en apercoit
+     * tout de suite — la regle reste juste : le client n'est pas bloque un
+     * jour de plus par une reservation qu'il n'a jamais payee.
+     *
+     * `expires_at` nul veut dire « jamais expiree » : les lignes ecrites avant
+     * cette regle n'en portent pas, et les traiter comme expirees ferait
+     * disparaitre des reservations vivantes. La migration s'occupe d'elles.
+     */
+    public function estExpiree(): bool
+    {
+        return $this->status === self::STATUS_PENDING_PAYMENT
+            && $this->expires_at !== null
+            && $this->expires_at->isPast();
+    }
+
+    /**
+     * Le statut tel qu'il doit etre lu, expiration comprise.
+     *
+     * Tout ce qui montre ou teste un statut passe par ici, jamais par
+     * `$booking->status` nu : sinon l'ecran client dirait « en attente de
+     * paiement » pendant que le serveur refuse l'acompte.
+     */
+    public function statutEffectif(): string
+    {
+        return $this->estExpiree() ? self::STATUS_EXPIRED : $this->status;
+    }
+
+    /**
+     * Ecrit l'expiration en base, si elle est due.
+     *
+     * Appelee au moment ou le client tente une nouvelle reservation : le
+     * laisser passer sans ecrire laisserait une ligne « en attente » eternelle
+     * dans l'administration et dans ses propres ecrans.
+     */
+    public function expirerSiNecessaire(): bool
+    {
+        if (! $this->estExpiree()) {
+            return false;
+        }
+
+        $this->status = self::STATUS_EXPIRED;
+        $this->save();
+
+        return true;
+    }
+
+    /** Les reservations non reglees qui bloquent encore leur client. */
+    public function scopeEnAttenteDePaiement(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_PENDING_PAYMENT);
+    }
+
+    /** Les reservations non reglees dont le delai est passe. */
+    public function scopeExpirable(Builder $query): Builder
+    {
+        return $query
+            ->where('status', self::STATUS_PENDING_PAYMENT)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now());
+    }
+
     /** Annulable tant que la course n'a pas commence. */
     public function isCancellable(): bool
     {
-        return in_array($this->status, [self::STATUS_PENDING_PAYMENT, self::STATUS_CONFIRMED], true)
+        return in_array($this->statutEffectif(), [self::STATUS_PENDING_PAYMENT, self::STATUS_CONFIRMED], true)
             && $this->starts_at?->isFuture();
     }
 

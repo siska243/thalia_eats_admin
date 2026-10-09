@@ -223,11 +223,15 @@ class BookingController extends Controller
             BookingRefusee::CRENEAU_INVALIDE => 'La fin doit suivre le début.',
             BookingRefusee::MODE_INDISPONIBLE => "Ce véhicule n'est pas proposé à la journée.",
             BookingRefusee::DUREE_HORS_BORNES => "La durée demandée n'est pas autorisée.",
+            // Le service compose le message : il nomme la réservation qui
+            // bloque. Cette phrase n'est qu'un filet si la référence manque.
+            BookingRefusee::RESERVATION_NON_REGLEE => "Vous avez déjà une réservation non réglée. Payez-la ou annulez-la avant d'en réserver une autre.",
             // Le texte vient des reglages : c'est la meme phrase que celle
             // affichee a cote du bouton WhatsApp, et le commercial la change
             // sans livraison.
             BookingRefusee::HORS_ZONE => app(RentalSettings::class)->out_of_zone_message,
             'acompte_non_attendu' => "Cette réservation n'attend plus d'acompte.",
+            'reservation_expiree' => 'Cette réservation a expiré faute de paiement. Réservez à nouveau.',
             'creneau_passe' => 'Ce créneau est déjà passé.',
             'paiement_refuse' => "Le paiement n'a pas pu être engagé, réessayez.",
             default => "Cette réservation n'a pas pu être enregistrée.",

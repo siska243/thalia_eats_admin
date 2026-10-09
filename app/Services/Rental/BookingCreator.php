@@ -45,6 +45,35 @@ class BookingCreator
         }
 
         /*
+         * Une seule reservation non reglee a la fois.
+         *
+         * Sans cette regle, un client pouvait empiler les reservations
+         * impayees : elles ne retiennent rien, mais elles remplissent
+         * l'administration, et le jour ou il en paie une, personne ne sait
+         * laquelle il voulait.
+         *
+         * Les reservations deja perimees sont expirees ici, sur-le-champ, et
+         * ne bloquent pas : laisser le client attendre la tache planifiee le
+         * priverait de reserver pendant un quart d'heure, sans lui dire
+         * pourquoi ni combien de temps.
+         */
+        $this->expirerLesReservationsPerimees($user);
+
+        $bloquante = Booking::query()
+            ->where('user_id', $user->id)
+            ->enAttenteDePaiement()
+            ->oldest()
+            ->first();
+
+        if ($bloquante) {
+            throw new BookingRefusee(
+                BookingRefusee::RESERVATION_NON_REGLEE,
+                "Votre réservation #{$bloquante->reference} n'est pas encore réglée. "
+                ."Payez l'acompte ou annulez-la avant d'en réserver une autre.",
+            );
+        }
+
+        /*
          * La location ne dessert que certaines communes.
          *
          * Le controle est ici, pas dans la validation de la requete : il
@@ -110,5 +139,22 @@ class BookingCreator
             'ends_at' => $endsAt,
             'status' => Booking::STATUS_PENDING_PAYMENT,
         ], $details, $quote->toBookingAttributes()));
+    }
+
+    /**
+     * Marque expirees les reservations non reglees du client dont le delai est
+     * passe.
+     *
+     * L'ecriture passe par le modele et non par un `update()` en masse : le
+     * crochet `saving` tient la coherence entre statut et dates, et une mise a
+     * jour globale la contournerait.
+     */
+    private function expirerLesReservationsPerimees(User $user): void
+    {
+        Booking::query()
+            ->where('user_id', $user->id)
+            ->expirable()
+            ->get()
+            ->each(fn (Booking $booking) => $booking->expirerSiNecessaire());
     }
 }

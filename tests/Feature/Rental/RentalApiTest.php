@@ -435,10 +435,20 @@ class RentalApiTest extends TestCase
 
         $this->connecte();
 
-        $this->postJson('/api/rental/bookings', array_merge($this->creneau(), [
+        $reponse = $this->postJson('/api/rental/bookings', array_merge($this->creneau(), [
             'vehicle' => Cipher::Encrypt($this->vehicle->id),
             'pickup_location' => 'Gombe',
-        ]))->assertSuccessful()->assertJsonPath('data.chauffeur.full_name', 'Jean Kabila');
+        ]))->assertSuccessful();
+
+        /*
+         * Le chauffeur est attache a la reservation, mais il n'est pas rendu :
+         * rien n'est encore paye. Son identite — nom, telephone, photo — ne
+         * sort qu'une fois l'acompte recu (voir BookingPlaqueEtChauffeurTest).
+         */
+        $reponse->assertJsonPath('data.chauffeur', null);
+
+        $booking = Booking::query()->latest('id')->first();
+        $this->assertSame($chauffeur->id, (int) $booking->chauffeur_id);
     }
 
     public function test_on_ne_lit_pas_la_reservation_d_un_autre(): void

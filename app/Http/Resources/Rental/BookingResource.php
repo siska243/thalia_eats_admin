@@ -18,7 +18,14 @@ class BookingResource extends JsonResource
         return [
             'uid' => Cipher::Encrypt($this->resource->id),
             'reference' => $this->resource->reference,
-            'status' => $this->resource->status,
+            /*
+             * Le statut lu, expiration comprise.
+             *
+             * Une reservation perimee s'annonce « expired » des la lecture,
+             * sans attendre la tache planifiee : sinon l'ecran proposerait de
+             * payer un acompte que le serveur refuse deja.
+             */
+            'status' => $this->resource->statutEffectif(),
 
             'starts_at' => $this->resource->starts_at,
             'ends_at' => $this->resource->ends_at,
@@ -52,11 +59,26 @@ class BookingResource extends JsonResource
 
             'vehicle' => new VehicleResource($this->resource->vehicle),
 
-            // La plaque arrive ici, une fois la reservation faite : c'est a ce
-            // moment qu'elle sert, pour reconnaitre la voiture qui se gare.
-            'plate_number' => $this->resource->vehicle?->plate_number,
+            /*
+             * La plaque et le chauffeur ne sortent que pendant la course.
+             *
+             * Meme raisonnement que pour `pickup_code` plus bas : les masquer
+             * dans l'application ne masque rien, la reponse reste lisible par
+             * qui detient le jeton. La plaque designe un vehicule precis sur
+             * la voie publique et le chauffeur est une personne nommee, avec
+             * sa photo et son telephone — ce sont deux identites reelles, pas
+             * des details d'affichage.
+             *
+             * Elles ne servent qu'une fois la course payee, pour reconnaitre
+             * la voiture qui se gare et joindre son conducteur. Avant,
+             * l'acompte n'est pas arrive ; apres, la course est finie et il
+             * n'y a plus rien a reconnaitre. Dans les deux cas, null.
+             */
+            'plate_number' => $this->courseEngagee()
+                ? $this->resource->vehicle?->plate_number
+                : null,
 
-            'chauffeur' => $this->resource->chauffeur
+            'chauffeur' => $this->courseEngagee() && $this->resource->chauffeur
                 ? new ChauffeurResource($this->resource->chauffeur)
                 : null,
 
@@ -84,6 +106,19 @@ class BookingResource extends JsonResource
                 : null,
             'refunded_at' => $this->resource->refunded_at,
         ];
+    }
+
+    /**
+     * La course est-elle payee et pas encore finie ?
+     *
+     * Une seule definition, et la liste des statuts vit sur le modele : les
+     * deux cles qui exposent une identite reelle — la plaque et le chauffeur
+     * — la partagent. Toute autre ressource qui voudrait les rendre passe par
+     * ici plutot que de recopier le test.
+     */
+    private function courseEngagee(): bool
+    {
+        return in_array($this->resource->status, Booking::COURSE_ENGAGEE, true);
     }
 
     private function estLeClient(Request $request): bool

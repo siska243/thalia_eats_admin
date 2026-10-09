@@ -35,6 +35,16 @@ class DepositPayment
      */
     public function initier(Booking $booking, string $method, string $phone, array $retours = []): array
     {
+        /*
+         * `statutEffectif()` et non `status` : une reservation perimee attend
+         * encore son acompte en base tant que la tache planifiee n'est pas
+         * passee. Engager le paiement la-dessus ferait debiter un client pour
+         * une reservation que la creation suivante annulera.
+         */
+        if ($booking->statutEffectif() === Booking::STATUS_EXPIRED) {
+            return ['ok' => false, 'raison' => 'reservation_expiree'];
+        }
+
         if ($booking->status !== Booking::STATUS_PENDING_PAYMENT) {
             return ['ok' => false, 'raison' => 'acompte_non_attendu'];
         }

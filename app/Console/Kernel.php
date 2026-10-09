@@ -25,6 +25,22 @@ class Kernel extends ConsoleKernel
         $schedule->command('commandes:annuler-abandonnees')
             ->hourly()
             ->withoutOverlapping();
+
+        /*
+         * L'expiration des reservations et des commandes non reglees.
+         *
+         * Toutes les minutes, parce que le delai est de quinze : passer a
+         * l'heure ferait attendre un client jusqu'a une heure de plus avant
+         * que l'administration cesse d'afficher sa commande morte.
+         *
+         * Le passage est court — il ne touche que les lignes deja echues —
+         * mais `withoutOverlapping` reste indispensable a cette frequence :
+         * sans lui, un passage qui s'attarde verrait le suivant demarrer et
+         * les deux eteindraient les memes lignes.
+         */
+        $schedule->command('expirations:traiter')
+            ->everyMinute()
+            ->withoutOverlapping();
     }
 
     /**

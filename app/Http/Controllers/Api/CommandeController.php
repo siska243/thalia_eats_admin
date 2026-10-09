@@ -66,12 +66,44 @@ class CommandeController extends Controller
 
             $url = $request->url;
 
-            $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
-
             $user = auth()->user();
+
+            /*
+             * Les commandes perimees sont annulees avant toute chose.
+             *
+             * La lecture les ignore deja — `nonReglee()` les exclut — mais
+             * sans cette ecriture elles resteraient affichees « en attente »
+             * au client et dans l'administration jusqu'au prochain passage de
+             * la tache planifiee. Le client ne doit pas voir deux commandes
+             * dont l'une est un fantome.
+             */
+            Commande::expirerPour($user->id);
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
+
+            /*
+             * Une commande envoyee au paiement ne se modifie plus.
+             *
+             * Jusqu'ici, un client dont la commande attendait son paiement
+             * (statut 5) pouvait la reecrire par cet appel : changer les
+             * produits, changer l'adresse, pendant que la passerelle tenait
+             * deja un montant. Il payait alors un panier et en recevait un
+             * autre. Il paie celle-la ou il l'annule, puis il recommence.
+             *
+             * Le statut 1 n'est pas bloque : c'est le panier en cours, et cet
+             * appel est precisement ce qui le compose. Le refuser fermerait
+             * l'ajout au panier a tous les clients.
+             */
+            if ($commande && (int) $commande->status_id === Commande::STATUT_ATTENTE_PAIEMENT) {
+                return ApiResponse::BAD_REQUEST(
+                    ['uid' => Cipher::Encrypt($commande->id), 'reference' => $commande->refernce],
+                    __('Commande en attente'),
+                    __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $commande->refernce])
+                );
+            }
+
+            $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
 
             if (!$commande) {
 
@@ -615,6 +647,11 @@ class CommandeController extends Controller
             if (!$user) {
                 return ApiResponse::NOT_AUTHORIZED();
             }
+
+            // Les commandes perimees sont annulees avant le controle : sinon le
+            // client reste bloque un quart d'heure par une commande morte,
+            // sans savoir combien de temps ni pourquoi.
+            Commande::expirerPour($user->id);
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user?->id)->first();
