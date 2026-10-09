@@ -14,19 +14,25 @@ class Town extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'rental_available' => 'boolean',
+        // Castees pour que relire une commune rende la meme valeur qu'on y a
+        // ecrite : sans cela, le seeder rejoue a chaque deploiement
+        // reecrirait les memes coordonnees sous une autre forme.
+        'latitude' => 'decimal:6',
+        'longitude' => 'decimal:6',
     ];
 
-    public function restaurant() : HasMany
+    public function restaurant(): HasMany
     {
-        return $this->hasMany(Restaurant::class,'restaurant_id');
+        return $this->hasMany(Restaurant::class, 'restaurant_id');
     }
 
-    public function city():BelongsTo
+    public function city(): BelongsTo
     {
         return $this->belongsTo(City::class);
     }
 
-    public function delivrery_price():HasMany{
+    public function delivrery_price(): HasMany
+    {
         return $this->hasMany(DelivreryPrice::class);
     }
 }
