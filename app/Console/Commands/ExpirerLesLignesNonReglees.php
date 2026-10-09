@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Booking;
 use App\Models\Commande;
+use App\Settings\ExpirationSettings;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -30,7 +31,7 @@ class ExpirerLesLignesNonReglees extends Command
     public function handle(): int
     {
         $simulation = (bool) $this->option('simuler');
-        $minutes = (int) config('expiration.minutes');
+        $minutes = ExpirationSettings::delai();
 
         $reservations = Booking::query()->expirable()->get();
         $commandes = Commande::query()->expiree()->get();

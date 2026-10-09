@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Settings\ExpirationSettings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,18 @@ class Commande extends Model
 
     public const STATUT_ATTENTE_PAIEMENT = 5;
 
+    /**
+     * Les statuts d'une commande qui attend encore son reglement.
+     *
+     * Cette liste etait ecrite en nombres nus, `whereIn('status_id', [1, 5])`,
+     * a chaque endroit qui en avait besoin. Nommee une fois, elle sert au
+     * crochet d'ecriture, aux scopes et a la lecture du statut effectif.
+     */
+    public const STATUTS_NON_REGLES = [
+        self::STATUT_EN_ATTENTE,
+        self::STATUT_ATTENTE_PAIEMENT,
+    ];
+
     /** Les statuts d'une commande qui n'est ni livree ni annulee. */
     public const STATUTS_EN_COURS = [
         self::STATUT_EN_ATTENTE,
@@ -51,13 +64,60 @@ class Commande extends Model
     /**
      * Le delai, en minutes, avant qu'une commande non reglee expire.
      *
-     * Il vient de `config/expiration.php`, partage avec la location : la regle
-     * annoncee au client est la meme des deux cotes, et une seconde copie
-     * divergerait au premier ajustement commercial.
+     * Il vient des reglages d'administration, partage avec la location : la
+     * regle annoncee au client est la meme des deux cotes, et une seconde
+     * copie divergerait au premier ajustement commercial.
      */
     public static function delaiExpiration(): int
     {
-        return (int) config('expiration.minutes');
+        return ExpirationSettings::delai();
+    }
+
+    /**
+     * La commande a-t-elle depasse son delai de paiement ?
+     *
+     * Calcule a la lecture, sans attendre la tache planifiee : si le
+     * planificateur s'arrete — il l'a deja fait — la regle reste juste.
+     *
+     * `expires_at` nul vaut « pas d'echeance » : les lignes ecrites avant
+     * cette regle n'en portent pas, et les traiter comme perimees ferait
+     * disparaitre des commandes vivantes.
+     */
+    public function estExpiree(): bool
+    {
+        return in_array((int) $this->status_id, self::STATUTS_NON_REGLES, true)
+            && $this->expires_at !== null
+            && $this->expires_at->isPast();
+    }
+
+    /**
+     * Le statut tel qu'il doit etre lu, annulation et expiration comprises.
+     *
+     * Meme definition unique que `Booking::statutEffectif()`. Tout ce qui
+     * montre ou teste un statut passe par ici, jamais par `$commande->status_id`
+     * nu : sinon l'ecran dirait « en attente de paiement » pendant que le
+     * serveur refuse le paiement.
+     */
+    public function statutEffectif(): int
+    {
+        if ($this->cancel_at !== null || (int) $this->status_id === self::STATUT_ANNULEE) {
+            return self::STATUT_ANNULEE;
+        }
+
+        return $this->estExpiree() ? self::STATUT_ANNULEE : (int) $this->status_id;
+    }
+
+    /**
+     * La commande attend-elle encore un reglement ?
+     *
+     * Une seule question, posee au statut effectif : ni annulee, ni perimee,
+     * et dans l'un des statuts non regles. Tout ce qui montre une echeance
+     * passe par ici — une commande livree ou deja perimee qui sortirait avec
+     * une date ferait decompter l'application a l'envers.
+     */
+    public function attendUnReglement(): bool
+    {
+        return in_array($this->statutEffectif(), self::STATUTS_NON_REGLES, true);
     }
 
     /**
@@ -92,7 +152,7 @@ class Commande extends Model
          * chemin, c'est le motif qui a deja produit deux bugs sur ce depot.
          */
         static::saving(function (self $commande) {
-            if (in_array((int) $commande->status_id, [self::STATUT_EN_ATTENTE, self::STATUT_ATTENTE_PAIEMENT], true)) {
+            if (in_array((int) $commande->status_id, self::STATUTS_NON_REGLES, true)) {
                 $commande->expires_at = now()->addMinutes(self::delaiExpiration());
             }
         });
@@ -131,7 +191,7 @@ class Commande extends Model
     public function scopeNonReglee(Builder $query): Builder
     {
         return $query
-            ->whereIn('status_id', [self::STATUT_EN_ATTENTE, self::STATUT_ATTENTE_PAIEMENT])
+            ->whereIn('status_id', self::STATUTS_NON_REGLES)
             ->nonAnnulee()
             ->nonExpiree();
     }
@@ -160,7 +220,7 @@ class Commande extends Model
     public function scopeExpiree(Builder $query): Builder
     {
         return $query
-            ->whereIn('status_id', [self::STATUT_EN_ATTENTE, self::STATUT_ATTENTE_PAIEMENT])
+            ->whereIn('status_id', self::STATUTS_NON_REGLES)
             ->nonAnnulee()
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now());

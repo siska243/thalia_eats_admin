@@ -10,6 +10,7 @@ use App\Models\Vehicle;
 use App\Services\Rental\BookingCreator;
 use App\Services\Rental\BookingWorkflow;
 use App\Services\Rental\DepositPayment;
+use App\Settings\ExpirationSettings;
 use App\Settings\RentalSettings;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -167,9 +168,9 @@ class ReservationUniqueEtExpirationTest extends TestCase
         $this->assertFalse($booking->isCancellable());
     }
 
-    public function test_le_delai_vient_de_la_configuration(): void
+    public function test_le_delai_vient_des_reglages(): void
     {
-        config()->set('expiration.minutes', 45);
+        ExpirationSettings::fake(['minutes' => 45], loadMissingValues: false);
 
         $booking = $this->reserver();
 
@@ -177,7 +178,7 @@ class ReservationUniqueEtExpirationTest extends TestCase
             45,
             now()->diffInMinutes($booking->expires_at),
             1,
-            "L'echeance doit suivre config('expiration.minutes').",
+            "L'echeance doit suivre le reglage d'expiration.",
         );
     }
 

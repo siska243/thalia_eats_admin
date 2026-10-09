@@ -6,6 +6,7 @@ use App\Models\Commande;
 use App\Models\Status;
 use App\Models\Town;
 use App\Models\User;
+use App\Settings\ExpirationSettings;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -169,9 +170,9 @@ class CommandeUniqueEtExpirationTest extends TestCase
         $this->assertSame($bloquante->refernce, $reponse->json('error.reference'));
     }
 
-    public function test_le_delai_vient_de_la_configuration(): void
+    public function test_le_delai_vient_des_reglages(): void
     {
-        config()->set('expiration.minutes', 45);
+        ExpirationSettings::fake(['minutes' => 45], loadMissingValues: false);
 
         $commande = $this->commande(Commande::STATUT_ATTENTE_PAIEMENT);
 

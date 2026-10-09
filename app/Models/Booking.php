@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Exceptions\BookingRefusee;
 use App\Services\Rental\BookingPricing;
+use App\Settings\ExpirationSettings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -228,7 +229,7 @@ class Booking extends Model
     /** Le delai, en minutes, avant qu'une reservation non reglee expire. */
     public static function delaiExpiration(): int
     {
-        return (int) config('expiration.minutes');
+        return ExpirationSettings::delai();
     }
 
     /**

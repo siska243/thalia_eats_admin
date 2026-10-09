@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Models\Commande;
-use App\Models\CommandeProduct;
 use App\Models\Currency;
 use App\Models\Restaurant;
 use App\Wrappers\Cipher;
@@ -26,10 +25,23 @@ class CommandeResource extends JsonResource
     {
         // return parent::toArray($request);
         return [
-            'uid'=>Cipher::encrypt($this->resource->id),
+            'uid' => Cipher::encrypt($this->resource->id),
             'adresse' => $this->resource->adresse_delivery,
-            'created_at'=>$this->resource->created_at,
-            'reference_adresse'=>$this->resource->reference_adresse,
+            'created_at' => $this->resource->created_at,
+            /*
+             * L'echeance de reglement, pour le compte a rebours du client.
+             *
+             * Rendue seulement tant qu'un reglement est reellement attendu.
+             * La colonne garde la valeur posee a la derniere ecriture : la
+             * rendre telle quelle ferait decompter une commande deja livree,
+             * ou decompter a l'envers une commande deja perimee. Meme regle
+             * que sur `BookingResource` — c'est le serveur qui decide ce qui
+             * a un sens, pas l'ecran.
+             */
+            'expires_at' => $this->resource->attendUnReglement()
+                ? $this->resource->expires_at
+                : null,
+            'reference_adresse' => $this->resource->reference_adresse,
             // Chaque code n'est communique qu'a la partie qui doit le
             // detenir. Le livreur les recevait tous les deux : il pouvait
             // declarer une commande recuperee puis livree sans jamais voir ni
@@ -41,16 +53,16 @@ class CommandeResource extends JsonResource
             'restaurant_code_confirmation' => $this->estRestaurateur($request)
                 ? $this->resource->code_confirmation_restaurant
                 : null,
-            "address_delivery"=> $this->resource->adresse_delivery,
-            "street"=>$this->resource->street,
-            "number_street"=>$this->resource->number_street,
+            'address_delivery' => $this->resource->adresse_delivery,
+            'street' => $this->resource->street,
+            'number_street' => $this->resource->number_street,
             // La colonne s'appelle delivery_at ; lire delivrery_at visait un
             // attribut inexistant, et le champ partait donc toujours a null.
             // Seule la lecture etait fautive : la cle de reponse, elle, est
             // correcte et ne bouge pas.
-            'delivery_at'=>$this->resource->delivery_at,
-            'cancel_at'=>$this->resource->cancel_at,
-            'accepted_at'=>$this->resource->accepted_at,
+            'delivery_at' => $this->resource->delivery_at,
+            'cancel_at' => $this->resource->cancel_at,
+            'accepted_at' => $this->resource->accepted_at,
             'global_price' => $this->resource->global_price,
             // La devise d'une commande n'etait exposee nulle part : chaque
             // client la deduisait de `products[0].currency`. Les commandes sans
@@ -59,26 +71,26 @@ class CommandeResource extends JsonResource
             // Une commande porte un montant, elle doit porter sa monnaie.
             'currency' => $this->devise(),
             'price_delivery' => $this->resource->price_delivery,
-            'price_service'=>$this->resource->price_service,
+            'price_service' => $this->resource->price_service,
             'town_id' => new TownResource($this->resource->town),
-            'status' => new StatusResource ($this->resource->status),
+            'status' => new StatusResource($this->resource->status),
             'reference' => $this->resource->refernce,
             'lat' => $this->resource->lat,
             'long' => $this->resource->long,
             'recipient_name' => $this->resource->recipient_name,
             'recipient_phone' => $this->resource->recipient_phone,
             'reference_address' => $this->resource->adresse,
-            'delivrery_driver_id' => $this->whenLoaded('delivrery_driver',new DelivreryResource($this->resource->delivrery_driver)),
+            'delivrery_driver_id' => $this->whenLoaded('delivrery_driver', new DelivreryResource($this->resource->delivrery_driver)),
             'reception' => $this->resource->reception,
-            'user'=>$this->whenLoaded('user',new UserResource($this->resource->user)),
-            "reference_paiement"=>$this->resource->reference_paiement,
-            'time_restaurant'=>$this->resource->time_restaurant,
-            'time_delivery'=>$this->resource->time_delivery,
-            'date_time_restautant'=>$this->resource->time_restaurant ? self::customTime($this->resource->accepted_at,$this->resource->time_restaurant):null,
-            'date_time_delivery'=>$this->resource->time_delivery ? self::customTime($this->resource->accepted_at,$this->resource->time_delivery):null,
+            'user' => $this->whenLoaded('user', new UserResource($this->resource->user)),
+            'reference_paiement' => $this->resource->reference_paiement,
+            'time_restaurant' => $this->resource->time_restaurant,
+            'time_delivery' => $this->resource->time_delivery,
+            'date_time_restautant' => $this->resource->time_restaurant ? self::customTime($this->resource->accepted_at, $this->resource->time_restaurant) : null,
+            'date_time_delivery' => $this->resource->time_delivery ? self::customTime($this->resource->accepted_at, $this->resource->time_delivery) : null,
             'products' => $this->whenLoaded('product', CommandeProductResource::collection($this->resource->product)),
-            'user_delivery_complet_adress'=>"{$this->resource->adresse_delivery}, {$this->resource->town?->title} {$this->resource->town?->city?->title}",
-            "mask_address"=>Str::mask("{$this->resource->adresse_delivery}, {$this->resource->town?->title}","*",3)
+            'user_delivery_complet_adress' => "{$this->resource->adresse_delivery}, {$this->resource->town?->title} {$this->resource->town?->city?->title}",
+            'mask_address' => Str::mask("{$this->resource->adresse_delivery}, {$this->resource->town?->title}", '*', 3),
         ];
     }
 
@@ -94,14 +106,16 @@ class CommandeResource extends JsonResource
     {
         $surLaCommande = $this->resource->product?->first()?->currency;
 
-        if ($surLaCommande) return $surLaCommande;
+        if ($surLaCommande) {
+            return $surLaCommande;
+        }
 
         static $defaut = null;
 
         return $defaut ??= Currency::query()->where('is_active', 1)->first();
     }
 
-    public static function customTime($date,$time)
+    public static function customTime($date, $time)
     {
         $date = Carbon::parse($date);
         $time = Carbon::parse($time);
@@ -125,7 +139,9 @@ class CommandeResource extends JsonResource
     {
         $user = $request->user();
 
-        if (!$user) return false;
+        if (! $user) {
+            return false;
+        }
 
         static $cache = [];
 

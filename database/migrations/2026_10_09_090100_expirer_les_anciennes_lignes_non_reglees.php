@@ -37,6 +37,16 @@ return new class extends Migration
 
     public function up(): void
     {
+        /*
+         * Volontairement `config('expiration.minutes')` et non le reglage
+         * d'administration : ce passage est de l'histoire figee.
+         *
+         * Il a ete joue une fois, avec le delai en vigueur ce jour-la. Le
+         * faire suivre un reglage modifie ensuite rendrait son `down()`
+         * incoherent et ferait rejouer la migration sur un perimetre
+         * different de celui qui a ete annonce au proprietaire avant
+         * l'ecriture. Ne pas « corriger » en `ExpirationSettings::delai()`.
+         */
         $limite = now()->subMinutes((int) config('expiration.minutes'));
 
         if (! Schema::hasTable(self::TRACE)) {
