@@ -8,7 +8,6 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Actions\EditAction;
@@ -78,9 +77,12 @@ class TownResource extends Resource
                 ToggleColumn::make('is_active')
 
                 ,
-                IconColumn::make('rental_available')
-                    ->label('Location')
-                    ->boolean(),
+                // Cochable depuis la liste, comme `is_active` juste au-dessus :
+                // Kinshasa compte vingt-quatre communes, et les ouvrir une a
+                // une obligeait a vingt-quatre allers-retours dans le
+                // formulaire.
+                ToggleColumn::make('rental_available')
+                    ->label('Location'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
