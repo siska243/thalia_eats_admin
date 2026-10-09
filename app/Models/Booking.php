@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -307,5 +308,17 @@ class Booking extends Model
     public function isPickupCodeLocked(): bool
     {
         return $this->pickup_code_locked_at !== null;
+    }
+
+    /**
+     * Les releves de position de cette course.
+     *
+     * Declaree ici, et sur `Commande`, pour qu'un `withCount('releves')`
+     * reponde en une requete a la seule question que pose l'administration :
+     * « y a-t-il quelque chose a voir sur la carte ? ».
+     */
+    public function releves(): MorphMany
+    {
+        return $this->morphMany(TrackOrder::class, 'suivable');
     }
 }

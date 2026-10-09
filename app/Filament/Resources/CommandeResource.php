@@ -2,40 +2,38 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
+use App\Filament\Pages\SuiviDesCourses;
+use App\Filament\Resources\CommandeResource\Pages\EditCommande;
+use App\Filament\Resources\CommandeResource\Pages\ListCommandes;
+use App\Filament\Resources\CommandeResource\Pages\ManageCommandeProducts;
+use App\Filament\Resources\CommandeResource\Pages\ViewCommande;
+use App\Models\Commande;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\ViewAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
 use Filament\Pages\Enums\SubNavigationPosition;
-use App\Filament\Resources\CommandeResource\Pages\ViewCommande;
-use App\Filament\Resources\CommandeResource\Pages\ManageCommandeProducts;
-use App\Filament\Resources\CommandeResource\Pages\ListCommandes;
-use App\Filament\Resources\CommandeResource\Pages\EditCommande;
-use App\Filament\Resources\CommandeResource\Pages;
-use App\Filament\Resources\CommandeResource\RelationManagers;
-use App\Models\Commande;
-use Filament\Forms;
-use Filament\Resources\Pages\Page;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\HtmlString;
 
 class CommandeResource extends Resource
 {
     protected static ?string $model = Commande::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-bag';
-    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
-    protected static ?string $navigationModeleLabel = "Commande";
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Thalia eats';
+
+    protected static ?string $navigationModeleLabel = 'Commande';
 
     public static function form(Schema $schema): Schema
     {
@@ -58,12 +56,9 @@ class CommandeResource extends Resource
                             ->numeric(),
                         TextInput::make('delivrery_driver_id')
                             ->numeric(),
-                        TextInput::make('adresse_delivery')
-                        ,
-                        TextInput::make('street')
-                        ,
-                        TextInput::make('number_street')
-                        ,
+                        TextInput::make('adresse_delivery'),
+                        TextInput::make('street'),
+                        TextInput::make('number_street'),
 
                         Select::make('town_id')
                             ->relationship('town', 'title'),
@@ -71,7 +66,7 @@ class CommandeResource extends Resource
                         DateTimePicker::make('cancel_at'),
                         DateTimePicker::make('delivery_at'),
                         DateTimePicker::make('paied_at'),
-                    ])
+                    ]),
 
             ]);
     }
@@ -80,10 +75,13 @@ class CommandeResource extends Resource
     {
         return $table
             ->defaultSort('id', 'desc')
+            // Le bouton « Suivre » a besoin de savoir s'il y a quelque chose a
+            // voir : un compte en une requete, pas un comptage par ligne.
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount('releves'))
             ->columns([
                 TextColumn::make('user.name'),
                 TextColumn::make('status')
-                    ->formatStateUsing(fn($state) => new HtmlString("<div class='flex gap-1'>
+                    ->formatStateUsing(fn ($state) => new HtmlString("<div class='flex gap-1'>
 <div class='w-5 h-5 rounded' style='background:$state->color'></div>
 <div>{$state->title}</div>
 </div>"))
@@ -109,22 +107,17 @@ class CommandeResource extends Resource
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('delivrery_driver.user.name')
-                    ->label(__("Livreur"))
-                    ->searchable()
-                ,
+                    ->label(__('Livreur'))
+                    ->searchable(),
                 TextColumn::make('adresse_delivery')
                     ->sortable(),
 
                 TextColumn::make('street')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('number_street')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('town.title')
-                    ->toggleable(isToggledHiddenByDefault: true)
-
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('cancel_at')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->dateTime()
@@ -156,6 +149,19 @@ class CommandeResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make(),
+
+                Action::make('suivre')
+                    ->label('Suivre')
+                    ->icon('heroicon-o-map-pin')
+                    ->color('info')
+                    // Meme bouton que sur les reservations : le suivi s'ouvre
+                    // depuis la ligne de la commande, pas depuis un annuaire.
+                    ->visible(fn () => SuiviDesCourses::canAccess())
+                    ->disabled(fn (Commande $record) => ! $record->releves_count)
+                    ->tooltip(fn (Commande $record) => $record->releves_count
+                        ? null
+                        : 'Aucune position relevée pour cette commande : il n\'y a rien à afficher sur la carte.')
+                    ->url(fn (Commande $record) => SuiviDesCourses::urlPour($record)),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -174,15 +180,14 @@ class CommandeResource extends Resource
         ];
     }
 
-    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
-
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
     public static function getRecordSubNavigation(\Filament\Pages\Page $page): array
     {
         return $page->generateNavigationItems([
             // ...
             ViewCommande::class,
-            ManageCommandeProducts::class
+            ManageCommandeProducts::class,
 
         ]);
     }

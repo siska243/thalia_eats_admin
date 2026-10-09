@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Commande extends Model
 {
@@ -305,5 +306,11 @@ class Commande extends Model
     public function delivrery_driver(): BelongsTo
     {
         return $this->belongsTo(DelivreryDriver::class);
+    }
+
+    /** Les releves de position de cette livraison. Voir `Booking::releves()`. */
+    public function releves(): MorphMany
+    {
+        return $this->morphMany(TrackOrder::class, 'suivable');
     }
 }

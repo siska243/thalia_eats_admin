@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Pages\SuiviDesCourses;
 use App\Filament\Resources\BookingResource\Pages\CreateBooking;
 use App\Filament\Resources\BookingResource\Pages\EditBooking;
 use App\Filament\Resources\BookingResource\Pages\ListBookings;
@@ -302,6 +303,9 @@ class BookingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Le bouton « Suivre » a besoin de savoir s'il y a quelque chose a
+            // voir : un compte en une requete, pas un comptage par ligne.
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount('releves'))
             ->columns([
                 TextColumn::make('reference')
                     ->label('Référence')
@@ -466,6 +470,20 @@ class BookingResource extends Resource
                     ->modalDescription('À cocher une fois le virement réellement effectué : cette application ne rembourse pas elle-même.')
                     ->visible(fn (Booking $record) => $record->refund_amount > 0 && $record->refunded_at === null)
                     ->action(fn (Booking $record) => app(BookingWorkflow::class)->markRefunded($record)),
+
+                Action::make('suivre')
+                    ->label('Suivre')
+                    ->icon('heroicon-o-map-pin')
+                    ->color('info')
+                    // Le suivi vit la ou vit la course : l'administrateur a
+                    // la reservation sous les yeux, il n'a pas a aller la
+                    // rechercher dans une liste a part.
+                    ->visible(fn () => SuiviDesCourses::canAccess())
+                    ->disabled(fn (Booking $record) => ! $record->releves_count)
+                    ->tooltip(fn (Booking $record) => $record->releves_count
+                        ? null
+                        : 'Aucune position relevée pour cette réservation : il n\'y a rien à afficher sur la carte.')
+                    ->url(fn (Booking $record) => SuiviDesCourses::urlPour($record)),
 
                 EditAction::make(),
             ])

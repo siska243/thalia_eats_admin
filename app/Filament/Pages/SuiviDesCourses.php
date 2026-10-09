@@ -2,15 +2,21 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\BookingResource;
 use App\Models\Booking;
 use App\Models\Commande;
 use App\Models\TrackOrder;
 use App\Services\Suivi\SuiviPositions;
 use Filament\Actions\Action;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Url;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,10 +24,24 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Le suivi des courses : repas et location, sur une carte OpenStreetMap.
  *
- * Deux vues avec le meme ecran, parce que c'est la meme donnee : une course
- * en cours se rafraichit toute seule, une course terminee reste consultable.
- * L'objectif annonce est de comprendre comment ameliorer le service, ce qui
- * demande de pouvoir relire ce qui s'est passe.
+ * Un seul ecran, deux modes, parce que c'est la meme donnee lue a deux
+ * echelles :
+ *
+ * 1. Ouvert avec une course (`?course=repas:12`, depuis le bouton « Suivre »
+ *    d'une ligne de `BookingResource` ou de `CommandeResource`), il ne montre
+ *    que cette course : sa fiche, son trace, sa duree, sa distance. C'est le
+ *    chemin normal, et il part de la ou l'administrateur a deja la course
+ *    sous les yeux — lui redemander de la retrouver dans une liste a part
+ *    etait le reproche qui nous a ete fait.
+ *
+ * 2. Ouvert sans course, c'est la vue d'analyse : la periode, le type, la
+ *    liste de ce qui a ete suivi et l'export. Elle sert l'autre objectif,
+ *    comprendre comment ameliorer le service, et l'export est la condition
+ *    posee a la purge a quatre-vingt-dix jours.
+ *
+ * Deux modes et non deux pages : c'est la meme requete, les memes filtres et
+ * le meme export : les separer aurait duplique tout cela pour ne changer
+ * qu'un titre.
  *
  * OpenStreetMap, et non Google Maps : aucune cle a prevoir, aucun secret a
  * commiter. Les tuiles sont servies par le navigateur de l'administrateur,
@@ -35,7 +55,7 @@ class SuiviDesCourses extends Page
 
     protected static ?string $title = 'Suivi des courses';
 
-    protected static ?string $navigationLabel = 'Courses suivies';
+    protected static ?string $navigationLabel = 'Analyse des courses';
 
     protected static ?int $navigationSort = 1;
 
@@ -57,7 +77,13 @@ class SuiviDesCourses extends Page
 
     public string $type = 'toutes';
 
-    /** La course regardee, sous la forme « repas:12 ». */
+    /**
+     * La course regardee, sous la forme « repas:12 ».
+     *
+     * Dans l'URL : c'est elle qui fait de l'ecran une page de course, et le
+     * lien reste partageable et rechargeable.
+     */
+    #[Url]
     public ?string $course = null;
 
     /**
@@ -75,10 +101,15 @@ class SuiviDesCourses extends Page
     {
         $this->du = now()->subDays(7)->toDateString();
         $this->au = now()->toDateString();
+
+        // La page peut arriver deja pointee sur une course, par le bouton
+        // « Suivre » : le trace doit etre pret avant le premier rendu.
+        $this->chargerLeTrace();
     }
 
     public function updatedCourse(): void
     {
+        $this->courseResolue = null;
         $this->chargerLeTrace();
     }
 
@@ -88,19 +119,144 @@ class SuiviDesCourses extends Page
         $this->chargerLeTrace();
     }
 
+    /** Regarde-t-on une course precise, ou l'ensemble ? */
+    public function modeCourse(): bool
+    {
+        return $this->courseRegardee() !== null;
+    }
+
+    public function getTitle(): string
+    {
+        $fiche = $this->fiche;
+
+        return $fiche
+            ? "Course {$fiche['reference']}"
+            : 'Analyse des courses';
+    }
+
+    public function getSubheading(): ?string
+    {
+        return $this->fiche
+            ? null
+            : 'Les positions relevées sur la période, pour analyse et export. Le suivi d\'une course s\'ouvre depuis sa ligne, dans Réservations ou Commandes.';
+    }
+
+    /**
+     * L'adresse du suivi d'une course donnee.
+     *
+     * Un seul endroit sait fabriquer la cle « repas:12 » : les deux
+     * ressources s'y adressent, elles n'ecrivent pas le format a la main.
+     */
+    public static function urlPour(Model $course): string
+    {
+        $type = array_search($course::class, self::TYPES, true);
+
+        return static::getUrl(['course' => "{$type}:{$course->getKey()}"]);
+    }
+
     /** @return array<int, Action> */
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('vueDEnsemble')
+                ->label("Vue d'ensemble")
+                ->icon('heroicon-o-table-cells')
+                ->color('gray')
+                ->visible(fn (): bool => $this->modeCourse())
+                ->url(static::getUrl()),
+
             Action::make('exporter')
                 ->label('Exporter en tableur')
                 ->icon('heroicon-o-arrow-down-tray')
                 // Les releves sont purges au-dela du delai de conservation :
                 // l'export est ce qui permet de garder ce qu'on voulait
                 // analyser. Il suit les filtres affiches, pour qu'on exporte
-                // ce qu'on regarde.
+                // ce qu'on regarde — donc il vit avec eux, dans la vue
+                // d'ensemble.
+                ->visible(fn (): bool => ! $this->modeCourse())
                 ->action(fn (): StreamedResponse => $this->exporter()),
         ];
+    }
+
+    /**
+     * La fiche de la course regardee : de quoi la reconnaitre sans la chercher.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getFicheProperty(): ?array
+    {
+        $course = $this->courseRegardee();
+
+        if (! $course) {
+            return null;
+        }
+
+        return $course instanceof Booking
+            ? $this->ficheDUneReservation($course)
+            : $this->ficheDUneLivraison($course);
+    }
+
+    /** L'entete de la course : qui, quoi, ou en est-elle, et ce qu'a donne le trajet. */
+    public function identite(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make()
+                ->columns(4)
+                ->components([
+                    TextEntry::make('reference')
+                        ->label('Référence')
+                        ->copyable()
+                        ->weight('bold')
+                        ->state(fn (): string => $this->fiche['reference'] ?? '—'),
+
+                    TextEntry::make('client')
+                        ->label('Client')
+                        ->state(fn (): string => $this->fiche['client'] ?? '—'),
+
+                    TextEntry::make('origine')
+                        ->label(fn (): string => $this->fiche['origine_label'] ?? 'Origine')
+                        ->state(fn (): string => $this->fiche['origine'] ?? '—'),
+
+                    TextEntry::make('etat')
+                        ->label('État')
+                        ->badge()
+                        ->color(fn (): string => $this->fiche['etat_couleur'] ?? 'gray')
+                        ->state(fn (): string => $this->fiche['etat'] ?? '—'),
+                ]),
+
+            Section::make()
+                ->columns(4)
+                ->components([
+                    TextEntry::make('duree')
+                        ->label('Durée du suivi')
+                        ->icon('heroicon-m-clock')
+                        ->size('lg')
+                        ->state(fn (): string => isset($this->trace['duree_minutes'])
+                            ? "{$this->trace['duree_minutes']} min"
+                            : '—'),
+
+                    TextEntry::make('distance')
+                        ->label('Distance parcourue')
+                        ->icon('heroicon-m-map')
+                        ->size('lg')
+                        ->helperText('À vol d\'oiseau entre relevés : un plancher, pas la distance routière.')
+                        ->state(fn (): string => isset($this->trace['distance_km'])
+                            ? number_format($this->trace['distance_km'], 2, ',', ' ').' km'
+                            : '—'),
+
+                    TextEntry::make('releves')
+                        ->label('Relevés')
+                        ->icon('heroicon-m-map-pin')
+                        ->size('lg')
+                        ->state(fn (): string => (string) count($this->trace['points'] ?? [])),
+
+                    TextEntry::make('fenetre')
+                        ->label('Période')
+                        ->state(fn (): string => isset($this->trace['debut'])
+                            ? "{$this->trace['debut']} → {$this->trace['fin']}"
+                            : '—'),
+                ]),
+        ]);
     }
 
     /**
@@ -245,9 +401,16 @@ class SuiviDesCourses extends Page
             );
     }
 
+    /** @var Model|false|null la course designee, resolue une fois par requete */
+    private Model|false|null $courseResolue = null;
+
     /** La commande ou la reservation designee par `$course`. */
-    private function courseRegardee(): ?object
+    private function courseRegardee(): ?Model
     {
+        if ($this->courseResolue !== null && $this->courseResolue !== false) {
+            return $this->courseResolue;
+        }
+
         if (! $this->course || ! str_contains($this->course, ':')) {
             return null;
         }
@@ -256,7 +419,44 @@ class SuiviDesCourses extends Page
 
         $classe = self::TYPES[$type] ?? null;
 
-        return $classe ? $classe::query()->whereKey($id)->first() : null;
+        return $this->courseResolue = ($classe ? $classe::query()->whereKey($id)->first() : null) ?? false;
+    }
+
+    /** @return array<string, mixed> */
+    private function ficheDUneReservation(Booking $booking): array
+    {
+        return [
+            'reference' => (string) $booking->reference,
+            'client' => (string) ($booking->user?->name ?? '—'),
+            'origine_label' => 'Véhicule',
+            'origine' => trim(($booking->vehicle?->name ?? '').' '.($booking->vehicle?->plate_number ? "({$booking->vehicle->plate_number})" : '')) ?: '—',
+            'etat' => BookingResource::statusLabels()[$booking->statutEffectif()] ?? $booking->status,
+            'etat_couleur' => match ($booking->statutEffectif()) {
+                Booking::STATUS_CONFIRMED, Booking::STATUS_IN_PROGRESS => 'success',
+                Booking::STATUS_PENDING_PAYMENT => 'warning',
+                Booking::STATUS_LOST, Booking::STATUS_CANCELLED, Booking::STATUS_EXPIRED => 'danger',
+                default => 'gray',
+            },
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function ficheDUneLivraison(Commande $commande): array
+    {
+        // Le restaurant se lit par le premier produit commande : la commande
+        // ne le porte pas elle-meme. Une requete, pour une page a la fois.
+        $restaurant = $commande->commande_products()
+            ->with('product.restaurant')
+            ->first()?->product?->restaurant?->name;
+
+        return [
+            'reference' => (string) $commande->refernce,
+            'client' => (string) ($commande->user?->name ?? '—'),
+            'origine_label' => 'Restaurant',
+            'origine' => $restaurant ?: '—',
+            'etat' => (string) ($commande->status?->title ?? '—'),
+            'etat_couleur' => (int) $commande->status_id === 2 ? 'success' : 'gray',
+        ];
     }
 
     /**

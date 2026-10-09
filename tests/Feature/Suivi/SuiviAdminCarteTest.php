@@ -3,6 +3,8 @@
 namespace Tests\Feature\Suivi;
 
 use App\Filament\Pages\SuiviDesCourses;
+use App\Filament\Resources\BookingResource\Pages\ListBookings;
+use App\Filament\Resources\CommandeResource\Pages\ListCommandes;
 use App\Models\Booking;
 use App\Models\Chauffeur;
 use App\Models\Commande;
@@ -215,6 +217,120 @@ class SuiviAdminCarteTest extends TestCase
         // vrai classeur est sorti, et non une page d'erreur.
         $this->assertStringStartsWith('PK', $contenu);
         $this->assertGreaterThan(1000, strlen($contenu));
+    }
+
+    /**
+     * Le chemin normal : le bouton vit sur la ligne de la course.
+     *
+     * L'administrateur a deja la reservation sous les yeux ; lui redemander
+     * de la retrouver dans un annuaire etait precisement le reproche.
+     */
+    public function test_le_bouton_suivre_est_actif_sur_une_reservation_relevee(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        Livewire::test(ListBookings::class)
+            ->assertTableActionVisible('suivre', $this->booking)
+            ->assertTableActionEnabled('suivre', $this->booking);
+    }
+
+    public function test_le_bouton_suivre_est_desactive_sur_une_reservation_sans_releve(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $sansReleve = $this->booking->replicate(['reference']);
+        $sansReleve->reference = 'R-SUIVI0002';
+        $sansReleve->save();
+
+        Livewire::test(ListBookings::class)
+            ->assertTableActionVisible('suivre', $sansReleve)
+            ->assertTableActionDisabled('suivre', $sansReleve);
+    }
+
+    public function test_le_bouton_suivre_est_actif_sur_une_commande_relevee(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        Livewire::test(ListCommandes::class)
+            ->assertTableActionVisible('suivre', $this->commande)
+            ->assertTableActionEnabled('suivre', $this->commande);
+    }
+
+    public function test_le_bouton_suivre_est_desactive_sur_une_commande_sans_releve(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $sansReleve = Commande::query()->create([
+            'user_id' => User::factory()->create()->id,
+            'status_id' => 2,
+            'town_id' => Town::factory()->create()->id,
+            'refernce' => 'CMD-SUIVI-2',
+            'global_price' => 10,
+        ]);
+
+        Livewire::test(ListCommandes::class)
+            ->assertTableActionVisible('suivre', $sansReleve)
+            ->assertTableActionDisabled('suivre', $sansReleve);
+    }
+
+    /** Le lien du bouton pointe bien sur cette course-la. */
+    public function test_le_bouton_suivre_pointe_sur_la_course(): void
+    {
+        $this->assertStringContainsString(
+            'course=location%3A'.$this->booking->id,
+            SuiviDesCourses::urlPour($this->booking),
+        );
+
+        $this->assertStringContainsString(
+            'course=repas%3A'.$this->commande->id,
+            SuiviDesCourses::urlPour($this->commande),
+        );
+    }
+
+    /**
+     * Ouvert sur une course, l'ecran montre cette course et rien d'autre :
+     * sa reference, son client, son vehicule, son etat.
+     */
+    public function test_le_suivi_d_une_course_montre_cette_course(): void
+    {
+        Gate::before(fn () => true);
+
+        $this->actingAs($this->admin)
+            ->get(SuiviDesCourses::urlPour($this->booking))
+            ->assertSuccessful()
+            ->assertSee('R-SUIVI0001')
+            ->assertSee('Toyota', escape: false)
+            ->assertSee('Trajet')
+            // La liste globale n'est plus ce qu'on voit en premier.
+            ->assertDontSee('CMD-SUIVI-1');
+    }
+
+    public function test_le_suivi_d_une_commande_montre_cette_commande(): void
+    {
+        Gate::before(fn () => true);
+
+        $this->actingAs($this->admin)
+            ->get(SuiviDesCourses::urlPour($this->commande))
+            ->assertSuccessful()
+            ->assertSee('CMD-SUIVI-1')
+            ->assertDontSee('R-SUIVI0001');
+    }
+
+    /** La vue d'ensemble reste atteignable, avec son export. */
+    public function test_la_vue_d_ensemble_reste_atteignable(): void
+    {
+        Gate::before(fn () => true);
+
+        $this->actingAs($this->admin)
+            ->get(SuiviDesCourses::getUrl())
+            ->assertSuccessful()
+            ->assertSee('Exporter en tableur')
+            ->assertSee('R-SUIVI0001')
+            ->assertSee('CMD-SUIVI-1');
     }
 
     public function test_l_export_suit_le_filtre_de_periode(): void
