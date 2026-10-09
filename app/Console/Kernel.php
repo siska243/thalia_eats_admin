@@ -41,6 +41,18 @@ class Kernel extends ConsoleKernel
         $schedule->command('expirations:traiter')
             ->everyMinute()
             ->withoutOverlapping();
+
+        /*
+         * La purge des releves de position, au-dela du delai de conservation.
+         *
+         * Une fois par nuit : rien ne presse, et le passage lit toute la
+         * table. L'extraction en tableur se fait depuis l'administration,
+         * avant que la purge n'arrive — c'est la condition posee a sa mise en
+         * place, et `--simuler` permet de voir ce qui partira.
+         */
+        $schedule->command('suivi:purger')
+            ->dailyAt('03:30')
+            ->withoutOverlapping();
     }
 
     /**
