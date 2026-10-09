@@ -131,6 +131,80 @@ class RentalApiTest extends TestCase
             ->assertJsonPath('data.0.available', false);
     }
 
+    /** Le catalogue chiffre au mode demande. */
+    public function test_le_catalogue_chiffre_a_la_journee(): void
+    {
+        $this->vehicle->update(['daily_rate' => 149]);
+
+        $this->getJson('/api/rental/vehicles?'.http_build_query(array_merge(
+            $this->creneau('+2 days 08:00', '+3 days 08:00'),
+            ['pricing_mode' => 'daily'],
+        )))
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.quote.mode', 'daily')
+            ->assertJsonPath('data.0.quote.billed_units', 1)
+            ->assertJsonPath('data.0.quote.total', 149)
+            ->assertJsonPath('data.0.daily_rate', 149);
+    }
+
+    /**
+     * Un vehicule sans tarif journalier reste au catalogue, chiffre a l'heure.
+     *
+     * Le cacher laisserait croire qu'il n'existe pas alors qu'il se loue
+     * parfaitement, simplement pas dans ce mode.
+     */
+    public function test_le_catalogue_retombe_a_l_heure_sans_tarif_journalier(): void
+    {
+        $this->getJson('/api/rental/vehicles?'.http_build_query(array_merge(
+            $this->creneau(),
+            ['pricing_mode' => 'daily'],
+        )))
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.quote.mode', 'hourly')
+            ->assertJsonPath('data.0.daily_rate', null);
+    }
+
+    /** Reserver a la journee fige le mode sur la reservation. */
+    public function test_le_client_reserve_a_la_journee(): void
+    {
+        $this->vehicle->update(['daily_rate' => 149]);
+        $this->connecte();
+
+        $this->postJson('/api/rental/bookings', array_merge(
+            $this->creneau('+2 days 08:00', '+3 days 08:00'),
+            [
+                'vehicle' => Cipher::Encrypt($this->vehicle->id),
+                'pickup_location' => 'Gombe',
+                'pricing_mode' => 'daily',
+            ],
+        ))
+            ->assertSuccessful()
+            ->assertJsonPath('data.pricing_mode', 'daily')
+            ->assertJsonPath('data.unit_price', 149)
+            ->assertJsonPath('data.billed_units', 1)
+            ->assertJsonPath('data.total', 149);
+    }
+
+    /**
+     * Reserver a la journee un vehicule qui ne l'est pas est REFUSE.
+     *
+     * Le catalogue retombe a l'heure pour ne pas cacher le vehicule ; ici le
+     * client paie, et un prix qui n'est pas celui qu'il a choisi n'est pas un
+     * prix.
+     */
+    public function test_reserver_a_la_journee_un_vehicule_horaire_est_refuse(): void
+    {
+        $this->connecte();
+
+        $this->postJson('/api/rental/bookings', array_merge($this->creneau(), [
+            'vehicle' => Cipher::Encrypt($this->vehicle->id),
+            'pickup_location' => 'Gombe',
+            'pricing_mode' => 'daily',
+        ]))
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'mode_indisponible');
+    }
+
     /** La fiche s'ouvre sans creneau, comme celle d'un restaurant. */
     public function test_la_fiche_s_ouvre_sans_creneau(): void
     {

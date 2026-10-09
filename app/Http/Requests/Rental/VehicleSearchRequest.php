@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Rental;
 
+use App\Services\Rental\BookingPricing;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * La consultation du catalogue de vehicules.
@@ -31,6 +33,9 @@ class VehicleSearchRequest extends FormRequest
             'starts_at' => ['nullable', 'required_with:ends_at', 'date', 'after:now'],
             'ends_at' => ['nullable', 'required_with:starts_at', 'date', 'after:starts_at'],
             'search' => ['nullable', 'string', 'max:120'],
+            // Le mode de tarification demande. Absent, c'est l'heure : le
+            // comportement d'un appelant qui ne le connait pas ne change pas.
+            'pricing_mode' => ['nullable', Rule::in(BookingPricing::MODES)],
         ];
     }
 

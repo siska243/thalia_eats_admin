@@ -20,6 +20,7 @@ class Vehicle extends Model
 
     protected $casts = [
         'hourly_rate' => 'decimal:2',
+        'daily_rate' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 

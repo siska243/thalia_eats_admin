@@ -9,13 +9,20 @@ use App\Models\Currency;
  *
  * Un objet fige plutot qu'un tableau : le total, l'acompte et le solde sont
  * calcules ensemble et ne doivent pas pouvoir etre modifies un par un par
- * l'appelant. C'est le meme principe que pour les commandes de repas — le
+ * l'appelant. C'est le meme principe que pour les commandes de repas, le
  * montant ne vient jamais du client.
  */
 readonly class BookingQuote
 {
     public function __construct(
+        public string $mode,
+        /** Le prix d'une unite : une heure, ou une journee. */
+        public float $unitPrice,
+        /** Les unites facturees, entamees comprises. */
+        public float $billedUnits,
+        /** Le tarif horaire du vehicule, conserve a titre indicatif. */
         public float $hourlyRate,
+        /** Les heures facturables du creneau, affichees quel que soit le mode. */
         public float $durationHours,
         public float $total,
         public float $deposit,
@@ -27,6 +34,9 @@ readonly class BookingQuote
     public function toBookingAttributes(): array
     {
         return [
+            'pricing_mode' => $this->mode,
+            'unit_price' => $this->unitPrice,
+            'billed_units' => $this->billedUnits,
             'hourly_rate' => $this->hourlyRate,
             'duration_hours' => $this->durationHours,
             'total' => $this->total,

@@ -19,6 +19,9 @@ class BookingRefusee extends Exception
 
     public const CRENEAU_INVALIDE = 'creneau_invalide';
 
+    /** Le vehicule n'est pas propose dans le mode de tarification demande. */
+    public const MODE_INDISPONIBLE = 'mode_indisponible';
+
     public function __construct(public readonly string $raison)
     {
         parent::__construct($raison);

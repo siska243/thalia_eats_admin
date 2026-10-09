@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Rental;
 
+use App\Services\Rental\BookingPricing;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * La creation d'une reservation.
@@ -25,6 +27,8 @@ class BookingRequest extends FormRequest
             'vehicle' => ['required', 'string'],
             'starts_at' => ['required', 'date', 'after:now'],
             'ends_at' => ['required', 'date', 'after:starts_at'],
+            // Le mode de tarification choisi. Absent, c'est l'heure.
+            'pricing_mode' => ['nullable', Rule::in(BookingPricing::MODES)],
             'pickup_location' => ['required', 'string', 'max:255'],
             'pickup_lat' => ['nullable', 'numeric', 'between:-90,90'],
             'pickup_lng' => ['nullable', 'numeric', 'between:-180,180'],

@@ -40,6 +40,7 @@ class VehicleController extends Controller
     public function index(VehicleSearchRequest $request): JsonResponse
     {
         $search = $request->input('search');
+        $mode = $request->input('pricing_mode', BookingPricing::MODE_HOURLY);
 
         $startsAt = $request->filled('starts_at')
             ? Carbon::parse($request->input('starts_at'))
@@ -59,17 +60,30 @@ class VehicleController extends Controller
         // vehicule s'il est libre ferait une requete par ligne affichee.
         $enCourse = $startsAt ? collect() : $this->vehiculesEnCourse();
 
-        $data = $vehicles->map(function (Vehicle $vehicle) use ($request, $startsAt, $endsAt, $enCourse) {
+        $data = $vehicles->map(function (Vehicle $vehicle) use ($request, $startsAt, $endsAt, $enCourse, $mode) {
             $ligne = (new VehicleResource($vehicle))->toArray($request);
 
             if ($startsAt && $endsAt) {
-                $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt);
+                /*
+                 * Un vehicule sans tarif journalier reste chiffre a l'heure,
+                 * meme si le mode journee est demande : le cacher du catalogue
+                 * laisserait croire qu'il n'existe pas.
+                 */
+                $modeApplique = $mode === BookingPricing::MODE_DAILY
+                    && ! $this->pricing->estProposeALaJournee($vehicle)
+                        ? BookingPricing::MODE_HOURLY
+                        : $mode;
+
+                $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $modeApplique);
 
                 return array_merge($ligne, [
                     // Ils sortent tous de availableVehicles : ils sont libres
                     // sur ce creneau, par construction.
                     'available' => true,
                     'quote' => [
+                        'mode' => $quote->mode,
+                        'unit_price' => $quote->unitPrice,
+                        'billed_units' => $quote->billedUnits,
                         'duration_hours' => $quote->durationHours,
                         'total' => $quote->total,
                         'deposit' => $quote->deposit,
@@ -129,11 +143,21 @@ class VehicleController extends Controller
         }
 
         $libre = $this->availability->isVehicleAvailable($vehicle, $startsAt, $endsAt);
-        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt);
+
+        $mode = $request->input('pricing_mode', BookingPricing::MODE_HOURLY);
+
+        if ($mode === BookingPricing::MODE_DAILY && ! $this->pricing->estProposeALaJournee($vehicle)) {
+            $mode = BookingPricing::MODE_HOURLY;
+        }
+
+        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
 
         return ApiResponse::GET_DATA(['data' => array_merge($ligne, [
             'available' => $libre,
             'quote' => [
+                'mode' => $quote->mode,
+                'unit_price' => $quote->unitPrice,
+                'billed_units' => $quote->billedUnits,
                 'duration_hours' => $quote->durationHours,
                 'total' => $quote->total,
                 'deposit' => $quote->deposit,

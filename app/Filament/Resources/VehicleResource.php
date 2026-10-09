@@ -108,6 +108,18 @@ class VehicleResource extends Resource
                         ->step(0.01)
                         ->required(),
 
+                    /*
+                     * Laisse vide, le vehicule n'est propose qu'a l'heure : le
+                     * mode journee ne s'affiche alors pas pour lui cote
+                     * client, plutot qu'un prix a zero.
+                     */
+                    TextInput::make('daily_rate')
+                        ->label('Tarif journalier')
+                        ->helperText('Laissez vide si ce véhicule ne se loue pas à la journée.')
+                        ->numeric()
+                        ->minValue(0.01)
+                        ->step(0.01),
+
                     Select::make('currency_id')
                         ->label('Devise')
                         ->relationship('currency', 'title')
@@ -164,6 +176,15 @@ class VehicleResource extends Resource
                     ->label('Tarif horaire')
                     ->formatStateUsing(fn ($state, Vehicle $record) => number_format((float) $state, 2, ',', ' ').' '.$record->currency?->code)
                     ->sortable(),
+
+                TextColumn::make('daily_rate')
+                    ->label('Tarif journalier')
+                    ->placeholder('Non proposé')
+                    ->formatStateUsing(fn ($state, Vehicle $record) => $state === null
+                        ? null
+                        : number_format((float) $state, 2, ',', ' ').' '.$record->currency?->code)
+                    ->sortable()
+                    ->toggleable(),
 
                 TextColumn::make('bookings_count')
                     ->label('Réservations')

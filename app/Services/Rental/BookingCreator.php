@@ -31,8 +31,14 @@ class BookingCreator
      *
      * @throws BookingRefusee
      */
-    public function create(User $user, Vehicle $vehicle, Carbon $startsAt, Carbon $endsAt, array $details = []): Booking
-    {
+    public function create(
+        User $user,
+        Vehicle $vehicle,
+        Carbon $startsAt,
+        Carbon $endsAt,
+        array $details = [],
+        string $mode = BookingPricing::MODE_HOURLY,
+    ): Booking {
         if (! $vehicle->is_active) {
             throw new BookingRefusee(BookingRefusee::VEHICULE_INTROUVABLE);
         }
@@ -48,7 +54,16 @@ class BookingCreator
         }
 
         try {
-            $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt);
+            /*
+             * Un vehicule sans tarif journalier est refuse a la journee plutot
+             * que chiffre a l'heure en douce : ici le client paie, et un prix
+             * qui n'est pas celui qu'il a choisi n'est pas un prix.
+             */
+            if ($mode === BookingPricing::MODE_DAILY && ! $this->pricing->estProposeALaJournee($vehicle)) {
+                throw new BookingRefusee(BookingRefusee::MODE_INDISPONIBLE);
+            }
+
+            $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
         } catch (InvalidArgumentException) {
             throw new BookingRefusee(BookingRefusee::CRENEAU_INVALIDE);
         }

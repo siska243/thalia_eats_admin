@@ -29,6 +29,13 @@ class VehicleResource extends JsonResource
                 ? ImageUrl::make($request, $this->resource->image)
                 : null,
             'hourly_rate' => (float) $this->resource->hourly_rate,
+            /*
+             * Nul quand le vehicule n'est propose qu'a l'heure. L'ecran
+             * n'affiche alors pas le mode journee, plutot qu'un prix a zero.
+             */
+            'daily_rate' => $this->resource->daily_rate !== null
+                ? (float) $this->resource->daily_rate
+                : null,
             'currency' => $this->resource->currency,
 
             /*

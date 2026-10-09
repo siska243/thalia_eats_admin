@@ -31,6 +31,19 @@ class BookingResource extends JsonResource
             'dropoff_lat' => $this->resource->dropoff_lat,
             'dropoff_lng' => $this->resource->dropoff_lng,
 
+            /*
+             * Le mode applique et son prix unitaire. Le client doit relire sur
+             * sa reservation ce qu'il a choisi : « 2 journees a 149 » et non
+             * un total sans explication.
+             */
+            'pricing_mode' => $this->resource->pricing_mode,
+            'unit_price' => $this->resource->unit_price !== null
+                ? (float) $this->resource->unit_price
+                : null,
+            'billed_units' => $this->resource->billed_units !== null
+                ? (float) $this->resource->billed_units
+                : null,
+
             'hourly_rate' => (float) $this->resource->hourly_rate,
             'total' => (float) $this->resource->total,
             'deposit' => (float) $this->resource->deposit,

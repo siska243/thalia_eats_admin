@@ -2,50 +2,47 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
-use InvalidArgumentException;
-use Filament\Tables\Enums\RecordActionsPosition;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\Filter;
-use Filament\Actions\ActionGroup;
-use Filament\Actions\Action;
-use Filament\Notifications\Notification;
-use Filament\Actions\EditAction;
-use App\Services\Rental\BookingQuote;
-use App\Filament\Resources\BookingResource\RelationManagers\PaymentsRelationManager;
-use App\Filament\Resources\BookingResource\Pages\ListBookings;
 use App\Filament\Resources\BookingResource\Pages\CreateBooking;
 use App\Filament\Resources\BookingResource\Pages\EditBooking;
-use App\Filament\Resources\BookingResource\Pages;
-use App\Filament\Resources\BookingResource\RelationManagers;
+use App\Filament\Resources\BookingResource\Pages\ListBookings;
+use App\Filament\Resources\BookingResource\RelationManagers\PaymentsRelationManager;
 use App\Models\Booking;
 use App\Models\Chauffeur;
-use App\Models\Vehicle;
 use App\Models\PaimentMethod;
+use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
+use App\Services\Rental\BookingQuote;
 use App\Services\Rental\BookingWorkflow;
 use App\Services\Rental\VehicleAvailability;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 
 class BookingResource extends Resource
 {
     protected static ?string $model = Booking::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-calendar-days';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Location';
+    protected static string|\UnitEnum|null $navigationGroup = 'Location';
 
     protected static ?string $label = 'Réservation';
 
@@ -155,6 +152,23 @@ class BookingResource extends Resource
                      * total tape a la main dans l'administration divergerait du
                      * prix annonce au client.
                      */
+                    /*
+                     * Le mode de tarification. Le client le choisit cote
+                     * application ; l'administration doit pouvoir faire la
+                     * meme chose, sans quoi une reservation prise au telephone
+                     * ne pourrait jamais etre a la journee.
+                     */
+                    Select::make('pricing_mode')
+                        ->label('Mode de tarification')
+                        ->options([
+                            BookingPricing::MODE_HOURLY => 'À l\'heure',
+                            BookingPricing::MODE_DAILY => 'À la journée',
+                        ])
+                        ->default(BookingPricing::MODE_HOURLY)
+                        ->native(false)
+                        ->live()
+                        ->required(),
+
                     Placeholder::make('quote')
                         ->label('Montant')
                         ->columnSpanFull()
@@ -172,17 +186,21 @@ class BookingResource extends Resource
                                     $vehicle,
                                     Carbon::parse($startsAt),
                                     Carbon::parse($endsAt),
+                                    $get('pricing_mode') ?: BookingPricing::MODE_HOURLY,
                                 );
-                            } catch (InvalidArgumentException) {
-                                return 'La fin doit suivre le début.';
+                            } catch (InvalidArgumentException $e) {
+                                return $e->getMessage();
                             }
 
                             $code = $quote->currency->code;
 
+                            $unite = $quote->mode === BookingPricing::MODE_DAILY ? 'j' : 'h';
+
                             return sprintf(
-                                '%s h × %s %s = %s %s — acompte %s %s, solde %s %s en espèces',
-                                rtrim(rtrim(number_format($quote->durationHours, 2, ',', ' '), '0'), ','),
-                                number_format($quote->hourlyRate, 2, ',', ' '), $code,
+                                '%s %s × %s %s = %s %s — acompte %s %s, solde %s %s en espèces',
+                                rtrim(rtrim(number_format($quote->billedUnits, 2, ',', ' '), '0'), ','),
+                                $unite,
+                                number_format($quote->unitPrice, 2, ',', ' '), $code,
                                 number_format($quote->total, 2, ',', ' '), $code,
                                 number_format($quote->deposit, 2, ',', ' '), $code,
                                 number_format($quote->balance, 2, ',', ' '), $code,
@@ -279,7 +297,7 @@ class BookingResource extends Resource
                 TextColumn::make('starts_at')
                     ->label('Créneau')
                     ->dateTime('d/m/Y H:i')
-                    ->description(fn (Booking $record) => 'jusqu\'à ' . $record->ends_at?->format('H:i'))
+                    ->description(fn (Booking $record) => 'jusqu\'à '.$record->ends_at?->format('H:i'))
                     ->sortable(),
 
                 TextColumn::make('chauffeur.full_name')
@@ -290,7 +308,7 @@ class BookingResource extends Resource
 
                 TextColumn::make('total')
                     ->label('Total')
-                    ->formatStateUsing(fn ($state, Booking $record) => number_format((float) $state, 2, ',', ' ') . ' ' . $record->currency?->code)
+                    ->formatStateUsing(fn ($state, Booking $record) => number_format((float) $state, 2, ',', ' ').' '.$record->currency?->code)
                     ->alignEnd()
                     ->sortable(),
 
@@ -369,7 +387,7 @@ class BookingResource extends Resource
                                 ->title($confirmed ? 'Réservation confirmée' : 'Créneau déjà pris')
                                 ->body($confirmed
                                     ? 'Le code de prise en charge a été généré.'
-                                    : "Un autre client avait payé avant. La réservation passe en « ratée », avec un remboursement à effectuer.")
+                                    : 'Un autre client avait payé avant. La réservation passe en « ratée », avec un remboursement à effectuer.')
                                 ->status($confirmed ? 'success' : 'warning')
                                 ->send();
                         }),
@@ -378,7 +396,7 @@ class BookingResource extends Resource
                         ->label('Démarrer la course')
                         ->icon('heroicon-o-play')
                         ->requiresConfirmation()
-                        ->modalDescription("À utiliser quand le chauffeur ne peut pas le faire depuis son application.")
+                        ->modalDescription('À utiliser quand le chauffeur ne peut pas le faire depuis son application.')
                         ->visible(fn (Booking $record) => $record->status === Booking::STATUS_CONFIRMED)
                         ->action(fn (Booking $record) => app(BookingWorkflow::class)->startRide($record)),
 
@@ -396,9 +414,9 @@ class BookingResource extends Resource
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
                         ->schema([
-                            Textarea::make('reason')->label("Motif")->rows(2),
+                            Textarea::make('reason')->label('Motif')->rows(2),
                         ])
-                        ->modalDescription("Le remboursement dû est calculé sur ce qui a réellement été payé. Le virement, lui, reste à faire à la main.")
+                        ->modalDescription('Le remboursement dû est calculé sur ce qui a réellement été payé. Le virement, lui, reste à faire à la main.')
                         ->visible(fn (Booking $record) => in_array($record->status, [Booking::STATUS_PENDING_PAYMENT, Booking::STATUS_CONFIRMED], true))
                         ->action(fn (Booking $record, array $data) => app(BookingWorkflow::class)->cancel($record, $data['reason'] ?? null)),
                 ])
@@ -411,7 +429,7 @@ class BookingResource extends Resource
                     ->icon('heroicon-o-lock-open')
                     ->color('warning')
                     ->requiresConfirmation()
-                    ->modalDescription("Le chauffeur a épuisé ses essais. Vérifiez avec le client avant de débloquer.")
+                    ->modalDescription('Le chauffeur a épuisé ses essais. Vérifiez avec le client avant de débloquer.')
                     ->visible(fn (Booking $record) => $record->isPickupCodeLocked())
                     ->action(fn (Booking $record) => app(BookingWorkflow::class)->unlockPickupCode($record)),
 
@@ -419,7 +437,7 @@ class BookingResource extends Resource
                     ->label('Marquer remboursée')
                     ->icon('heroicon-o-banknotes')
                     ->requiresConfirmation()
-                    ->modalDescription("À cocher une fois le virement réellement effectué : cette application ne rembourse pas elle-même.")
+                    ->modalDescription('À cocher une fois le virement réellement effectué : cette application ne rembourse pas elle-même.')
                     ->visible(fn (Booking $record) => $record->refund_amount > 0 && $record->refunded_at === null)
                     ->action(fn (Booking $record) => app(BookingWorkflow::class)->markRefunded($record)),
 
@@ -442,6 +460,7 @@ class BookingResource extends Resource
             Vehicle::findOrFail($data['vehicle_id']),
             Carbon::parse($data['starts_at']),
             Carbon::parse($data['ends_at']),
+            $data['pricing_mode'] ?? BookingPricing::MODE_HOURLY,
         );
     }
 
