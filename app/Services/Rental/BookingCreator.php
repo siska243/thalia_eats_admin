@@ -16,9 +16,10 @@ use InvalidArgumentException;
  * Le client envoie un vehicule, un creneau et un lieu. Jamais un montant : le
  * prix est refait ici, comme il l'est deja dans l'administration.
  *
- * La reservation nait en attente de paiement et ne retient rien. Le premier
- * qui paie emporte le vehicule ; c'est `BookingConfirmation` qui tranche, sous
- * verrou, au moment ou l'acompte arrive.
+ * La reservation nait en attente de paiement et ne retient rien : tant que son
+ * client n'est pas parti payer, le vehicule reste proposable. C'est
+ * `DepositPayment` qui retient le creneau, sous verrou, au moment ou le client
+ * engage l'acompte, et `BookingConfirmation` qui tranche a l'encaissement.
  */
 class BookingCreator
 {
@@ -97,8 +98,18 @@ class BookingCreator
          * ferait payer un client pour rien, et la deception arriverait apres
          * le debit.
          */
-        if (! $this->availability->isVehicleAvailable($vehicle, $startsAt, $endsAt)) {
-            throw new BookingRefusee(BookingRefusee::VEHICULE_INDISPONIBLE);
+        $conflit = $this->availability->conflictsFor($vehicle, $startsAt, $endsAt)->first();
+
+        if ($conflit) {
+            /*
+             * Deux refus differents, parce que le client n'a pas la meme
+             * chose a faire. Un creneau vendu ne se liberera pas ; un creneau
+             * qu'un autre est en train de payer peut revenir dans le quart
+             * d'heure, et le lui dire lui evite d'abandonner.
+             */
+            throw new BookingRefusee($conflit->status === Booking::STATUS_PENDING_PAYMENT
+                ? BookingRefusee::PAIEMENT_EN_COURS
+                : BookingRefusee::VEHICULE_INDISPONIBLE);
         }
 
         try {

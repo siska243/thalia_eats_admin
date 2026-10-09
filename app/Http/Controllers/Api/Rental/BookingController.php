@@ -220,6 +220,10 @@ class BookingController extends Controller
         return match ($raison) {
             BookingRefusee::VEHICULE_INTROUVABLE => "Ce véhicule n'est plus proposé à la location.",
             BookingRefusee::VEHICULE_INDISPONIBLE => 'Ce véhicule est déjà réservé sur ce créneau.',
+            // Pas le même message que « déjà réservé » : ce créneau-là peut
+            // revenir. Le client doit savoir qu'il a une seconde chance,
+            // sinon il abandonne sur un refus qu'il croit définitif.
+            BookingRefusee::PAIEMENT_EN_COURS => 'Ce véhicule est en cours de réservation par un autre client. Réessayez dans quelques minutes, ou choisissez un autre véhicule.',
             BookingRefusee::CRENEAU_INVALIDE => 'La fin doit suivre le début.',
             BookingRefusee::MODE_INDISPONIBLE => "Ce véhicule n'est pas proposé à la journée.",
             BookingRefusee::DUREE_HORS_BORNES => "La durée demandée n'est pas autorisée.",

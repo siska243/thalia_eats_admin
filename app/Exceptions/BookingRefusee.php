@@ -47,6 +47,19 @@ class BookingRefusee extends Exception
     public const RESERVATION_NON_REGLEE = 'reservation_non_reglee';
 
     /**
+     * Un autre client est deja en train de payer ce vehicule sur ce creneau.
+     *
+     * Le refus est immediat, pas une attente : le second client comprend ce
+     * qui se passe et choisit — patienter le temps de l'echeance, ou prendre
+     * un autre vehicule. Le faire patienter sans rien dire sur une page de
+     * paiement aurait ete pire que le refus.
+     *
+     * Distinct de `vehicule_indisponible`, qui dit « c'est vendu » : ici le
+     * creneau peut tres bien se liberer dans le quart d'heure.
+     */
+    public const PAIEMENT_EN_COURS = 'paiement_en_cours';
+
+    /**
      * @param  string|null  $messageClient  La phrase a montrer, quand elle
      *                                      depend des reglages et ne peut
      *                                      donc pas etre figee cote

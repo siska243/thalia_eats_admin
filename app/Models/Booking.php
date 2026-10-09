@@ -38,10 +38,11 @@ class Booking extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     /**
-     * Les statuts qui retiennent le creneau.
+     * Les statuts qui retiennent le creneau a eux seuls.
      *
-     * `pending_payment` n'en fait pas partie : le premier qui paie emporte le
-     * vehicule, une reservation non reglee ne bloque personne.
+     * `pending_payment` n'en fait pas partie : une reservation simplement
+     * creee ne bloque personne. Elle ne retient le creneau qu'a partir du
+     * moment ou son client part payer — voir `scopeHolding()`.
      */
     public const HOLDING_STATUSES = [
         self::STATUS_CONFIRMED,
@@ -84,6 +85,7 @@ class Booking extends Model
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'expires_at' => 'datetime',
+        'deposit_started_at' => 'datetime',
         'confirmed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'completed_at' => 'datetime',
@@ -207,10 +209,35 @@ class Booking extends Model
         return $this->hasMany(BookingPayment::class, 'booking_id');
     }
 
-    /** Les reservations qui retiennent encore leur creneau. */
+    /**
+     * Les reservations qui retiennent encore leur creneau.
+     *
+     * Deux familles, et une seule definition pour tout le produit — le
+     * catalogue, la creation, le webhook d'acompte, l'administration :
+     *
+     * 1. celles qui sont payees (`confirmed`, `in_progress`) ;
+     * 2. celle dont le client est en train de payer. Elle porte
+     *    `deposit_started_at` et n'a pas encore atteint son echeance.
+     *
+     * La seconde famille est nouvelle. Sans elle, deux clients pouvaient
+     * partir payer le meme vehicule sur le meme creneau en meme temps : les
+     * deux etaient debites, le perdant passait en `lost` et attendait un
+     * remboursement manuel. On refuse maintenant le second avant le debit.
+     *
+     * L'echeance est celle qui existe deja (`expires_at`, reglee dans
+     * l'administration) : un seul compte a rebours dans le produit. Quand la
+     * reservation expire, le creneau se libere au meme instant, sans attendre
+     * la tache planifiee — la comparaison est faite en SQL. Un `expires_at`
+     * nul ne retient rien : en SQL la comparaison vaut NULL, donc faux.
+     */
     public function scopeHolding(Builder $query): Builder
     {
-        return $query->whereIn('status', self::HOLDING_STATUSES);
+        return $query->where(fn (Builder $holding) => $holding
+            ->whereIn('status', self::HOLDING_STATUSES)
+            ->orWhere(fn (Builder $enPaiement) => $enPaiement
+                ->where('status', self::STATUS_PENDING_PAYMENT)
+                ->whereNotNull('deposit_started_at')
+                ->where('expires_at', '>', now())));
     }
 
     /**
