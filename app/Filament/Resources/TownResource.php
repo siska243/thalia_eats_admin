@@ -6,8 +6,11 @@ use Filament\Schemas\Schema;
 use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Actions\EditAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
@@ -53,6 +56,12 @@ class TownResource extends Resource
                             ->relationship('city', 'title'),
                         TextInput::make('zip')
                             ->maxLength(255),
+                        // La location ne couvre pas tout le pays : ouvrir une
+                        // commune est une decision commerciale, prise ici
+                        // plutot que dans une constante du code.
+                        Toggle::make('rental_available')
+                            ->label('Desservie par la location')
+                            ->helperText("Hors de ces communes, le client est renvoye vers le service par WhatsApp."),
                     ])
 
             ]);
@@ -69,6 +78,9 @@ class TownResource extends Resource
                 ToggleColumn::make('is_active')
 
                 ,
+                IconColumn::make('rental_available')
+                    ->label('Location')
+                    ->boolean(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -79,7 +91,8 @@ class TownResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                TernaryFilter::make('rental_available')
+                    ->label('Desservie par la location'),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -37,6 +37,29 @@ class RentalSettings extends Settings
      */
     public int $pickup_code_max_attempts;
 
+    /**
+     * Le numero joint depuis le bouton WhatsApp, au format international.
+     *
+     * Hors des communes desservies, il n'y a pas de reservation a prendre :
+     * le client parle a quelqu'un. Le numero change de main plus souvent que
+     * l'application ne se livre.
+     */
+    public string $whatsapp_number;
+
+    /** Le nom commercial de la restauration, affiche dans l'application. */
+    public string $brand_food;
+
+    /** Le nom commercial de la location, affiche dans l'application. */
+    public string $brand_rental;
+
+    /**
+     * La phrase montree quand la commune de depart n'est pas desservie.
+     *
+     * Elle accompagne le bouton WhatsApp et sert aussi de message de refus a
+     * l'API : une seule formulation, modifiable sans livrer.
+     */
+    public string $out_of_zone_message;
+
     public static function group(): string
     {
         return 'rental';

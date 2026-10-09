@@ -200,6 +200,7 @@ Route::middleware(['auth:sanctum', 'assistant.emetteur', 'throttle:agent-ecritur
  * d'immatriculation, qui n'apparait qu'une fois la reservation faite et
  * seulement a son proprietaire.
  */
+Route::get('/rental/config', \App\Http\Controllers\Api\Rental\RentalConfigController::class);
 Route::get('/rental/vehicles', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'index']);
 Route::get('/rental/vehicles/{slug}', [\App\Http\Controllers\Api\Rental\VehicleController::class, 'show']);
 

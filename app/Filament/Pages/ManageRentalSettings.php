@@ -2,11 +2,12 @@
 
 namespace App\Filament\Pages;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
 use App\Settings\RentalSettings;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\SettingsPage;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 
 /**
  * Les reglages de la location, modifiables sans deploiement.
@@ -17,9 +18,9 @@ use Filament\Pages\SettingsPage;
  */
 class ManageRentalSettings extends SettingsPage
 {
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-adjustments-horizontal';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-adjustments-horizontal';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Location';
+    protected static string|\UnitEnum|null $navigationGroup = 'Location';
 
     protected static ?string $title = 'Réglages de la location';
 
@@ -72,7 +73,37 @@ class ManageRentalSettings extends SettingsPage
                         ->minValue(1)
                         ->maxValue(10)
                         ->required()
-                        ->helperText("Au-delà, le code se bloque et seul un administrateur peut le débloquer."),
+                        ->helperText('Au-delà, le code se bloque et seul un administrateur peut le débloquer.'),
+                ]),
+
+            Section::make('Marque et contact')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('brand_food')
+                        ->label('Nom de la restauration')
+                        ->required()
+                        ->maxLength(255)
+                        ->helperText("Affiché par l'application pour l'univers des repas."),
+
+                    TextInput::make('brand_rental')
+                        ->label('Nom de la location')
+                        ->required()
+                        ->maxLength(255)
+                        ->helperText("Affiché par l'application pour l'univers des véhicules."),
+
+                    TextInput::make('whatsapp_number')
+                        ->label('Numéro WhatsApp')
+                        ->tel()
+                        ->maxLength(255)
+                        ->helperText('Au format international, par exemple +243900000000. Laissé vide, le bouton WhatsApp ne sert à rien.'),
+
+                    Textarea::make('out_of_zone_message')
+                        ->label('Message hors zone')
+                        ->rows(3)
+                        ->required()
+                        ->maxLength(500)
+                        ->columnSpanFull()
+                        ->helperText('Montré quand la commune de prise en charge n\'est pas desservie, et renvoyé tel quel par l\'API à la réservation refusée.'),
                 ]),
         ]);
     }

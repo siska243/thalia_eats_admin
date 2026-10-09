@@ -34,6 +34,10 @@ class RentalApiTest extends TestCase
             'refund_percentage' => 100.0,
             'minimum_hours' => 1.0,
             'pickup_code_max_attempts' => 3,
+            'whatsapp_number' => '',
+            'brand_food' => 'Thalia Eats',
+            'brand_rental' => 'Thalia Trans',
+            'out_of_zone_message' => 'Nous ne desservons pas encore cette commune.',
         ], loadMissingValues: false);
 
         $this->currency = Currency::query()->create([

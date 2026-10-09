@@ -30,6 +30,12 @@ class BookingRequest extends FormRequest
             // Le mode de tarification choisi. Absent, c'est l'heure.
             'pricing_mode' => ['nullable', Rule::in(BookingPricing::MODES)],
             'pickup_location' => ['required', 'string', 'max:255'],
+            /*
+             * Nullable : les applications deja installees n'envoient pas de
+             * commune. Absente, la reservation passe — c'est le prix a payer
+             * pour ne pas casser le parc existant.
+             */
+            'pickup_town_id' => ['nullable', 'exists:towns,id'],
             'pickup_lat' => ['nullable', 'numeric', 'between:-90,90'],
             'pickup_lng' => ['nullable', 'numeric', 'between:-180,180'],
             'dropoff_location' => ['nullable', 'string', 'max:255'],
@@ -46,6 +52,7 @@ class BookingRequest extends FormRequest
             'starts_at.after' => 'La date de départ doit être à venir.',
             'ends_at.after' => 'La fin doit suivre le début.',
             'pickup_location.required' => 'Indiquez où le chauffeur doit vous prendre en charge.',
+            'pickup_town_id.exists' => 'Cette commune est inconnue.',
         ];
     }
 }

@@ -13,6 +13,7 @@ use App\Services\Rental\BookingCreator;
 use App\Services\Rental\BookingPricing;
 use App\Services\Rental\BookingWorkflow;
 use App\Services\Rental\DepositPayment;
+use App\Settings\RentalSettings;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\LibPhoneNumber;
@@ -70,7 +71,7 @@ class BookingController extends Controller
                 Carbon::parse($request->input('starts_at')),
                 Carbon::parse($request->input('ends_at')),
                 $request->only([
-                    'pickup_location', 'pickup_lat', 'pickup_lng',
+                    'pickup_location', 'pickup_lat', 'pickup_lng', 'pickup_town_id',
                     'dropoff_location', 'dropoff_lat', 'dropoff_lng',
                 ]),
                 $request->input('pricing_mode', BookingPricing::MODE_HOURLY),
@@ -219,6 +220,10 @@ class BookingController extends Controller
             BookingRefusee::VEHICULE_INDISPONIBLE => 'Ce véhicule est déjà réservé sur ce créneau.',
             BookingRefusee::CRENEAU_INVALIDE => 'La fin doit suivre le début.',
             BookingRefusee::MODE_INDISPONIBLE => "Ce véhicule n'est pas proposé à la journée.",
+            // Le texte vient des reglages : c'est la meme phrase que celle
+            // affichee a cote du bouton WhatsApp, et le commercial la change
+            // sans livraison.
+            BookingRefusee::HORS_ZONE => app(RentalSettings::class)->out_of_zone_message,
             'acompte_non_attendu' => "Cette réservation n'attend plus d'acompte.",
             'creneau_passe' => 'Ce créneau est déjà passé.',
             'paiement_refuse' => "Le paiement n'a pas pu être engagé, réessayez.",

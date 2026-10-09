@@ -4,6 +4,7 @@ namespace App\Services\Rental;
 
 use App\Exceptions\BookingRefusee;
 use App\Models\Booking;
+use App\Models\Town;
 use App\Models\User;
 use App\Models\Vehicle;
 use Illuminate\Support\Carbon;
@@ -41,6 +42,24 @@ class BookingCreator
     ): Booking {
         if (! $vehicle->is_active) {
             throw new BookingRefusee(BookingRefusee::VEHICULE_INTROUVABLE);
+        }
+
+        /*
+         * La location ne dessert que certaines communes.
+         *
+         * Le controle est ici, pas dans la validation de la requete : il
+         * porte sur l'etat commercial de la commune, qui change en
+         * administration, et il doit valoir pour tout appelant du service,
+         * API comme back-office.
+         *
+         * Pas de commune transmise, pas de refus : les applications deja
+         * installees n'en envoient pas, et les bloquer ferait plus de degats
+         * qu'une course prise hors zone et rattrapee par telephone.
+         */
+        $townId = $details['pickup_town_id'] ?? null;
+
+        if ($townId && ! Town::query()->whereKey($townId)->value('rental_available')) {
+            throw new BookingRefusee(BookingRefusee::HORS_ZONE);
         }
 
         /*

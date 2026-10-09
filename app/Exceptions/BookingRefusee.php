@@ -22,6 +22,9 @@ class BookingRefusee extends Exception
     /** Le vehicule n'est pas propose dans le mode de tarification demande. */
     public const MODE_INDISPONIBLE = 'mode_indisponible';
 
+    /** La commune de prise en charge n'est pas desservie par la location. */
+    public const HORS_ZONE = 'hors_zone';
+
     public function __construct(public readonly string $raison)
     {
         parent::__construct($raison);
