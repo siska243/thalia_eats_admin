@@ -13,7 +13,6 @@ use App\Models\Payement;
 use App\Models\Product;
 use App\Models\StatusPayement;
 use App\Models\Town;
-use App\Models\TrackOrder;
 use App\Services\QuotationService;
 use App\Services\Suivi\SuiviPositions;
 use App\Wrappers\ApiResponse;
@@ -549,7 +548,21 @@ class CommandeController extends Controller
                 return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
             }
 
-            $data = TrackOrder::query()->where('commande_id', $commande->id)->first();
+            /*
+             * Le DERNIER releve, et non le premier.
+             *
+             * `first()` sans tri rendait la plus ancienne ligne : le plan du
+             * client affichait la position ou le livreur se trouvait au
+             * moment du tout premier releve, et ne bougeait plus jusqu'a la
+             * livraison. Le point restait fige a l'endroit ou le livreur
+             * avait quitte le restaurant.
+             *
+             * `latest('id')` et non `latest('created_at')` : deux releves
+             * peuvent partager la meme seconde, seul l'ordre d'insertion ne
+             * ment pas. La lecture passe par le service, qui porte deja cette
+             * definition pour la location.
+             */
+            $data = app(SuiviPositions::class)->dernier($commande);
 
             return ApiResponse::GET_DATA($data);
         } catch (Exception $e) {

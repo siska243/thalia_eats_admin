@@ -371,6 +371,34 @@ class SuiviPositionsTest extends TestCase
         $this->assertSame(['lat' => -4.32, 'lng' => 15.31], $reponse->json('location_delivery'));
     }
 
+    /**
+     * La carte du client suit le livreur, elle ne reste pas figee au depart.
+     *
+     * `first()` sans tri rendait le plus ancien releve : le point affiche
+     * restait la ou le livreur avait quitte le restaurant, et ne bougeait
+     * plus jusqu'a la livraison.
+     */
+    public function test_la_carte_repas_rend_le_dernier_releve(): void
+    {
+        [$commande, $livreurUser] = $this->commandeEnLivraison();
+
+        Sanctum::actingAs($livreurUser, ['*']);
+
+        $this->emettreRepas($commande, ['lat' => -4.32, 'lng' => 15.31]);
+
+        // Le second point n'est accepte qu'une fois l'intervalle ecoule.
+        TrackOrder::query()->update(['created_at' => now()->subMinutes(6)]);
+        $this->emettreRepas($commande, ['lat' => -4.35, 'lng' => 15.34]);
+
+        $this->assertSame(2, TrackOrder::query()->count());
+
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->getJson('/api/user/commande/get-track/'.Cipher::Encrypt($commande->id))
+            ->assertSuccessful()
+            ->assertJsonPath('location_delivery', ['lat' => -4.35, 'lng' => 15.34]);
+    }
+
     // ── La purge ─────────────────────────────────────────────────────────
 
     public function test_la_purge_supprime_les_vieux_releves_et_garde_les_recents(): void
