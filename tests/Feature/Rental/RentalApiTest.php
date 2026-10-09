@@ -205,6 +205,57 @@ class RentalApiTest extends TestCase
             ->assertJsonPath('error', 'mode_indisponible');
     }
 
+    /**
+     * Le catalogue se pagine, pour le defilement infini.
+     *
+     * Sans `meta`, l'application redemanderait indefiniment une page qui
+     * n'existe pas : rien ne lui dirait qu'elle est arrivee au bout.
+     */
+    public function test_le_catalogue_se_pagine(): void
+    {
+        // Seize vehicules pour deborder la page de quinze.
+        for ($i = 0; $i < 15; $i++) {
+            Vehicle::query()->create([
+                'brand' => 'Suzuki', 'model' => "Alto {$i}",
+                'plate_number' => "KIN-10{$i}", 'hourly_rate' => 5 + $i,
+                'currency_id' => $this->currency->id,
+            ]);
+        }
+
+        $this->getJson('/api/rental/vehicles')
+            ->assertSuccessful()
+            ->assertJsonCount(15, 'data')
+            ->assertJsonPath('meta.current_page', 1)
+            ->assertJsonPath('meta.last_page', 2)
+            ->assertJsonPath('meta.total', 16);
+
+        $this->getJson('/api/rental/vehicles?page=2')
+            ->assertSuccessful()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.current_page', 2);
+    }
+
+    /** La recherche porte sur tout le parc, pas sur la page courante. */
+    public function test_la_recherche_traverse_les_pages(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            Vehicle::query()->create([
+                'brand' => 'Suzuki', 'model' => "Alto {$i}",
+                'plate_number' => "KIN-20{$i}", 'hourly_rate' => 5,
+                'currency_id' => $this->currency->id,
+            ]);
+        }
+
+        // « Land Cruiser » est le vehicule de setUp, trie en derniere position
+        // par tarif : une recherche filtree apres pagination ne le trouverait
+        // jamais.
+        $this->getJson('/api/rental/vehicles?search=cruiser')
+            ->assertSuccessful()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.model', 'Land Cruiser');
+    }
+
     /** La fiche s'ouvre sans creneau, comme celle d'un restaurant. */
     public function test_la_fiche_s_ouvre_sans_creneau(): void
     {

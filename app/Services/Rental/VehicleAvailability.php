@@ -5,6 +5,7 @@ namespace App\Services\Rental;
 use App\Models\Booking;
 use App\Models\Chauffeur;
 use App\Models\Vehicle;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
@@ -74,13 +75,24 @@ class VehicleAvailability
     /** Les vehicules proposables pour un creneau donne. */
     public function availableVehicles(Carbon $startsAt, Carbon $endsAt): Collection
     {
+        return $this->availableVehiclesQuery($startsAt, $endsAt)->get();
+    }
+
+    /**
+     * La meme chose, pas encore executee.
+     *
+     * Le catalogue en a besoin pour paginer et chercher en SQL : filtrer une
+     * collection deja chargee obligerait a tout lire avant d'en renvoyer
+     * quinze, et la recherche s'ecrirait deux fois, une par chemin.
+     */
+    public function availableVehiclesQuery(Carbon $startsAt, Carbon $endsAt): Builder
+    {
         return Vehicle::query()
             ->rentable()
             ->whereDoesntHave('bookings', fn ($query) => $query
                 ->holding()
                 ->overlapping($startsAt, $endsAt))
-            ->orderBy('hourly_rate')
-            ->get();
+            ->orderBy('hourly_rate');
     }
 
     /** Les chauffeurs affectables sur un creneau. */

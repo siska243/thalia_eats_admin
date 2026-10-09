@@ -10,9 +10,10 @@ use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
 use App\Services\Rental\VehicleAvailability;
 use App\Wrappers\ApiResponse;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Le catalogue des vehicules de location.
@@ -32,6 +33,9 @@ use Illuminate\Support\Carbon;
  */
 class VehicleController extends Controller
 {
+    /** Quinze par page : trois ecrans de cartes sur un telephone. */
+    private const PAR_PAGE = 15;
+
     public function __construct(
         private readonly VehicleAvailability $availability,
         private readonly BookingPricing $pricing,
@@ -50,58 +54,99 @@ class VehicleController extends Controller
             ? Carbon::parse($request->input('ends_at'))
             : null;
 
-        $vehicles = $startsAt && $endsAt
-            ? $this->availability->availableVehicles($startsAt, $endsAt)
-            : Vehicle::query()->rentable()->with('currency')->get();
+        /*
+         * Une requete, jamais une collection : le catalogue se pagine, et
+         * filtrer une collection deja chargee obligerait a lire tout le parc
+         * pour en renvoyer quinze.
+         */
+        $requete = $startsAt && $endsAt
+            ? $this->availability->availableVehiclesQuery($startsAt, $endsAt)
+            : Vehicle::query()->rentable()->orderBy('hourly_rate');
 
-        $vehicles = $this->filtrer($vehicles, $search);
+        $this->appliquerRecherche($requete, $search);
 
-        // Un seul appel pour tout le catalogue : demander vehicule par
-        // vehicule s'il est libre ferait une requete par ligne affichee.
+        $page = $requete->with('currency')->paginate(self::PAR_PAGE);
+
+        // Un seul appel pour toute la page : demander vehicule par vehicule
+        // s'il est libre ferait une requete par ligne affichee.
         $enCourse = $startsAt ? collect() : $this->vehiculesEnCourse();
 
-        $data = $vehicles->map(function (Vehicle $vehicle) use ($request, $startsAt, $endsAt, $enCourse, $mode) {
-            $ligne = (new VehicleResource($vehicle))->toArray($request);
+        $data = collect($page->items())->map(
+            fn (Vehicle $vehicle) => $this->ligne($vehicle, $request, $startsAt, $endsAt, $mode, $enCourse)
+        );
 
-            if ($startsAt && $endsAt) {
-                /*
-                 * Un vehicule sans tarif journalier reste chiffre a l'heure,
-                 * meme si le mode journee est demande : le cacher du catalogue
-                 * laisserait croire qu'il n'existe pas.
-                 */
-                $modeApplique = $mode === BookingPricing::MODE_DAILY
-                    && ! $this->pricing->estProposeALaJournee($vehicle)
-                        ? BookingPricing::MODE_HOURLY
-                        : $mode;
+        return ApiResponse::GET_DATA([
+            'data' => $data->values(),
+            /*
+             * De quoi savoir s'il reste quelque chose a charger. Sans cette
+             * information, le defilement infini redemande indefiniment une
+             * page qui n'existe pas.
+             */
+            'meta' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'total' => $page->total(),
+                'per_page' => $page->perPage(),
+            ],
+        ]);
+    }
 
-                $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $modeApplique);
+    /**
+     * Une ligne du catalogue : la ressource, plus son prix et sa disponibilite.
+     *
+     * Ecrite une fois pour la liste et la fiche, qui doivent annoncer
+     * exactement la meme chose : ecrite deux fois, elle finirait par diverger.
+     *
+     * @param  Collection<int, int>  $enCourse
+     * @return array<string, mixed>
+     */
+    private function ligne(
+        Vehicle $vehicle,
+        VehicleSearchRequest $request,
+        ?Carbon $startsAt,
+        ?Carbon $endsAt,
+        string $mode,
+        Collection $enCourse,
+    ): array {
+        $ligne = (new VehicleResource($vehicle))->toArray($request);
 
-                return array_merge($ligne, [
-                    // Ils sortent tous de availableVehicles : ils sont libres
-                    // sur ce creneau, par construction.
-                    'available' => true,
-                    'quote' => [
-                        'mode' => $quote->mode,
-                        'unit_price' => $quote->unitPrice,
-                        'billed_units' => $quote->billedUnits,
-                        'duration_hours' => $quote->durationHours,
-                        'total' => $quote->total,
-                        'deposit' => $quote->deposit,
-                        'balance' => $quote->balance,
-                        'currency' => $quote->currency,
-                    ],
-                ]);
-            }
-
+        if (! $startsAt || ! $endsAt) {
             return array_merge($ligne, [
                 'available' => ! $enCourse->contains($vehicle->id),
                 // Sans creneau, il n'y a pas de total a annoncer : seul le
                 // tarif horaire a un sens, et il est deja dans la ressource.
                 'quote' => null,
             ]);
-        });
+        }
 
-        return ApiResponse::GET_DATA(['data' => $data->values()]);
+        /*
+         * Un vehicule sans tarif journalier reste chiffre a l'heure, meme si
+         * le mode journee est demande : le cacher du catalogue laisserait
+         * croire qu'il n'existe pas.
+         */
+        $modeApplique = $mode === BookingPricing::MODE_DAILY
+            && ! $this->pricing->estProposeALaJournee($vehicle)
+                ? BookingPricing::MODE_HOURLY
+                : $mode;
+
+        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $modeApplique);
+
+        return array_merge($ligne, [
+            // Dans la liste, ils sortent tous de availableVehiclesQuery : ils
+            // sont libres sur ce creneau, par construction. La fiche, elle,
+            // corrige ce drapeau pour le vehicule qu'elle affiche.
+            'available' => true,
+            'quote' => [
+                'mode' => $quote->mode,
+                'unit_price' => $quote->unitPrice,
+                'billed_units' => $quote->billedUnits,
+                'duration_hours' => $quote->durationHours,
+                'total' => $quote->total,
+                'deposit' => $quote->deposit,
+                'balance' => $quote->balance,
+                'currency' => $quote->currency,
+            ],
+        ]);
     }
 
     /**
@@ -133,63 +178,51 @@ class VehicleController extends Controller
             ? Carbon::parse($request->input('ends_at'))
             : null;
 
-        $ligne = (new VehicleResource($vehicle))->toArray($request);
+        /*
+         * La fiche passe par la meme construction que la liste : les deux
+         * doivent annoncer exactement la meme chose, et c'est en les ecrivant
+         * deux fois qu'elles finissent par diverger.
+         */
+        $ligne = $this->ligne(
+            $vehicle,
+            $request,
+            $startsAt,
+            $endsAt,
+            $request->input('pricing_mode', BookingPricing::MODE_HOURLY),
+            $this->vehiculesEnCourse(),
+        );
 
-        if (! $startsAt || ! $endsAt) {
-            return ApiResponse::GET_DATA(['data' => array_merge($ligne, [
-                'available' => ! $this->vehiculesEnCourse()->contains($vehicle->id),
-                'quote' => null,
-            ])]);
+        /*
+         * La nuance propre a la fiche : avec un creneau, elle dit si CE
+         * vehicule est libre sur ces heures. La liste, elle, ne montre que
+         * des vehicules libres par construction.
+         */
+        if ($startsAt && $endsAt) {
+            $ligne['available'] = $this->availability->isVehicleAvailable($vehicle, $startsAt, $endsAt);
         }
 
-        $libre = $this->availability->isVehicleAvailable($vehicle, $startsAt, $endsAt);
-
-        $mode = $request->input('pricing_mode', BookingPricing::MODE_HOURLY);
-
-        if ($mode === BookingPricing::MODE_DAILY && ! $this->pricing->estProposeALaJournee($vehicle)) {
-            $mode = BookingPricing::MODE_HOURLY;
-        }
-
-        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
-
-        return ApiResponse::GET_DATA(['data' => array_merge($ligne, [
-            'available' => $libre,
-            'quote' => [
-                'mode' => $quote->mode,
-                'unit_price' => $quote->unitPrice,
-                'billed_units' => $quote->billedUnits,
-                'duration_hours' => $quote->durationHours,
-                'total' => $quote->total,
-                'deposit' => $quote->deposit,
-                'balance' => $quote->balance,
-                'currency' => $quote->currency,
-            ],
-        ])]);
+        return ApiResponse::GET_DATA(['data' => $ligne]);
     }
 
     /**
-     * Recherche par marque et modele, comme /list-restaurant sur le nom.
+     * Recherche par marque, modele et description, comme /list-restaurant sur
+     * le nom.
      *
-     * Elle porte sur la liste deja chargee plutot que sur une clause SQL : le
-     * chemin avec creneau passe par `availableVehicles`, qui rend une
-     * collection, pas une requete. Filtrer aux deux endroits differemment
-     * aurait donne deux comportements de recherche selon qu'un creneau est
-     * fourni ou non.
+     * En SQL et pas sur la collection : le catalogue est pagine, filtrer
+     * apres coup ne renverrait que les resultats de la page courante.
      */
-    private function filtrer(Collection $vehicles, ?string $search): Collection
+    private function appliquerRecherche(Builder $requete, ?string $search): void
     {
         if (! $search) {
-            return $vehicles;
+            return;
         }
 
-        $terme = mb_strtolower(trim($search));
+        $terme = '%'.trim($search).'%';
 
-        return $vehicles->filter(
-            fn (Vehicle $vehicle) => str_contains(
-                mb_strtolower("{$vehicle->brand} {$vehicle->model} {$vehicle->description}"),
-                $terme,
-            )
-        );
+        $requete->where(fn (Builder $q) => $q
+            ->where('brand', 'like', $terme)
+            ->orWhere('model', 'like', $terme)
+            ->orWhere('description', 'like', $terme));
     }
 
     /** Les vehicules occupes a cet instant precis. */
