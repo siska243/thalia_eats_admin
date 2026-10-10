@@ -4,29 +4,30 @@ namespace App\Http\Controllers;
 
 use Throwable;
 use App\Models\Precommande;
-use App\Wrappers\Cipher;
-use App\Wrappers\FlexPay;
-use App\Wrappers\LibPhoneNumber;
+use App\Services\PaiementPrecommande;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 
 /**
- * Le lien signé mène ici, pas directement à FlexPay : l'assistant ne collecte
- * que la commune, le client saisit lui-même ses coordonnées de livraison et
- * choisit son moyen de paiement, et une page permet de montrer le récapitulatif
- * avant de débiter.
+ * La page Blade de paiement d'une pre-commande.
+ *
+ * CONSERVEE POUR LES LIENS DEJA EMIS. Le lien qu'un client recoit desormais
+ * mene au site Next.js (voir Api\LienPaiementPrecommandeController), comme le
+ * veut la regle d'architecture du projet : « Pas de rendu Blade cote produit ».
+ * Mais des liens valables douze heures circulent peut-etre encore ; les casser
+ * laisserait quelqu'un avec un repas commande et aucun moyen de payer. Ces
+ * deux routes pourront partir une fois cette fenetre ecoulee.
+ *
+ * Toute la logique metier vit dans App\Services\PaiementPrecommande : les deux
+ * chemins ne doivent jamais diverger.
  */
 class PaiementPrecommandeController extends Controller
 {
-    /**
-     * Les deux seuls littéraux acceptés côté FlexPay. « cart » s'écrit bien
-     * ainsi : c'est le contrat de la passerelle, pas une faute à corriger.
-     */
-    private const METHODES = ['mobile', 'cart'];
+    public function __construct(private readonly PaiementPrecommande $paiements) {}
 
     public function show(string $uid)
     {
-        $precommande = $this->trouver($uid);
+        $precommande = $this->paiements->trouver($uid);
 
         if (! $precommande) {
             abort(404);
@@ -56,7 +57,7 @@ class PaiementPrecommandeController extends Controller
 
     public function initier(Request $request, string $uid)
     {
-        $precommande = $this->trouver($uid);
+        $precommande = $this->paiements->trouver($uid);
 
         if (! $precommande) {
             abort(404);
@@ -73,24 +74,21 @@ class PaiementPrecommandeController extends Controller
         // peut avoir été transféré, et celui qui l'a ne doit pas pouvoir
         // détourner une livraison déjà renseignée.
         if (! $precommande->coordonneesCompletes()) {
-            $this->figerCoordonnees($request, $precommande);
+            $this->paiements->figerCoordonnees($precommande, $request->validate(
+                $this->paiements->reglesCoordonnees(),
+                $this->paiements->messagesCoordonnees(),
+            ));
         }
 
         $method = (string) $request->input('method', 'mobile');
 
-        if (! in_array($method, self::METHODES, true)) {
+        if (! $this->paiements->methodeConnue($method)) {
             return back()->withErrors(['method' => 'Choisissez un moyen de paiement.'])->withInput();
         }
 
-        // Reproduction à l'identique du contrôle de l'application
-        // (CommandeController : `$total_price <= 2 && $method == "cart"`).
-        // Il ne regarde pas la devise : un montant en francs congolais y
-        // échappe donc, alors qu'il est très en dessous de 2 USD. On ne le
-        // corrige pas ici — une divergence entre le chemin application et le
-        // chemin lien de paiement serait pire que ce défaut partagé.
-        if ($method === 'cart' && (float) $precommande->total <= 2) {
+        if (! $this->paiements->minimumCarteAtteint($precommande, $method)) {
             return back()->withErrors([
-                'method' => "Pour le paiement par cart le montant minimum c'est 2USD",
+                'method' => PaiementPrecommande::MESSAGE_MINIMUM_CARTE,
             ])->withInput();
         }
 
@@ -100,16 +98,18 @@ class PaiementPrecommandeController extends Controller
         $phone = '';
 
         if ($method === 'mobile') {
-            $phone = $request->boolean('meme_numero')
-                ? (string) $precommande->recipient_phone
-                : (string) $request->input('phone');
+            $phone = $this->paiements->numeroDuPayeur(
+                $precommande,
+                $request->boolean('meme_numero'),
+                (string) $request->input('phone'),
+            );
 
-            if (! $this->numeroValide($phone)) {
+            if (! $this->paiements->numeroValide($phone)) {
                 return back()->withErrors(['phone' => 'Numéro de téléphone invalide.'])->withInput();
             }
         }
 
-        $result = $this->initierFlexPay($precommande, $phone, $method);
+        $result = $this->paiements->initierFlexPay($precommande, $phone, $method);
 
         if (! empty($result['code']) && $result['code'] != 0) {
             return back()->withErrors([
@@ -140,8 +140,10 @@ class PaiementPrecommandeController extends Controller
     }
 
     /**
-     * Commune aux deux points d'entrée (lien signé et application) : appelle
-     * FlexPay avec le total figé et enregistre la référence de paiement.
+     * Conservee pour Api\PrecommandeController::payer(), qui l'appelait via le
+     * conteneur. Elle ne fait plus que deleguer au service.
+     *
+     * @return array<string, mixed>
      */
     public function initierFlexPay(Precommande $precommande, string $phone, string $method): array
     {

@@ -102,6 +102,29 @@ class RouteServiceProvider extends ServiceProvider
     }
 
     /**
+     * La clé de limitation du compte visé par une tentative de connexion OAuth.
+     *
+     * L'adresse est normalisée (sinon « Client@X » et « client@x » seraient
+     * deux compteurs distincts pour un même compte) puis hachée : une clé de
+     * limiteur finit en clair dans le cache, et la liste des adresses qu'on a
+     * essayé d'attaquer n'a rien à y faire.
+     *
+     * Rend null quand aucune adresse n'est fournie : une requête sans e-mail
+     * échouera de toute façon, et lui donner un compteur commun offrirait de
+     * quoi saturer ce compteur pour bloquer les autres.
+     */
+    private static function cleDeCompte(Request $request): ?string
+    {
+        $email = $request->input('email');
+
+        if (! is_string($email) || trim($email) === '') {
+            return null;
+        }
+
+        return 'oauth-compte:'.hash('sha256', mb_strtolower(trim($email)));
+    }
+
+    /**
      * Compter par JETON et non par utilisateur : sinon un assistant bavard
      * épuise le quota de l'application mobile du même client, qui se retrouve
      * bloqué dans son app sans comprendre pourquoi.

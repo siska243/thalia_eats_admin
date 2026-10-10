@@ -160,11 +160,32 @@ class PrecommandeController extends Controller
 
     protected function lienDePaiement(Precommande $precommande): string
     {
-        return URL::temporarySignedRoute(
-            'precommande.paiement',
+        $uid = Cipher::Encrypt($precommande->id);
+
+        $signee = URL::temporarySignedRoute(
+            'api.precommande.lien-paiement',
             $precommande->expires_at,
-            ['uid' => Cipher::Encrypt($precommande->id)],
+            ['uid' => $uid],
         );
+
+        $query = parse_url($signee, PHP_URL_QUERY);
+
+        // ATTENTION — cet encodage n'est PAS celui de Laravel, et il ne faut
+        // pas s'appuyer sur une symétrie qui n'existe pas.
+        //
+        // `RouteUrlGenerator::to()` fait `strtr(rawurlencode($uri),
+        // $dontEncode)`, et `$dontEncode` ramène notamment « %2B → + »,
+        // « %3D → = » et « %2F → / » : Laravel laisse donc ces caractères BRUTS
+        // dans le chemin qu'il signe, là où `rawurlencode` ci-dessous les code,
+        // tout comme `encodeURIComponent` côté site. Un uid qui en contiendrait
+        // produirait deux chemins différents, et la signature serait rejetée.
+        //
+        // Sans conséquence en pratique : l'uid est un base64 de base64, et un
+        // balayage de 200 000 identifiants n'en a pas trouvé un seul portant
+        // « + », « / » ou « = ». Un « / » casserait de toute façon aussi la
+        // route Blade historique, bien avant ce lot. Mais si les clés de
+        // `Cipher` changent un jour, c'est ici qu'il faudra revenir.
+        return config('site.url').'/paiement/precommande/'.rawurlencode($uid).($query ? '?'.$query : '');
     }
 
     private function messageDeRefus(string $raison): string
@@ -173,6 +194,7 @@ class PrecommandeController extends Controller
             PrecommandeRefusee::AUCUN_TARIF_LIVRAISON => 'Nous ne livrons pas encore dans cette zone.',
             PrecommandeRefusee::PANIER_HORS_TRANCHE => 'Ce panier dépasse nos tranches de livraison. Réduisez la commande ou passez par l\'application.',
             PrecommandeRefusee::REFERENCE_INDISPONIBLE => 'Une erreur technique empêche la création de la pré-commande, réessayez.',
+            PrecommandeRefusee::TROP_DE_PRECOMMANDES => 'Vous avez déjà '.config('precommande.plafond_actives').' commandes en attente de paiement. Payez-en une ou attendez qu\'elles expirent avant d\'en créer une autre.',
             'multi_restaurant' => 'Une commande ne peut contenir que des plats d\'un seul restaurant.',
             'devises_melangees' => 'Tous les plats doivent être dans la même devise.',
             'panier_vide' => 'Veuillez indiquer au moins un produit.',

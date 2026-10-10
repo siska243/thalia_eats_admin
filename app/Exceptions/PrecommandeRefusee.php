@@ -16,6 +16,8 @@ class PrecommandeRefusee extends Exception
 
     public const REFERENCE_INDISPONIBLE = 'reference_indisponible';
 
+    public const TROP_DE_PRECOMMANDES = 'trop_de_precommandes';
+
     public function __construct(public readonly string $raison)
     {
         parent::__construct($raison);
