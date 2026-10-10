@@ -1,6 +1,21 @@
 <?php
 
+use App\Enums\CallBackEnum;
+
 return [
+
+    /*
+     * La cle secrete Stripe etait ecrite en clair dans App\Enums\CallBackEnum,
+     * donc committee et lisible par quiconque a acces au depot.
+     *
+     * La valeur par defaut reste celle d'aujourd'hui, pour que rien ne change
+     * tant que le proprietaire n'a pas renseigne STRIPE_SECRET : une cle
+     * committee est compromise, la sortir du code ne suffit pas, il faut la
+     * revoquer et la regenerer, et cette decision ne se prend pas ici.
+     */
+    'stripe' => [
+        'secret' => env('STRIPE_SECRET', CallBackEnum::SK_KEY->value),
+    ],
 
     /*
     |--------------------------------------------------------------------------

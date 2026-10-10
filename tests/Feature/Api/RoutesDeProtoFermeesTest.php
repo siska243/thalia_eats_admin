@@ -50,6 +50,27 @@ class RoutesDeProtoFermeesTest extends TestCase
             ->assertStatus(200);
     }
 
+    /**
+     * create-payment-intent ouvrait une intention de paiement Stripe a chaque
+     * appel, sans authentification et sur un montant fixe de 1099. Aucun des
+     * trois clients ne l'appelle. La cle secrete Stripe, elle, est ecrite en
+     * clair dans un enum du depot : elle passe par la configuration, en
+     * gardant la valeur actuelle par defaut pour ne rien casser.
+     */
+    public function test_l_ouverture_d_une_intention_stripe_refuse_un_appel_anonyme(): void
+    {
+        $this->postJson('/api/create-payment-intent', ['url' => 'https://app.thaliaeats.com'])
+            ->assertStatus(401);
+    }
+
+    public function test_la_cle_stripe_se_lit_dans_la_configuration(): void
+    {
+        // Le point d'entree existe et porte une valeur : le proprietaire n'a
+        // plus qu'a poser STRIPE_SECRET dans son .env pour que la cle
+        // committee cesse de servir.
+        $this->assertNotEmpty(config('services.stripe.secret'));
+    }
+
     public function test_la_creation_de_roles_n_est_plus_joignable(): void
     {
         $avant = Role::query()->count();

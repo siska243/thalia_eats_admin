@@ -289,7 +289,17 @@ Route::prefix('/default')->controller(DefaultDataController::class)->group(funct
     Route::get('/preview', 'preview');
 });
 
-Route::post('/create-payment-intent', [CallbackUrlController::class, 'paiement'])->name('payment-intent');
+/*
+ * Ouverture d'une intention de paiement Stripe.
+ *
+ * Elle etait anonyme : un POST suffisait a faire ouvrir une intention chez
+ * Stripe, sur un montant fixe de 1099, autant de fois que demande. Aucun des
+ * trois clients ne l'appelle. Elle est fermee derriere le jeton et limitee,
+ * pas supprimee.
+ */
+Route::post('/create-payment-intent', [CallbackUrlController::class, 'paiement'])
+    ->middleware(['auth:sanctum', 'throttle:lien-paiement'])
+    ->name('payment-intent');
 
 /*
  * Amorcage des roles, en local seulement.
