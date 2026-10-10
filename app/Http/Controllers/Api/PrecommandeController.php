@@ -112,6 +112,19 @@ class PrecommandeController extends Controller
             );
         }
 
+        // L'assistant ne collecte que la commune : une pré-commande naît donc
+        // sans adresse, et les colonnes sont nullables pour cette raison. Ce
+        // second point d'entrée — le paiement depuis l'application, sans passer
+        // par le lien signé — n'a pas le formulaire qui les remplit. Sans ce
+        // garde, il produirait une commande payée que personne ne peut livrer.
+        if (! $precommande->coordonneesCompletes()) {
+            return ApiResponse::BAD_REQUEST(
+                'coordonnees_manquantes',
+                'Oups',
+                'Veuillez d\'abord indiquer où livrer cette commande.'
+            );
+        }
+
         $phone = (string) $request->input('phone');
 
         if (! (new LibPhoneNumber($phone))->checkValidationNumber()) {
