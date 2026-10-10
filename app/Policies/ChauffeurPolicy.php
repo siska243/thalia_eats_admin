@@ -15,7 +15,7 @@ class ChauffeurPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->can('view_any_chauffeur');
+        return $user->can('ViewAny:Chauffeur');
     }
 
     /**
@@ -23,7 +23,7 @@ class ChauffeurPolicy
      */
     public function view(User $user, Chauffeur $chauffeur): bool
     {
-        return $user->can('view_chauffeur');
+        return $user->can('View:Chauffeur');
     }
 
     /**
@@ -31,7 +31,7 @@ class ChauffeurPolicy
      */
     public function create(User $user): bool
     {
-        return $user->can('create_chauffeur');
+        return $user->can('Create:Chauffeur');
     }
 
     /**
@@ -39,7 +39,7 @@ class ChauffeurPolicy
      */
     public function update(User $user, Chauffeur $chauffeur): bool
     {
-        return $user->can('update_chauffeur');
+        return $user->can('Update:Chauffeur');
     }
 
     /**
@@ -47,7 +47,7 @@ class ChauffeurPolicy
      */
     public function delete(User $user, Chauffeur $chauffeur): bool
     {
-        return $user->can('delete_chauffeur');
+        return $user->can('Delete:Chauffeur');
     }
 
     /**
@@ -55,7 +55,7 @@ class ChauffeurPolicy
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can('delete_any_chauffeur');
+        return $user->can('DeleteAny:Chauffeur');
     }
 
     /**
@@ -63,7 +63,7 @@ class ChauffeurPolicy
      */
     public function forceDelete(User $user, Chauffeur $chauffeur): bool
     {
-        return $user->can('force_delete_chauffeur');
+        return $user->can('ForceDelete:Chauffeur');
     }
 
     /**
@@ -71,7 +71,7 @@ class ChauffeurPolicy
      */
     public function forceDeleteAny(User $user): bool
     {
-        return $user->can('force_delete_any_chauffeur');
+        return $user->can('ForceDeleteAny:Chauffeur');
     }
 
     /**
@@ -79,7 +79,7 @@ class ChauffeurPolicy
      */
     public function restore(User $user, Chauffeur $chauffeur): bool
     {
-        return $user->can('restore_chauffeur');
+        return $user->can('Restore:Chauffeur');
     }
 
     /**
@@ -87,7 +87,7 @@ class ChauffeurPolicy
      */
     public function restoreAny(User $user): bool
     {
-        return $user->can('restore_any_chauffeur');
+        return $user->can('RestoreAny:Chauffeur');
     }
 
     /**
@@ -95,7 +95,7 @@ class ChauffeurPolicy
      */
     public function replicate(User $user, Chauffeur $chauffeur): bool
     {
-        return $user->can('replicate_chauffeur');
+        return $user->can('Replicate:Chauffeur');
     }
 
     /**
@@ -103,6 +103,6 @@ class ChauffeurPolicy
      */
     public function reorder(User $user): bool
     {
-        return $user->can('reorder_chauffeur');
+        return $user->can('Reorder:Chauffeur');
     }
 }
