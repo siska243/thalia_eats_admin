@@ -11,6 +11,7 @@ use App\Models\Commande;
 use App\Models\CommandeProduct;
 use App\Models\Payement;
 use App\Models\Product;
+use App\Models\Restaurant;
 use App\Models\StatusPayement;
 use App\Models\Town;
 use App\Services\Quotation;
@@ -78,6 +79,61 @@ class CommandeController extends Controller
             ['uid' => Cipher::Encrypt($commande->id), 'reference' => $commande->refernce],
             __('Commande en attente'),
             __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $commande->refernce])
+        );
+    }
+
+    /**
+     * Refuse une commande dont un produit vient d'un restaurant ferme.
+     *
+     * Le proprietaire, le 10 octobre : « on refuse car c'est fermer et
+     * personne peut preparer la commande ». Donc aucune marge, et c'est
+     * l'heure du REGLEMENT qui compte, pas celle ou le panier a ete rempli :
+     * un panier constitue avant la fermeture et paye apres est refuse.
+     *
+     * La regle d'ouverture elle-meme vit sur `Restaurant::estOuvert()`, une
+     * seule fois. Elle etait ecrite dans les deux applications et nulle part
+     * sur le serveur : le site affichait « Ferme » et laissait payer, le
+     * mobile grisait son bouton, et un appel direct a l'API passait dans les
+     * deux cas.
+     *
+     * Le message nomme l'heure de reouverture quand il y en a une : « ouvre a
+     * 9h » dit au client quoi faire, « ferme » le laisse devant une impasse.
+     *
+     * @param  array<int, array<string, mixed>>|null  $products  Les lignes recues, portant un uid chiffre.
+     */
+    private function refuserSiRestaurantFerme(?array $products, string $cle = 'product_id'): ?JsonResponse
+    {
+        $ids = collect($products ?? [])
+            ->map(fn ($ligne) => Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null))
+            ->filter(fn ($id) => $id !== false && $id !== '' && ctype_digit((string) $id))
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (! $ids) {
+            return null;
+        }
+
+        $ferme = Product::query()
+            ->with('restaurant')
+            ->whereIn('id', $ids)
+            ->get()
+            ->pluck('restaurant')
+            ->filter()
+            ->unique('id')
+            ->first(fn (Restaurant $restaurant) => ! $restaurant->estOuvert());
+
+        if (! $ferme) {
+            return null;
+        }
+
+        $ouvreA = $ferme->ouvreA();
+
+        return ApiResponse::BAD_REQUEST(
+            ['restaurant' => $ferme->name],
+            __('Restaurant fermé'),
+            $ouvreA
+                ? __(':restaurant est fermé. Il ouvre à :heure.', ['restaurant' => $ferme->name, 'heure' => $ouvreA])
+                : __(":restaurant est fermé et ne prend pas de commande pour l'instant.", ['restaurant' => $ferme->name]),
         );
     }
 
@@ -198,6 +254,10 @@ class CommandeController extends Controller
             // ayant une commande au paiement en aurait ouvert une seconde par
             // cet appel, ce qui contourne aussi le « une commande a la fois ».
             if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiRestaurantFerme($products)) {
                 return $refus;
             }
 
@@ -853,6 +913,13 @@ class CommandeController extends Controller
             }
 
             $products = $request->input('products');
+
+            // Avant toute ecriture et avant tout appel a la passerelle : un
+            // refus plus tard laisserait une commande posee, ou pire, un
+            // debit lance pour un repas que personne ne prepare.
+            if ($refus = $this->refuserSiRestaurantFerme($products, 'uid')) {
+                return $refus;
+            }
 
             $adresse = $request->input('address');
 
