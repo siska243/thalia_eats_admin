@@ -10,6 +10,12 @@
 .env.backup
 .env.production
 .env.testing
+# Les sauvegardes horodatees que laissent les scripts de deploiement. Elles
+# portent les memes secrets que le .env qu'elles copient, et un `git add -A`
+# distrait suffisait a les committer : .env.bak-1791572463 trainait a la
+# racine depuis le 9 octobre.
+.env.bak-*
+.env.*.bak
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
