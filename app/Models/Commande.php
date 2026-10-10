@@ -109,6 +109,25 @@ class Commande extends Model
     }
 
     /**
+     * Le `Status` a montrer, derive de `statutEffectif()`.
+     *
+     * Rend la relation chargee quand le statut reel est celui de la base, et
+     * le statut d'annulation quand la commande est expiree : l'ecran lit un
+     * objet `Status` complet dans les deux cas, avec son libelle et sa
+     * couleur, sans avoir a connaitre nos numeros.
+     */
+    public function statutLisible(): ?Status
+    {
+        $effectif = $this->statutEffectif();
+
+        if ($effectif === (int) $this->status_id) {
+            return $this->status;
+        }
+
+        return Status::query()->find($effectif) ?? $this->status;
+    }
+
+    /**
      * La commande attend-elle encore un reglement ?
      *
      * Une seule question, posee au statut effectif : ni annulee, ni perimee,
@@ -209,11 +228,18 @@ class Commande extends Model
      * cette regle n'en portent pas, et les traiter comme expirees ferait
      * disparaitre d'un coup des commandes vivantes. La migration s'occupe des
      * anciennes.
+     *
+     * Le statut compte autant que la date, exactement comme `estExpiree()` :
+     * seule une commande qui attend encore son reglement peut perimer. Sans
+     * cette condition, une commande deja payee qui aurait garde son echeance
+     * disparaitrait des ecrans.
      */
     public function scopeNonExpiree(Builder $query): Builder
     {
-        return $query->where(function (Builder $q) {
-            $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+        return $query->whereNot(function (Builder $q) {
+            $q->whereIn('status_id', self::STATUTS_NON_REGLES)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now());
         });
     }
 

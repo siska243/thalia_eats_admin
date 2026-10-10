@@ -407,9 +407,14 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
+            // `nonExpiree()` autant que `nonAnnulee()` : une commande en
+            // attente de paiement dont le delai est passe est annulee pour le
+            // serveur. Sans ce filtre, elle restait listee « en cours » alors
+            // que plus rien ne pouvait lui arriver, ni paiement ni annulation.
             $commande = Commande::with(['product', 'delivrery_driver', 'status'])
-                ->whereIn('status_id', [2, 5])
+                ->whereIn('status_id', [Commande::STATUT_EN_COURS, Commande::STATUT_ATTENTE_PAIEMENT])
                 ->nonAnnulee()
+                ->nonExpiree()
                 ->where('user_id', $user->id)
                 ->latest()
                 ->get();

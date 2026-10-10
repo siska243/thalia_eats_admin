@@ -78,7 +78,20 @@ class CommandeResource extends JsonResource
             'price_delivery' => $this->resource->price_delivery,
             'price_service' => $this->resource->price_service,
             'town_id' => new TownResource($this->resource->town),
-            'status' => new StatusResource($this->resource->status),
+            /*
+             * Le statut REEL, expiration comprise.
+             *
+             * La ressource rendait la relation brute : une commande dont le
+             * delai etait depasse continuait donc d'annoncer « en attente de
+             * paiement ». Le client la voyait dans sa liste, croyait pouvoir
+             * la regler, et ne pouvait rien en faire. `BookingResource` passe
+             * deja par le statut effectif de son cote ; les deux disent
+             * desormais la meme chose.
+             *
+             * La tache planifiee finira par ecrire ce statut en base, mais
+             * l'API n'a pas a mentir en l'attendant.
+             */
+            'status' => new StatusResource($this->resource->statutLisible()),
             'reference' => $this->resource->refernce,
             'lat' => $this->resource->lat,
             'long' => $this->resource->long,

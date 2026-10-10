@@ -121,4 +121,53 @@ class EcheanceCommandeTest extends TestCase
         $this->assertEqualsWithDelta(45, now()->diffInMinutes($commande->expires_at), 1);
         $this->assertEqualsWithDelta(45, now()->diffInMinutes($this->echeanceRendue($commande)), 1);
     }
+
+    /**
+     * Une commande perimee ne se lit plus comme « en attente de paiement ».
+     *
+     * Le statut rendu passait par la relation brute : l'ecran annoncait un
+     * reglement possible sur une commande que le serveur tenait deja pour
+     * annulee.
+     */
+    public function test_une_commande_perimee_se_lit_comme_annulee(): void
+    {
+        $commande = $this->commande(Commande::STATUT_ATTENTE_PAIEMENT);
+
+        $commande->forceFill(['expires_at' => now()->subMinute()])->saveQuietly();
+
+        $this->assertSame(
+            Commande::STATUT_ANNULEE,
+            $commande->statutEffectif(),
+            "Le statut effectif d'une commande perimee doit etre l'annulation.",
+        );
+
+        $this->assertSame(
+            Commande::STATUT_ANNULEE,
+            (int) ($commande->statutLisible()?->id),
+            'Le statut montre au client doit suivre le statut effectif.',
+        );
+    }
+
+    /**
+     * Et elle disparait de « Commandes en cours ».
+     *
+     * `/commande/tracking` ne filtrait que l'annulation ecrite en base. Le
+     * planificateur passant toutes les minutes, une commande echue restait
+     * listee « en cours » sans qu'on puisse ni la payer ni l'annuler.
+     */
+    public function test_une_commande_perimee_sort_des_commandes_en_cours(): void
+    {
+        $vivante = $this->commande(Commande::STATUT_ATTENTE_PAIEMENT);
+        $perimee = $this->commande(Commande::STATUT_ATTENTE_PAIEMENT);
+
+        $perimee->forceFill(['expires_at' => now()->subMinute()])->saveQuietly();
+
+        $references = collect($this->getJson('/api/user/commande/tracking')
+            ->assertSuccessful()
+            ->json())
+            ->pluck('reference');
+
+        $this->assertContains($vivante->refernce, $references->all());
+        $this->assertNotContains($perimee->refernce, $references->all());
+    }
 }
