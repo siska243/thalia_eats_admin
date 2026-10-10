@@ -22,6 +22,7 @@ use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
 use App\Wrappers\LibPhoneNumber;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -478,11 +479,30 @@ class CommandeController extends Controller
         }
     }
 
-    public function show($refernce)
+    /**
+     * La fiche d'une commande, retrouvee par sa reference.
+     *
+     * Elle n'etait filtree par rien : `where('refernce', ...)` et c'est tout.
+     * Et la reference n'est meme pas chiffree, c'est 1000 + l'identifiant de
+     * la commande precedente. Un seul compte suffisait donc a parcourir
+     * toutes les commandes de la plateforme, avec l'adresse de livraison, le
+     * nom et le telephone du destinataire et les coordonnees GPS. Le filtre
+     * est le meme que pour showOrder : client, livreur affecte, restaurant
+     * concerne.
+     */
+    public function show(Commande $commande)
     {
-        $commande = Commande::with(['product', 'delivrery_driver', 'status'])->where('refernce', $refernce)->first();
+        $commande = $this->clauseAcces(
+            Commande::query()->with(['product', 'delivrery_driver', 'status'])->whereKey($commande->getKey())
+        )->first();
 
-        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
+        // Une commande d'autrui et une reference inconnue donnent la meme
+        // reponse : sinon l'ecart renseigne sur l'existence des commandes.
+        if (! $commande) {
+            return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+        }
+
+        return ApiResponse::GET_DATA(new CommandeResource($commande));
     }
 
     /**
@@ -505,25 +525,37 @@ class CommandeController extends Controller
             return null;
         }
 
-        $user = auth()->user();
-
-        if (! $user) {
+        if (! auth()->check()) {
             return null;
         }
 
-        return Commande::query()
-            ->with($with)
-            ->where('id', (int) $id)
-            ->where(function ($query) use ($user) {
-                $query
-                    ->where('user_id', $user->id)
-                    ->orWhereHas('delivrery_driver', fn ($q) => $q->where('user_id', $user->id))
-                    ->orWhereHas(
-                        'commande_products.product.restaurant',
-                        fn ($q) => $q->where('user_id', $user->id)
-                    );
-            })
-            ->first();
+        return $this->clauseAcces(
+            Commande::query()->with($with)->where('id', (int) $id)
+        )->first();
+    }
+
+    /**
+     * La clause d'acces, ecrite une seule fois.
+     *
+     * Trois profils y ont legitimement acces : le client qui a commande, le
+     * livreur qui en a la charge, et le restaurant dont elle contient les
+     * plats. showOrder, get_track_order et show la partagent ; une seconde
+     * copie aurait diverge des la premiere evolution du modele, comme la
+     * definition « commande non reglee » l'a deja fait huit fois ici.
+     */
+    private function clauseAcces(Builder $query): Builder
+    {
+        $user = auth()->user();
+
+        return $query->where(function (Builder $sous) use ($user) {
+            $sous
+                ->where('user_id', $user?->id)
+                ->orWhereHas('delivrery_driver', fn ($q) => $q->where('user_id', $user?->id))
+                ->orWhereHas(
+                    'commande_products.product.restaurant',
+                    fn ($q) => $q->where('user_id', $user?->id)
+                );
+        });
     }
 
     public function showOrder(string $uid)
@@ -628,6 +660,25 @@ class CommandeController extends Controller
     {
 
         try {
+            /*
+             * La commande est d'abord reconnue comme celle du demandeur.
+             *
+             * L'ancienne version partait directement interroger FlexPay avec
+             * la reference recue, puis ecrivait le statut et declenchait la
+             * notification au restaurateur sur la commande que la passerelle
+             * lui nommait. La reference est une suite d'entiers : tout compte
+             * authentifie pouvait donc suivre, et faire avancer, le paiement
+             * de n'importe qui.
+             */
+            $commande = Commande::query()
+                ->where('refernce', $orderNumber)
+                ->where('user_id', auth()->id())
+                ->first();
+
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+            }
+
             $result = FlexPay::checkPaiement($orderNumber);
             if ($result['code'] != 0) {
 
@@ -640,9 +691,10 @@ class CommandeController extends Controller
 
                 if ($status_paiement?->is_paid) {
 
-                    $order = Commande::query()
-                        ->with('user')
-                        ->where('refernce', $result['transaction']['reference'])->first();
+                    // La commande deja reconnue, et non celle que la reponse
+                    // de la passerelle designe : sinon la verification de
+                    // propriete faite plus haut ne servirait a rien.
+                    $order = $commande->load('user');
 
                     $order->status_id = 2;
                     $order->reference_paiement = $result['transaction']['provider_reference'];
