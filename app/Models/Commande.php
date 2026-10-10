@@ -293,6 +293,39 @@ class Commande extends Model
         return $this->belongsTo(Status::class);
     }
 
+    /**
+     * La somme des lignes, hors livraison et service.
+     *
+     * Definie une seule fois : trois endroits la recalculaient chacun a sa
+     * facon, et c'est ainsi qu'une commande finit par porter deux montants.
+     */
+    public function sousTotal(): float
+    {
+        return round(
+            (float) $this->loadMissing('product')->product->sum(
+                fn (CommandeProduct $ligne) => (float) $ligne->price * (float) $ligne->quantity
+            ),
+            2
+        );
+    }
+
+    /**
+     * Le montant affiche doit etre le montant paye.
+     *
+     * `global_price` ne portait que les produits tant que la commande n'etait
+     * pas reglee : le client lisait « Total » sur son ecran — c'est le libelle
+     * employe par le site comme par le telephone — et payait autre chose au
+     * moment de valider. Livraison et service y sont donc compris des la
+     * creation.
+     */
+    public function recalculerTotal(): void
+    {
+        $this->global_price = round(
+            $this->sousTotal() + (float) $this->price_delivery + (float) $this->price_service,
+            2
+        );
+    }
+
     public function town(): BelongsTo
     {
         return $this->belongsTo(Town::class);

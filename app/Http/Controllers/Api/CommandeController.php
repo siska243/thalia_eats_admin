@@ -13,6 +13,7 @@ use App\Models\Payement;
 use App\Models\Product;
 use App\Models\StatusPayement;
 use App\Models\Town;
+use App\Services\Quotation;
 use App\Services\QuotationService;
 use App\Services\Suivi\SuiviPositions;
 use App\Wrappers\ApiResponse;
@@ -24,6 +25,7 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Throwable;
 
 class CommandeController extends Controller
@@ -131,7 +133,6 @@ class CommandeController extends Controller
             $commande->recipient_name = $request->input('recipient_name');
             $commande->recipient_phone = $request->input('recipient_phone');
             $commande->save();
-            $globale_price = 0;
 
             if (! empty($products)) {
                 return ApiResponse::BAD_REQUEST(__('Oups'), __('Error'), __('Veuillez ajouter au moins un produits'));
@@ -153,11 +154,13 @@ class CommandeController extends Controller
                 $commande_product->user_id = $user->id;
                 $commande_product->currency_id
                     = $pricing['currency']['id'];
-                $globale_price += $commande_product->price * $commande_product->quantity;
                 $commande_product->save();
             }
 
-            $commande->global_price = $globale_price;
+            // Livraison et service compris : l'ecran presente ce champ comme
+            // « Total », il doit etre le montant qu'on paiera.
+            $commande->load('product');
+            $commande->recalculerTotal();
 
             $commande->save();
 
@@ -211,14 +214,18 @@ class CommandeController extends Controller
                 }
             }
 
-            $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->get();
-            $sum = 0;
-            collect($commande_product)->each(function ($commande_product) use (&$sum) {
-
-                $sum = $commande_product->price * $commande_product->quantity;
-            });
-
-            $commande->global_price = $sum;
+            /*
+             * Le total ne comptait que les lignes du dernier produit ajoute,
+             * et l'affectation `=` au lieu de `+=` n'en gardait qu'une seule :
+             * un panier de trois plats s'affichait au prix du dernier. Il
+             * dependait de surcroit d'une variable de boucle, donc d'un appel
+             * sans produit pour planter.
+             *
+             * Livraison et service y sont compris, parce que les deux clients
+             * affichent ce champ sous le libelle « Total ».
+             */
+            $commande->load('product');
+            $commande->recalculerTotal();
             $commande->save();
 
             return $this->current();
@@ -630,6 +637,86 @@ class CommandeController extends Controller
         }
     }
 
+    /**
+     * Le repli sur le total du client, une fois le serveur declare souverain.
+     *
+     * Retomber sur le montant annonce par le telephone n'est alors plus un
+     * filet, c'est une porte : il suffit de faire echouer la cotation pour
+     * reprendre la main sur le prix. Chaque cas est donc tranche ici, et
+     * nulle part ailleurs.
+     *
+     * Refuses — on ne facture pas un panier qu'on ne sait pas lire :
+     * - produit_introuvable : un uid qui ne resout a rien. La suite de
+     *   valide() plantait de toute facon sur ce panier ;
+     * - panier_vide / quantite_invalide : il n'y a rien a facturer ;
+     * - commune_inconnue : sans commune, pas de grille, donc pas de prix.
+     *
+     * Gardent le repli, faute d'arbitrage du proprietaire :
+     * - multi_restaurant : trois commandes livrees en production sont dans ce
+     *   cas et aucun des deux paniers ne l'interdit — refuser casserait un
+     *   parcours reel ;
+     * - devises_melangees : meme raison ;
+     * - erreur_technique : une panne de la mesure ne peut pas, a elle seule,
+     *   decider de perdre une commande.
+     * Ces trois-la sont journalises en alerte : ils doivent se voir.
+     */
+    private function refuserFauteDeCotation(?Quotation $quotation, ?string $indisponibilite, $reference): ?JsonResponse
+    {
+        $refus_moteur = [
+            QuotationService::RAISON_PANIER_VIDE,
+            QuotationService::RAISON_QUANTITE_INVALIDE,
+        ];
+
+        $motif = null;
+
+        if ($quotation !== null && ! $quotation->disponible && in_array($quotation->raison, $refus_moteur, true)) {
+            $motif = $quotation->raison;
+        } elseif (in_array($indisponibilite, ['produit_introuvable', 'panier_vide', 'commune_inconnue'], true)) {
+            $motif = $indisponibilite;
+        }
+
+        if ($motif !== null) {
+            $this->journalQuotation('error', 'refus_facturation', [
+                'commande' => $reference,
+                'raison' => $motif,
+            ]);
+
+            return ApiResponse::BAD_REQUEST(
+                'panier_impossible_a_chiffrer',
+                __('Oups'),
+                __("Votre panier n'a pas pu être chiffré. Actualisez-le, puis réessayez.")
+            );
+        }
+
+        $repli = $quotation !== null && ! $quotation->disponible
+            ? $quotation->raison
+            : $indisponibilite;
+
+        if ($repli !== null) {
+            $this->journalQuotation('alert', 'repli_prix_client', [
+                'commande' => $reference,
+                'raison' => $repli,
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Journaliser ne doit jamais faire echouer une commande : le canal
+     * « quotation » est peut-etre precisement ce qui vient de tomber.
+     *
+     * @param  array<string, mixed>  $contexte
+     */
+    private function journalQuotation(string $niveau, string $evenement, array $contexte): void
+    {
+        try {
+            Log::channel('quotation')->{$niveau}($evenement, $contexte);
+        } catch (Throwable) {
+            // Rien a faire.
+        }
+    }
+
     public function valide(Request $request)
     {
         try {
@@ -722,6 +809,8 @@ class CommandeController extends Controller
             // que quotation.authoritative vaut false. Toute exception y est
             // absorbée : une commande ne peut pas échouer à cause de la mesure.
             $quotation = null;
+            // Pourquoi la cotation n'a pas eu lieu, quand elle n'a pas eu lieu.
+            $indisponibilite = null;
 
             try {
                 $ids = [];
@@ -765,6 +854,7 @@ class CommandeController extends Controller
                 }
 
                 if ($unresolved) {
+                    $indisponibilite = 'produit_introuvable';
                     // Une ligne non résolue chiffrerait un panier partiel : le
                     // moteur crierait à l'écart sur un panier qu'il n'a jamais
                     // vraiment vu. On ne chiffre pas, on journalise la raison.
@@ -807,8 +897,11 @@ class CommandeController extends Controller
                             'warnings' => $quotation->warnings,
                         ]);
                     }
+                } else {
+                    $indisponibilite = $quotation_lines === [] ? 'panier_vide' : 'commune_inconnue';
                 }
             } catch (Throwable $e) {
+                $indisponibilite = 'erreur_technique';
                 // Le canal « quotation » est peut-être précisément ce qui vient
                 // d'échouer : ne jamais laisser la récupération relever.
                 try {
@@ -822,9 +915,31 @@ class CommandeController extends Controller
                 }
             }
 
-            $montant_facture = (config('quotation.authoritative') && $quotation !== null && $quotation->disponible)
-                ? $quotation->total
-                : $total_price;
+            $autorite = (bool) config('quotation.authoritative');
+
+            if ($autorite) {
+                $refus = $this->refuserFauteDeCotation($quotation, $indisponibilite, $commande->refernce);
+
+                if ($refus) {
+                    return $refus;
+                }
+            }
+
+            $serveur_fait_foi = $autorite && $quotation !== null && $quotation->disponible;
+
+            if ($serveur_fait_foi) {
+                // La ventilation suit le total. Un total du serveur avec des
+                // frais du client donnerait une commande dont les lignes ne
+                // font pas la somme : personne, ensuite, ne sait laquelle croire.
+                $commande->price_delivery = $quotation->frais_livraison;
+                $commande->price_service = $quotation->service_price;
+            }
+
+            // La devise aussi : annoncer CDF sur un panier en USD ferait
+            // encaisser mille fois moins que le panier ne vaut.
+            $devise_facturee = $serveur_fait_foi ? $quotation->currency : null;
+
+            $montant_facture = $serveur_fait_foi ? $quotation->total : $total_price;
             // ----------------------------------------------------------------
 
             $commande->global_price = $montant_facture;
@@ -847,8 +962,7 @@ class CommandeController extends Controller
                 $commande_product->commande_id = $commande->id;
                 $commande_product->user_id = $user->id;
                 $commande_product->currency_id
-                    = $pricing['currency']['id'];
-                // $globale_price += $commande_product->price * $commande_product->quantity;
+                    = $devise_facturee?->id ?? $pricing['currency']['id'];
                 $commande_product->save();
             }
 
@@ -868,7 +982,8 @@ class CommandeController extends Controller
                 'phone' => $phone,
                 'name' => $user_name,
                 'email' => $user_email,
-                'currency' => ! empty($pricing['currency']['code']) ? $pricing['currency']['code'] : 'CDF',
+                'currency' => $devise_facturee?->code
+                    ?? (! empty($pricing['currency']['code']) ? $pricing['currency']['code'] : 'CDF'),
                 'reference' => $commande->refernce,
                 'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,

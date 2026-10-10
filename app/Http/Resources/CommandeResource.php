@@ -64,6 +64,11 @@ class CommandeResource extends JsonResource
             'cancel_at' => $this->resource->cancel_at,
             'accepted_at' => $this->resource->accepted_at,
             'global_price' => $this->resource->global_price,
+            // Le total etait la seule ligne chiffree exposee : l'ecran ne
+            // pouvait pas montrer le prix des plats sans le recalculer, et
+            // deux calculs pour un meme montant finissent toujours par
+            // diverger. Les lignes font foi.
+            'sous_total' => $this->resource->sousTotal(),
             // La devise d'une commande n'etait exposee nulle part : chaque
             // client la deduisait de `products[0].currency`. Les commandes sans
             // produit — il en existe en base — affichaient donc leur total nu,

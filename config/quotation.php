@@ -7,29 +7,25 @@ return [
     | Autorité sur le prix
     |--------------------------------------------------------------------------
     |
-    | À false, le montant facturé reste celui envoyé par le client, et le moteur
-    | de quotation se contente de journaliser les écarts sur le canal
-    | « quotation ». À true, le serveur fait autorité.
+    | Le serveur fait foi : le montant facturé est celui que calcule le moteur
+    | de quotation, pas celui qu'annonce le téléphone. Décision du propriétaire,
+    | prise au vu de la simulation sur les commandes réelles (`quotation:simuler`) :
+    | sur les dix dernières commandes exploitables, le serveur facturait au
+    | centime près ce qui avait été facturé.
     |
-    | Ne passer à true qu'après une période d'observation sans « ecart_quotation »
-    | dans les logs, couvrant plusieurs towns et plusieurs tranches.
-    | Réversible sans redéploiement de code.
+    | QUOTATION_AUTHORITATIVE=false dans le `.env` rend la main au client sans
+    | redéploiement : c'est le bouton d'arrêt d'urgence, il doit continuer de
+    | fonctionner.
     |
-    | ATTENTION — passer ce drapeau à true n'est PAS suffisant à lui seul.
-    | Aujourd'hui, seul `global_price` viendrait du serveur si authoritative
-    | valait true ; `CommandeController::valide()` continue par ailleurs à
-    | prendre `price_delivery`, `price_service` et `commande_products.currency_id`
-    | du `$pricing` envoyé par le client. Un client qui enverrait
-    | `frais_livraison: 0, service_price: 0` avec un total sous-évalué
-    | produirait alors une Commande dont la ventilation stockée ne
-    | correspondrait plus à son propre `global_price` — sans qu'un admin qui
-    | rapproche les chiffres dans Filament puisse savoir lequel fait foi.
+    | La ventilation suit le total. `CommandeController::valide()` prend de la
+    | quotation, au même moment, `price_delivery`, `price_service` et la devise
+    | des lignes : un total qui vient du serveur avec des frais qui viennent du
+    | client produirait une commande dont les lignes ne font pas la somme, et
+    | personne, en rapprochant les chiffres dans Filament, ne saurait lequel
+    | fait foi.
     |
-    | Le jour où l'on flippe ce drapeau, il faut aussi faire venir de la
-    | quotation, au même moment et au même endroit (CommandeController::valide()) :
-    | - price_delivery
-    | - price_service
-    | - commande_products.currency_id
+    | Ce que ce drapeau ne décide PAS : les cas où la cotation n'est pas
+    | disponible. Voir `CommandeController::refuserFauteDeCotation()`.
     |
     */
 
@@ -38,6 +34,6 @@ return [
     // (seule une chaine vide ou "0" vaut false) — un faux negatif ici
     // rendrait le serveur autorite sur ce qui est facture sans que personne
     // ne l'ait voulu.
-    'authoritative' => filter_var(env('QUOTATION_AUTHORITATIVE', false), FILTER_VALIDATE_BOOL),
+    'authoritative' => filter_var(env('QUOTATION_AUTHORITATIVE', true), FILTER_VALIDATE_BOOL),
 
 ];
