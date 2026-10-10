@@ -67,6 +67,16 @@ echo "[thalia] mise en cache de la configuration"
 
 php artisan config:clear --ansi
 php artisan config:cache --ansi
+
+# view:clear AVANT view:cache, et non seulement view:cache.
+#
+# storage/framework/views est un volume monte depuis l'hote : il survit aux
+# redemarrages et aux deploiements. Les vues Blade compilees d'un ancien
+# Filament y restaient, et referencaient une classe supprimee par la montee de
+# version — /admin/commandes tombait alors en Bad Gateway, le worker php tue
+# par le fatal. view:cache seul ne remplace pas une vue compilee deja presente ;
+# view:clear la supprime d'abord, et tout se recompile proprement derriere.
+php artisan view:clear --ansi
 php artisan view:cache --ansi
 
 # route:cache echoue si une route porte une closure ; l'application demarre
