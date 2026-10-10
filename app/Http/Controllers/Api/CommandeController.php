@@ -52,6 +52,35 @@ class CommandeController extends Controller
     }
 
     /**
+     * Refuse toute ecriture sur une commande qui n'est plus un panier.
+     *
+     * Quatre routes composaient le panier : `store`, `add-product`,
+     * `delete-product` et `update-address-delivery`. Seule la premiere avait
+     * ete fermee, en comparant status_id a 5 sur place ; les trois autres
+     * laissaient un client reecrire sa commande pendant que la passerelle en
+     * tenait deja le montant. Il payait un panier et en recevait un autre.
+     *
+     * La question est posee une seule fois ici, au statut effectif, parce
+     * qu'un garde par chemin est precisement le motif qui a deja produit deux
+     * bugs de production sur ce depot.
+     *
+     * La forme de la reponse est celle que `store` renvoyait deja : les deux
+     * clients savent la lire et proposent de payer ou d'annuler.
+     */
+    private function refuserSiVerrouillee(?Commande $commande): ?JsonResponse
+    {
+        if (! $commande || $commande->estModifiable()) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            ['uid' => Cipher::Encrypt($commande->id), 'reference' => $commande->refernce],
+            __('Commande en attente'),
+            __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $commande->refernce])
+        );
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(CommandeRequest $request)
@@ -81,25 +110,8 @@ class CommandeController extends Controller
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
 
-            /*
-             * Une commande envoyee au paiement ne se modifie plus.
-             *
-             * Jusqu'ici, un client dont la commande attendait son paiement
-             * (statut 5) pouvait la reecrire par cet appel : changer les
-             * produits, changer l'adresse, pendant que la passerelle tenait
-             * deja un montant. Il payait alors un panier et en recevait un
-             * autre. Il paie celle-la ou il l'annule, puis il recommence.
-             *
-             * Le statut 1 n'est pas bloque : c'est le panier en cours, et cet
-             * appel est precisement ce qui le compose. Le refuser fermerait
-             * l'ajout au panier a tous les clients.
-             */
-            if ($commande && (int) $commande->status_id === Commande::STATUT_ATTENTE_PAIEMENT) {
-                return ApiResponse::BAD_REQUEST(
-                    ['uid' => Cipher::Encrypt($commande->id), 'reference' => $commande->refernce],
-                    __('Commande en attente'),
-                    __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $commande->refernce])
-                );
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
             }
 
             $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
@@ -180,6 +192,13 @@ class CommandeController extends Controller
             $user = auth()->user();
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
+
+            // Avant la creation du panier de repli : sans ce refus, un client
+            // ayant une commande au paiement en aurait ouvert une seconde par
+            // cet appel, ce qui contourne aussi le « une commande a la fois ».
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
 
             if (! $commande) {
 
@@ -280,6 +299,10 @@ class CommandeController extends Controller
                 ->nonReglee()
                 ->when($uid, fn ($query) => $query->where('id', Cipher::Decrypt($uid)))
                 ->first();
+
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
 
             if (! $commande) {
                 return ApiResponse::NOT_FOUND(
@@ -392,6 +415,17 @@ class CommandeController extends Controller
 
             $product_id = $request->input('product_id');
             $commande = Commande::with('product')->nonReglee()->where('user_id', $user?->id)->first();
+
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
+
+            // Sans commande en cours il n'y a rien a retirer : l'appel ecrivait
+            // sur null et repondait 500.
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Aucune commande en attente ne correspond');
+            }
+
             CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id', Cipher::Decrypt($product_id))->delete();
 
             return $this->current();
@@ -1087,8 +1121,24 @@ class CommandeController extends Controller
     public function paiement(Request $request, $uid)
     {
         try {
+            /*
+             * Trois clauses la ou il n'y en avait qu'une.
+             *
+             * - `user_id` : l'uid n'est pas une capacite, Cipher chiffre un
+             *   entier avec une cle du depot et sans MAC. Sans ce filtre, tout
+             *   compte authentifie pouvait envoyer la commande d'autrui a la
+             *   passerelle et en lire le montant ;
+             * - `nonReglee()` : le `where('status_id', 5)` nu laissait passer
+             *   une commande annulee ou perimee, dont la colonne est restee a
+             *   5. Le client etait debite pour une commande morte. C'est la
+             *   definition partagee, celle que lisent les ecrans ;
+             * - le statut, nomme : seule une commande deja envoyee au paiement
+             *   se regle ici, pas un panier en cours de composition.
+             */
             $order = Commande::query()->where('id', Cipher::Decrypt($uid))
-                ->where('status_id', 5)
+                ->where('user_id', auth()->id())
+                ->nonReglee()
+                ->where('status_id', Commande::STATUT_ATTENTE_PAIEMENT)
                 ->first();
             if (! $order) {
                 return ApiResponse::BAD_REQUEST(__('Oups'), __('Error'), __('Commande invalide déjà payer ou annuler'));

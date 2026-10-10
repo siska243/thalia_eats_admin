@@ -41,6 +41,24 @@ class Commande extends Model
         self::STATUT_ATTENTE_PAIEMENT,
     ];
 
+    /**
+     * Les statuts ou le client compose encore son panier.
+     *
+     * Le statut 5 en est exclu, et c'est tout l'objet de cette constante : une
+     * commande envoyee au paiement est un montant que la passerelle tient
+     * deja. La laisser modifiable, c'est permettre de payer un panier et d'en
+     * recevoir un autre, ou de payer la livraison de Gombe pour se faire
+     * livrer a Ngaliema.
+     *
+     * Nommee ici plutot que testee statut par statut dans chaque route :
+     * `store` avait ete ferme en comparant status_id a 5 sur place, et les
+     * trois routes de panier etaient restees ouvertes faute d'avoir la meme
+     * phrase sous la main.
+     */
+    public const STATUTS_MODIFIABLES = [
+        self::STATUT_EN_ATTENTE,
+    ];
+
     /** Les statuts d'une commande qui n'est ni livree ni annulee. */
     public const STATUTS_EN_COURS = [
         self::STATUT_EN_ATTENTE,
@@ -138,6 +156,19 @@ class Commande extends Model
     public function attendUnReglement(): bool
     {
         return in_array($this->statutEffectif(), self::STATUTS_NON_REGLES, true);
+    }
+
+    /**
+     * Le client peut-il encore toucher a cette commande ?
+     *
+     * Posee au statut effectif, comme `attendUnReglement()` : une commande
+     * annulee ou perimee n'est pas modifiable non plus, meme si sa colonne
+     * status_id est restee a 1. Les lignes heritees portent exactement cet
+     * ecart.
+     */
+    public function estModifiable(): bool
+    {
+        return in_array($this->statutEffectif(), self::STATUTS_MODIFIABLES, true);
     }
 
     /**
