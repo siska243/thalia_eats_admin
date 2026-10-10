@@ -1,0 +1,70 @@
+# Connecteur MCP — fichier SEPARE, et c'est tout l'interet.
+#
+# Compose interpole TOUT le fichier avant de regarder quels services sont
+# demandes. Tant que ce service vivait dans docker-compose.yml, son
+# « MCP_URL_PUBLIQUE:? » manquant faisait echouer l'analyse du fichier entier
+# — donc le deploiement du BACKEND, qui n'a rien a voir avec le connecteur.
+# C'est arrive le 18 septembre 2026 : la production a cesse de se deployer
+# parce qu'une variable du connecteur n'etait pas encore renseignee.
+#
+# Un service accessoire ne doit jamais pouvoir empecher le service principal
+# de partir. Un fichier a part le garantit : deploy.sh ne le lit pas.
+#
+# Usage, depuis deploy/ :
+#   docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d mcp
+#
+# L'exigence stricte sur MCP_URL_PUBLIQUE reste : servir une adresse de
+# decouverte fausse serait pire que ne pas demarrer. Elle ne concerne
+# desormais que le connecteur.
+
+name: thalia-eats
+
+services:
+    mcp:
+        # Connecteur MCP : la facade qui permet a Claude ou ChatGPT d'appeler
+        # l'API Thalia au nom d'un client. C'est un client HTTP de cette API
+        # comme un autre — il ne touche jamais `db`, et n'est donc pas sur son
+        # reseau ni dans son `depends_on`.
+        build:
+            context: ../mcp
+            dockerfile: Dockerfile
+        image: thalia-eats-mcp:${MCP_IMAGE_TAG:-latest}
+        container_name: thalia-eats-mcp
+        restart: unless-stopped
+
+        # Boucle locale uniquement, comme `app` : Apache est le seul a pouvoir
+        # l'atteindre, et c'est lui qui porte le TLS.
+        ports:
+            - "127.0.0.1:${MCP_PORT:-8097}:8097"
+
+        environment:
+            # L'API publique, jamais la base. Le connecteur passe par le meme
+            # chemin que n'importe quel client : Apache, TLS, Sanctum.
+            THALIA_API_URL: "${MCP_API_URL:-https://app.thaliaeats.com}"
+
+            # L'URL publique du connecteur lui-meme. Elle part dans le document
+            # de metadonnees RFC 9728 et dans le defi 401 : une valeur fausse
+            # empeche un client de decouvrir ou s'authentifier.
+            THALIA_MCP_URL_PUBLIQUE: "${MCP_URL_PUBLIQUE:?MCP_URL_PUBLIQUE manquant dans deploy/.env}"
+
+            THALIA_MCP_DELAI_HTTP: "${MCP_DELAI_HTTP:-15}"
+
+            # Liste blanche d'hotes (anti-DNS-rebinding). Vide = desactivee :
+            # derriere Apache, l'en-tete Host est celui du domaine public.
+            THALIA_MCP_HOTES_AUTORISES: "${MCP_HOTES_AUTORISES:-}"
+
+        # Aucun volume : le connecteur n'ecrit rien et ne conserve aucun etat,
+        # ni jeton ni donnee client.
+
+        healthcheck:
+            test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8097/healthz', timeout=3).read().strip()==b'ok' else 1)\""]
+            interval: 30s
+            timeout: 5s
+            start_period: 15s
+            retries: 3
+
+        logging:
+            driver: json-file
+            options:
+                max-size: "20m"
+                max-file: "3"

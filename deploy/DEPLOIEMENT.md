@@ -762,18 +762,42 @@ Deux minutes de latence contre cette surface : le compromis est vite fait.
 
 ### Installation `[serveur]`
 
+L'unité se **fabrique dans `/etc/systemd/system/`** à partir du modèle. Le
+fichier suivi par git n'est jamais modifié : c'est tout l'intérêt, et
+l'explication est juste en dessous.
+
 ```bash
 cd /srv/thalia-eats/code/deploy
 
-# L'utilisateur propriétaire de /srv/thalia-eats, celui du groupe docker.
-sed -i "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service
+# Le modele est lu, jamais ecrit : la substitution part vers /etc.
+# $USER doit etre le proprietaire de /srv/thalia-eats, celui du groupe docker.
+sed "s/REMPLACER_PAR_VOTRE_UTILISATEUR/$USER/" systemd/thalia-deploy.service.example \
+    | sudo tee /etc/systemd/system/thalia-deploy.service > /dev/null
 
-sudo cp systemd/thalia-deploy.service systemd/thalia-deploy.timer \
-        /etc/systemd/system/
+sudo cp systemd/thalia-deploy.timer /etc/systemd/system/
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now thalia-deploy.timer
+
+# Le modele doit rester intact : cette commande ne doit rien afficher.
+git -C /srv/thalia-eats/code status --short
 ```
+
+> **Pourquoi ce detour plutot qu'un `sed -i` sur place.**
+> `auto-deploy.sh` refuse de deployer des qu'un fichier suivi est modifie sur
+> le serveur — c'est voulu, sinon un `git pull --ff-only` echouerait au milieu
+> d'une livraison. Mais l'ancienne procedure editait justement un fichier
+> suivi pour y poser `User=`. Le serveur divergeait donc des l'installation,
+> et **tous** les deploiements suivants etaient refuses. C'est arrive le
+> 18 septembre 2026 : un `User=ubuntu` pose des le premier jour avait gele la
+> livraison continue, sans que le lien soit fait entre les deux.
+>
+> Si vous heritez d'un serveur dans cet etat : copiez l'unite vers `/etc`
+> comme ci-dessus, puis
+> `git checkout -- deploy/systemd/thalia-deploy.service`. Verifiez d'abord
+> que `/etc/systemd/system/thalia-deploy.service` est une vraie copie et non
+> un lien symbolique vers le depot (`ls -l`) — restaurer sous un lien
+> casserait le service.
 
 Contrôle :
 
@@ -878,13 +902,44 @@ ss -ltnp | grep 8097
 
 ### 12b. Démarrage
 
+Le connecteur vit dans **son propre fichier Compose**, jamais dans celui du
+backend. Les commandes le nomment donc explicitement :
+
 ```bash
 cd /srv/thalia-eats/code/deploy
-docker compose build mcp
-docker compose up -d mcp
-docker compose ps mcp            # doit passer « healthy » en ~15 s
+COMPOSE="-f docker-compose.yml -f docker-compose.mcp.yml"
+
+docker compose $COMPOSE build mcp
+docker compose $COMPOSE up -d mcp
+docker compose $COMPOSE ps mcp          # doit passer « healthy » en ~15 s
 curl -s http://127.0.0.1:8097/healthz   # ok
 ```
+
+> **Pourquoi un fichier separe.** Compose interpole le fichier ENTIER avant de
+> regarder quels services sont demandes. Tant que `mcp` vivait dans
+> `docker-compose.yml`, son `MCP_URL_PUBLIQUE:?` manquant faisait echouer
+> l'analyse du fichier — donc le deploiement du **backend**, qui n'a rien a voir
+> avec le connecteur. Le 18 septembre 2026, la production a cesse de se deployer
+> pour cette seule raison. Un service accessoire ne doit jamais pouvoir bloquer
+> le service principal.
+>
+> `deploy.sh` ne lit pas ce fichier : mettre a jour le connecteur se fait a la
+> main, avec les commandes ci-dessus.
+>
+> **Corollaire qui a coute un 503 le jour meme.** Un service absent du fichier
+> que Compose lit est un ORPHELIN. `deploy.sh` portait `--remove-orphans` :
+> chaque deploiement du backend supprimait donc le conteneur du connecteur, et
+> `mcp.thaliaeats.com` rendait 503 jusqu'a relance manuelle. Le drapeau a ete
+> retire ; ne le remettez pas, et n'ajoutez pas non plus `-f
+> docker-compose.mcp.yml` a `deploy.sh` — ce serait recreer le couplage que la
+> separation vient de defaire.
+>
+> Si le connecteur est tombe :
+>
+> ```bash
+> cd /srv/thalia-eats/code/deploy
+> docker compose -f docker-compose.yml -f docker-compose.mcp.yml up -d mcp
+> ```
 
 ### 12c. Apache
 
@@ -903,6 +958,27 @@ applications du serveur.
 
 `ProxyTimeout 120` est utile ici aussi : le transport MCP « streamable HTTP »
 garde un flux SSE ouvert pendant la session.
+
+**Discretion sur la pile.** Le connecteur ne publie plus « Server: uvicorn » :
+c'est supprime a la source (`server_header=False`), donc vrai meme pour qui
+joindrait le conteneur directement. Apache, lui, annonce encore sa version, et
+ses pages d'erreur affichent « Apache/2.4.63 (Ubuntu) » — une version exacte
+vaut mieux qu'un nom de serveur pour qui cherche une faille connue. Cela se
+regle globalement, une fois, pour les onze applications de la machine :
+
+```apache
+# /etc/apache2/conf-enabled/security.conf
+ServerTokens Prod
+ServerSignature Off
+```
+
+```bash
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl -sI https://mcp.thaliaeats.com/healthz | grep -i '^server'
+```
+
+Ce n'est pas une protection : cacher un nom n'empeche aucune attaque, et il ne
+faut pas s'en croire protege. C'est retirer une indication gratuite.
 
 Puis, comme en section 7 : `a2ensite`, `apache2ctl configtest`,
 `apache2ctl -S` (le vhost MCP ne doit pas devenir le serveur par défaut),

@@ -34,6 +34,19 @@ Route::get('/auth/google', [\App\Http\Controllers\Api\GoogleAuthController::clas
 Route::get('/auth/google/register', [\App\Http\Controllers\Api\GoogleAuthController::class, 'register']);
 Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthController::class, 'callback']);
 
+/*
+ * La page Blade de paiement d'une pre-commande.
+ *
+ * CONSERVEE POUR LES LIENS DEJA EMIS, et pour eux seuls. Le lien qu'un client
+ * recoit desormais mene au site Next.js
+ * (GET|POST /api/precommandes/{uid}/lien-paiement), comme le veut la regle
+ * d'architecture du projet : « Pas de rendu Blade cote produit ».
+ *
+ * Mais un lien vaut douze heures : certains circulent peut-etre encore chez
+ * des clients au moment du deploiement, et les casser laisserait quelqu'un
+ * avec un repas commande et aucun moyen de payer. Ces deux routes pourront
+ * partir une fois cette fenetre ecoulee.
+ */
 Route::get('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'show'])
     ->name('precommande.paiement')
     ->middleware(['signed', 'throttle:lien-paiement']);
@@ -46,3 +59,35 @@ Route::post('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecom
 
 
 
+
+/*
+|--------------------------------------------------------------------------
+| Serveur d'autorisation OAuth 2.1 pour les assistants
+|--------------------------------------------------------------------------
+|
+| Ces routes sont dans le groupe « web » et non dans l'API : la page
+| d'autorisation est une vraie page HTML, avec un formulaire, une session et un
+| jeton CSRF. Les deux routes que l'assistant appelle en machine à machine
+| (`register` et `token`) sont exemptées de CSRF dans VerifyCsrfToken — un
+| logiciel n'a pas de session d'où tirer un jeton.
+|
+*/
+
+Route::get('/.well-known/oauth-authorization-server', [\App\Http\Controllers\Oauth\MetadonneesController::class, 'show'])
+    ->name('oauth.metadonnees');
+
+Route::post('/oauth/register', [\App\Http\Controllers\Oauth\EnregistrementController::class, 'store'])
+    ->name('oauth.register')
+    ->middleware('throttle:oauth-enregistrement');
+
+Route::get('/oauth/authorize', [\App\Http\Controllers\Oauth\AutorisationController::class, 'show'])
+    ->name('oauth.authorize')
+    ->middleware('throttle:oauth-autorisation');
+
+Route::post('/oauth/authorize', [\App\Http\Controllers\Oauth\AutorisationController::class, 'store'])
+    ->name('oauth.authorize.store')
+    ->middleware('throttle:oauth-connexion');
+
+Route::post('/oauth/token', [\App\Http\Controllers\Oauth\JetonController::class, 'store'])
+    ->name('oauth.token')
+    ->middleware('throttle:oauth-jeton');

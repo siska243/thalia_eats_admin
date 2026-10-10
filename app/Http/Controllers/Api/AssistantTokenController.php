@@ -12,7 +12,11 @@ use Illuminate\Http\Request;
 
 class AssistantTokenController extends Controller
 {
-    private const JOURS_PAR_DEFAUT = 90;
+    /**
+     * Publique parce que le serveur OAuth délivre le MÊME type de connexion :
+     * une seule définition de la durée, pas deux qui divergeront.
+     */
+    public const JOURS_PAR_DEFAUT = 90;
 
     public function store(AssistantTokenRequest $request): JsonResponse
     {

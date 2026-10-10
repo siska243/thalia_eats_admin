@@ -28,4 +28,41 @@ return [
 
     'visibilite_jours' => (int) env('PRECOMMANDE_VISIBILITE_JOURS', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Plafond de pré-commandes actives par client
+    |--------------------------------------------------------------------------
+    |
+    | Compte les pré-commandes EN ATTENTE et non expirées, jamais le total
+    | historique : un client qui en a payé cent doit pouvoir en créer une
+    | cent-unième. Le plafond se libère donc tout seul, par paiement ou par
+    | expiration, sans que personne n'ait à intervenir.
+    |
+    | Il existe parce qu'un assistant crée sans effort : une boucle maladroite,
+    | et le client reçoit quarante liens de paiement. Chaque pré-commande fige
+    | aussi un prix, donc chacune est un engagement commercial de Thalia.
+    |
+    */
+
+    'plafond_actives' => (int) env('PRECOMMANDE_PLAFOND_ACTIVES', 8),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Délai avant de pouvoir relancer un paiement
+    |--------------------------------------------------------------------------
+    |
+    | Une pré-commande ne se ferme qu'à la réception du webhook. Entre l'appel
+    | à la passerelle et cette confirmation, rien n'empêchait un second POST de
+    | rappeler FlexPay : le téléphone du client sonnait deux fois pour la même
+    | commande, et s'il confirmait la première sollicitation, la référence
+    | enregistrée n'était plus celle qui avait été payée.
+    |
+    | Pendant ce délai, une initiation déjà partie interdit la suivante et le
+    | client est invité à regarder son téléphone. Au-delà, on suppose la
+    | première sollicitation perdue et on laisse réessayer.
+    |
+    */
+
+    'delai_relance_paiement_minutes' => (int) env('PRECOMMANDE_DELAI_RELANCE_MINUTES', 5),
+
 ];

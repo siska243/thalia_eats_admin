@@ -136,11 +136,30 @@ log "Déploiement du conteneur"
 #
 # `db` n'est pas recréé : son volume porte les données, et le relancer pour
 # rien allonge le déploiement.
+# PAS de --remove-orphans, et ce n'est pas un oubli.
+#
+# Le connecteur MCP vit dans docker-compose.mcp.yml, un fichier que ce script
+# ne lit pas — c'est voulu : tant qu'il partageait le fichier principal, sa
+# variable MCP_URL_PUBLIQUE manquante faisait echouer l'analyse du fichier
+# entier, donc le deploiement du backend (18 septembre 2026).
+#
+# Mais un service absent du fichier lu est un ORPHELIN aux yeux de Compose.
+# Avec --remove-orphans, chaque deploiement du backend supprimait donc le
+# conteneur du connecteur, et mcp.thaliaeats.com rendait 503 jusqu'a ce que
+# quelqu'un le relance a la main. C'est arrive le jour meme de la separation.
+#
+# On ne peut pas non plus ajouter -f docker-compose.mcp.yml ici : ce serait
+# recreer exactement le couplage qu'on vient de defaire.
+#
+# Le drapeau ne servait qu'a nettoyer des services retires du fichier. Son
+# mode d'echec est destructeur et silencieux ; son benefice, du confort. Un
+# orphelin qui traine se supprime a la main, en le voyant. Le connecteur se
+# met a jour separement (voir DEPLOIEMENT.md section 12b).
 if $DO_BUILD; then
-  "${DC[@]}" up -d --build --remove-orphans
+  "${DC[@]}" up -d --build
   "${DC[@]}" up -d --force-recreate --no-deps app
 else
-  "${DC[@]}" up -d --remove-orphans
+  "${DC[@]}" up -d
   "${DC[@]}" up -d --force-recreate --no-deps app
 fi
 ok "Conteneurs démarrés (app + db)"

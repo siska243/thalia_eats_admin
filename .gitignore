@@ -44,3 +44,10 @@ yarn-error.log
 *.sql.gz
 /deploy/transfert/
 .gstack/
+
+# L'unite systemd reellement installee se fabrique dans /etc/systemd/system/
+# a partir de deploy/systemd/thalia-deploy.service.example. Suivre un
+# .service ici le ferait editer sur place a chaque installation, et
+# auto-deploy.sh refuse de deployer des qu'un fichier suivi est modifie sur
+# le serveur : un seul « User=ubuntu » gelait toute la livraison continue.
+deploy/systemd/thalia-deploy.service
