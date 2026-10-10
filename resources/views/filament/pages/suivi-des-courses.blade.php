@@ -41,8 +41,26 @@
                     x-data="{
                         trace: @entangle('trace'),
                         carte: null,
-                        ligne: null,
-                        marqueur: null,
+                        couches: [],
+                        /*
+                         * Une pastille lisible sans fichier d'image : Leaflet
+                         * sert ses icones par defaut depuis un CDN, et toutes
+                         * les courses se ressemblaient. Ici, la couleur et la
+                         * lettre disent qui est qui.
+                         */
+                        pastille(couleur, lettre) {
+                            return L.divIcon({
+                                className: '',
+                                // Guillemets SIMPLES : l'attribut HTML qui porte
+                                // ce code est delimite par des doubles, et HTML ne
+                                // connait pas l'echappement par antislash. Un guillemet
+                                // double y fermait l'attribut, la page devenait
+                                // invalide, et Livewire voyait plusieurs racines.
+                                html: `<div style='background:${couleur};width:28px;height:28px;border-radius:9999px;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);color:#fff;font:700 13px/22px sans-serif;text-align:center'>${lettre}</div>`,
+                                iconSize: [28, 28],
+                                iconAnchor: [14, 14],
+                            });
+                        },
                         dessiner() {
                             const points = (this.trace?.points ?? []).map(p => [p.lat, p.lng]);
 
@@ -50,12 +68,40 @@
                                 return;
                             }
 
-                            if (this.ligne) { this.carte.removeLayer(this.ligne); }
-                            if (this.marqueur) { this.carte.removeLayer(this.marqueur); }
+                            this.couches.forEach(c => this.carte.removeLayer(c));
+                            this.couches = [];
 
-                            this.ligne = L.polyline(points, { weight: 4 }).addTo(this.carte);
-                            this.marqueur = L.marker(points[points.length - 1]).addTo(this.carte);
-                            this.carte.fitBounds(this.ligne.getBounds(), { padding: [24, 24] });
+                            const ligne = L.polyline(points, { weight: 4, color: '#2563eb' }).addTo(this.carte);
+                            this.couches.push(ligne);
+
+                            const chauffeur = this.trace?.chauffeur;
+                            const client = this.trace?.client;
+
+                            if (chauffeur) {
+                                this.couches.push(
+                                    L.marker([chauffeur.lat, chauffeur.lng], { icon: this.pastille('#2563eb', 'C') })
+                                        .addTo(this.carte)
+                                        .bindTooltip('Chauffeur, derniere position', { direction: 'top' })
+                                );
+                            }
+
+                            // Le client n'est pas toujours localise : une
+                            // commande dont l'adresse n'a pas pu etre geocodee
+                            // n'en a pas. On ne pose alors aucun repere plutot
+                            // qu'un repere faux.
+                            if (client) {
+                                this.couches.push(
+                                    L.marker([client.lat, client.lng], { icon: this.pastille('#16a34a', 'K') })
+                                        .addTo(this.carte)
+                                        .bindTooltip(client.libelle ?? 'Client', { direction: 'top' })
+                                );
+                            }
+
+                            const bornes = client
+                                ? L.latLngBounds(points.concat([[client.lat, client.lng]]))
+                                : ligne.getBounds();
+
+                            this.carte.fitBounds(bornes, { padding: [32, 32] });
                         },
                     }"
                     x-init="
@@ -83,6 +129,25 @@
                     "
                 >
                     <div wire:ignore x-ref="carte" style="height: 28rem" class="rounded-lg"></div>
+
+                    {{-- Sans legende, deux pastilles de couleur ne veulent
+                         rien dire : l'administrateur devait deviner. --}}
+                    <div class="mt-3 flex flex-wrap items-center gap-4 text-sm">
+                        <span class="flex items-center gap-2">
+                            <span class="inline-block h-3 w-3 rounded-full" style="background:#2563eb"></span>
+                            Chauffeur, dernière position
+                        </span>
+                        @if ($this->trace['client'] ?? false)
+                            <span class="flex items-center gap-2">
+                                <span class="inline-block h-3 w-3 rounded-full" style="background:#16a34a"></span>
+                                Client — {{ $this->trace['client']['libelle'] }}
+                            </span>
+                        @else
+                            <span class="text-gray-500 dark:text-gray-400">
+                                Position du client inconnue pour cette course.
+                            </span>
+                        @endif
+                    </div>
                 </div>
             @else
                 <x-filament::empty-state

@@ -336,6 +336,18 @@ class SuiviDesCourses extends Page
 
         $this->trace = [
             'points' => $points,
+            /*
+             * Les deux reperes que l'administrateur cherche : ou est le
+             * chauffeur, et ou est le client. Le trace seul ne le disait pas,
+             * il fallait deviner que le dernier point etait le vehicule et
+             * que le client n'etait nulle part.
+             *
+             * Chauffeur : le dernier releve. Client : le point de prise en
+             * charge pour une location, qui le porte en propre, et la
+             * position geocodee une fois pour une commande de repas.
+             */
+            'chauffeur' => $points[count($points) - 1],
+            'client' => $this->positionDuClient($course, $points),
             'distance_km' => round($this->distanceParcourue($points), 2),
             'duree_minutes' => (int) $debut->diffInMinutes($fin),
             'debut' => $debut->format('d/m/Y H:i'),
@@ -347,6 +359,49 @@ class SuiviDesCourses extends Page
              * gaspillage — pour nous comme pour les serveurs de tuiles.
              */
             'en_cours' => app(SuiviPositions::class)->fenetreActive($course),
+        ];
+    }
+
+    /**
+     * Ou se trouve le client, selon la nature de la course.
+     *
+     * Une reservation porte ses coordonnees de prise en charge en propre.
+     * Une commande de repas les fait geocoder une fois, au premier releve,
+     * puis les recopie : on les relit donc sur le dernier releve.
+     *
+     * @param  array<int, array<string, mixed>>  $points
+     * @return array<string, mixed>|null
+     */
+    private function positionDuClient(Model $course, array $points): ?array
+    {
+        if ($course instanceof Booking) {
+            if ($course->pickup_lat === null || $course->pickup_lng === null) {
+                return null;
+            }
+
+            return [
+                'lat' => (float) $course->pickup_lat,
+                'lng' => (float) $course->pickup_lng,
+                'libelle' => $course->pickup_location ?: 'Prise en charge',
+            ];
+        }
+
+        $dernier = TrackOrder::query()
+            ->where('suivable_type', $course::class)
+            ->where('suivable_id', $course->getKey())
+            ->latest('id')
+            ->first();
+
+        $position = $dernier?->location_customer;
+
+        if (! is_array($position) || ! isset($position['lat'], $position['lng'])) {
+            return null;
+        }
+
+        return [
+            'lat' => (float) $position['lat'],
+            'lng' => (float) $position['lng'],
+            'libelle' => $course->adresse_delivery ?: 'Livraison',
         ];
     }
 

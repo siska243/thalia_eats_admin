@@ -353,4 +353,44 @@ class SuiviAdminCarteTest extends TestCase
 
         $this->assertStringStartsWith('PK', $contenu);
     }
+
+    public function test_le_trace_porte_la_position_du_chauffeur_et_celle_du_client(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $this->booking->update([
+            'pickup_lat' => -4.3190,
+            'pickup_lng' => 15.3080,
+            'pickup_location' => 'Gombe, avenue du Commerce',
+        ]);
+
+        $trace = Livewire::test(SuiviDesCourses::class)
+            ->set('course', 'location:'.$this->booking->id)
+            ->get('trace');
+
+        // Le chauffeur est le dernier releve : c'est la position qui compte.
+        $this->assertSame(end($trace['points'])['lat'], $trace['chauffeur']['lat']);
+        $this->assertSame(end($trace['points'])['lng'], $trace['chauffeur']['lng']);
+
+        $this->assertEqualsWithDelta(-4.3190, $trace['client']['lat'], 0.0001);
+        $this->assertEqualsWithDelta(15.3080, $trace['client']['lng'], 0.0001);
+        $this->assertSame('Gombe, avenue du Commerce', $trace['client']['libelle']);
+    }
+
+    public function test_sans_coordonnees_de_prise_en_charge_aucun_repere_client(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $this->booking->update(['pickup_lat' => null, 'pickup_lng' => null]);
+
+        $trace = Livewire::test(SuiviDesCourses::class)
+            ->set('course', 'location:'.$this->booking->id)
+            ->get('trace');
+
+        // Pas de repere plutot qu'un repere faux.
+        $this->assertNull($trace['client']);
+        $this->assertNotNull($trace['chauffeur']);
+    }
 }
