@@ -8,6 +8,7 @@ use App\Models\Currency;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Settings\RentalSettings;
+use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
@@ -244,6 +245,133 @@ class CourseChauffeurApiTest extends TestCase
         $this->assertSame($prochaine->reference, $resume['prochaine']['reference']);
         $this->assertSame('Jean Kabila', $resume['chauffeur']['full_name']);
         $this->assertSame(1, $resume['courses_terminees']);
+    }
+
+    private function uid(Booking $course): string
+    {
+        return Cipher::Encrypt($course->id);
+    }
+
+    /** Le code juste fait partir la course, et remet le compteur a zero. */
+    public function test_le_bon_code_demarre_la_course(): void
+    {
+        $course = $this->course(Booking::STATUS_CONFIRMED);
+        $course->forceFill(['pickup_code_attempts' => 2])->save();
+
+        Sanctum::actingAs($this->compteChauffeur, ['*']);
+
+        $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/depart', [
+            'code' => '4821',
+        ])->assertSuccessful();
+
+        $course->refresh();
+
+        $this->assertSame(Booking::STATUS_IN_PROGRESS, $course->status);
+        $this->assertNotNull($course->picked_up_at);
+        $this->assertSame(0, (int) $course->pickup_code_attempts);
+    }
+
+    /**
+     * Un code faux compte une tentative et ne demarre rien.
+     *
+     * Sans ce compteur, un code a quatre chiffres se devine en quelques
+     * milliers d'essais depuis le telephone du chauffeur.
+     */
+    public function test_un_code_faux_compte_une_tentative(): void
+    {
+        $course = $this->course(Booking::STATUS_CONFIRMED);
+
+        Sanctum::actingAs($this->compteChauffeur, ['*']);
+
+        $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/depart', [
+            'code' => '0000',
+        ])->assertStatus(400);
+
+        $course->refresh();
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $course->status);
+        $this->assertSame(1, (int) $course->pickup_code_attempts);
+        $this->assertNull($course->pickup_code_locked_at);
+    }
+
+    /** Au-dela du maximum regle, la saisie se verrouille. */
+    public function test_la_saisie_se_verrouille_au_dela_du_maximum(): void
+    {
+        $course = $this->course(Booking::STATUS_CONFIRMED);
+
+        Sanctum::actingAs($this->compteChauffeur, ['*']);
+
+        // Le reglage est a trois essais.
+        foreach (range(1, 3) as $ignore) {
+            $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/depart', [
+                'code' => '0000',
+            ])->assertStatus(400);
+        }
+
+        $course->refresh();
+        $this->assertNotNull($course->pickup_code_locked_at);
+
+        // Verrouillee, meme le bon code ne passe plus : seul un
+        // administrateur rouvre la saisie.
+        $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/depart', [
+            'code' => '4821',
+        ])->assertStatus(400);
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $course->refresh()->status);
+    }
+
+    /** Le code d'un autre chauffeur ne demarre pas sa course. */
+    public function test_un_chauffeur_ne_demarre_pas_la_course_d_un_autre(): void
+    {
+        $autreCompte = User::factory()->create();
+        Chauffeur::query()->create([
+            'user_id' => $autreCompte->id,
+            'full_name' => 'Paul Mbemba',
+            'phone' => '+243810000003',
+            'licence_expires_at' => now()->addYear(),
+            'is_active' => true,
+        ]);
+
+        $course = $this->course(Booking::STATUS_CONFIRMED);
+
+        Sanctum::actingAs($autreCompte, ['*']);
+
+        $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/depart', [
+            'code' => '4821',
+        ])->assertNotFound();
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $course->refresh()->status);
+    }
+
+    /** L'encaissement termine la course et laisse une ligne de paiement. */
+    public function test_l_encaissement_du_solde_termine_la_course(): void
+    {
+        $course = $this->course(Booking::STATUS_IN_PROGRESS);
+
+        Sanctum::actingAs($this->compteChauffeur, ['*']);
+
+        $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/encaisser')
+            ->assertSuccessful();
+
+        $course->refresh();
+
+        $this->assertSame(Booking::STATUS_COMPLETED, $course->status);
+        $this->assertNotNull($course->completed_at);
+        $this->assertNotNull($course->balance_collected_at);
+        $this->assertSame(1, $course->payments()->where('kind', 'balance')->count());
+    }
+
+    /** On n'encaisse pas une course qui n'a jamais demarre. */
+    public function test_on_n_encaisse_pas_une_course_non_demarree(): void
+    {
+        $course = $this->course(Booking::STATUS_CONFIRMED);
+
+        Sanctum::actingAs($this->compteChauffeur, ['*']);
+
+        $this->postJson('/api/rental/chauffeur/courses/'.$this->uid($course).'/encaisser')
+            ->assertStatus(400);
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $course->refresh()->status);
     }
 
     /** Un compte sans fiche chauffeur n'entre pas, meme authentifie. */

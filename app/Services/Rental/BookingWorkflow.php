@@ -102,6 +102,72 @@ class BookingWorkflow
         ]);
     }
 
+    /** Issues possibles d'une tentative de depart avec le code du client. */
+    public const DEPART_OK = 'ok';
+
+    public const DEPART_CODE_FAUX = 'code_faux';
+
+    public const DEPART_VERROUILLE = 'verrouille';
+
+    /**
+     * Le chauffeur saisit le code du client, et la course demarre.
+     *
+     * C'est la serrure de la course. Le code n'est jamais envoye au
+     * chauffeur — `BookingResource` ne le rend qu'a son proprietaire,
+     * `CourseChauffeurResource` jamais — il le saisit et c'est le serveur qui
+     * compare. Sans cette regle, un chauffeur pourrait declarer une course
+     * qu'il n'a pas faite, exactement la faille corrigee sur les livraisons
+     * de repas.
+     *
+     * Sous verrou de ligne : deux saisies simultanees, l'application et
+     * l'administration par exemple, compteraient chacune leur tentative sur
+     * la valeur qu'elles ont lue, et le compteur n'avancerait que d'un seul
+     * cran. Un code a quatre chiffres se devine en quelques milliers
+     * d'essais ; c'est le compteur qui l'en empeche, il doit etre juste.
+     *
+     * Au-dela du nombre d'essais regle en administration, la saisie se
+     * verrouille et seul un administrateur la rouvre, par
+     * `unlockPickupCode()`. C'est le choix du proprietaire : un deblocage
+     * automatique rendrait le compteur inoffensif.
+     */
+    public function demarrerAvecCode(Booking $booking, string $code): string
+    {
+        $max = max(1, (int) $this->settings->pickup_code_max_attempts);
+
+        return DB::transaction(function () use ($booking, $code, $max) {
+            /** @var Booking $verrouille */
+            $verrouille = Booking::query()->whereKey($booking->getKey())->lockForUpdate()->first();
+
+            if (! $verrouille || $verrouille->isPickupCodeLocked()) {
+                return self::DEPART_VERROUILLE;
+            }
+
+            // `hash_equals` plutot que `===` : la comparaison ne doit pas
+            // reveler, par sa duree, combien de chiffres sont deja justes.
+            if (! hash_equals((string) $verrouille->pickup_code, $code)) {
+                $tentatives = (int) $verrouille->pickup_code_attempts + 1;
+                $atteint = $tentatives >= $max;
+
+                $verrouille->update([
+                    'pickup_code_attempts' => $tentatives,
+                    'pickup_code_locked_at' => $atteint ? now() : null,
+                ]);
+
+                return $atteint ? self::DEPART_VERROUILLE : self::DEPART_CODE_FAUX;
+            }
+
+            // Le compteur repart de zero : les essais rates d'une course
+            // reussie n'ont pas a peser sur un deblocage ulterieur.
+            $verrouille->update(['pickup_code_attempts' => 0]);
+
+            $this->startRide($verrouille);
+
+            $booking->refresh();
+
+            return self::DEPART_OK;
+        });
+    }
+
     /**
      * Le solde est remis en especes au chauffeur, la course se termine.
      *

@@ -249,6 +249,15 @@ Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
             Route::get('/resume', 'resume');
             Route::get('/courses', 'courses');
             Route::get('/historique', 'historique');
+
+            /*
+             * Les deux seules ecritures du chauffeur, et les deux seules
+             * dont il porte la responsabilite sur le terrain : le client est
+             * monte, et le solde lui a ete remis en especes. Il n'accepte
+             * toujours ni ne refuse une course.
+             */
+            Route::post('/courses/{uid}/depart', 'depart');
+            Route::post('/courses/{uid}/encaisser', 'encaisser');
         });
 });
 

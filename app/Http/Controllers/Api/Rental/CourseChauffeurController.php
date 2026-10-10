@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Rental\CourseChauffeurResource;
 use App\Models\Booking;
 use App\Models\Chauffeur;
+use App\Services\Rental\BookingWorkflow;
 use App\Wrappers\ApiResponse;
+use App\Wrappers\Cipher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +29,8 @@ use Illuminate\Http\Request;
  */
 class CourseChauffeurController extends Controller
 {
+    public function __construct(private readonly BookingWorkflow $workflow) {}
+
     /**
      * Les courses a venir et celle qui roule.
      *
@@ -118,6 +122,112 @@ class CourseChauffeurController extends Controller
                     ->count(),
             ],
         ]);
+    }
+
+    /**
+     * Le client est monte : le chauffeur saisit le code, la course demarre.
+     *
+     * Le code n'est jamais rendu a ce controleur ni a l'ecran du chauffeur.
+     * Il arrive ici parce que le client le lui a lu, et le serveur compare.
+     *
+     * Les trois issues sont distinctes pour l'ecran : code faux, saisie
+     * verrouillee, ou depart. Un message unique obligerait le chauffeur a
+     * deviner s'il doit reessayer ou appeler l'administration.
+     */
+    public function depart(Request $request, string $uid): JsonResponse
+    {
+        $donnees = $request->validate([
+            'code' => ['required', 'string', 'size:4'],
+        ]);
+
+        $course = $this->courseDuChauffeur($request, $uid);
+
+        if (! $course) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette course est introuvable');
+        }
+
+        if ($course->statutEffectif() !== Booking::STATUS_CONFIRMED) {
+            return ApiResponse::BAD_REQUEST(
+                'statut',
+                'Oups',
+                "Cette course n'attend pas de départ.",
+            );
+        }
+
+        $issue = $this->workflow->demarrerAvecCode($course, $donnees['code']);
+
+        if ($issue === BookingWorkflow::DEPART_VERROUILLE) {
+            return ApiResponse::BAD_REQUEST(
+                'verrouille',
+                'Oups',
+                'Trop de codes erronés. Contactez Thalia pour débloquer cette course.',
+            );
+        }
+
+        if ($issue === BookingWorkflow::DEPART_CODE_FAUX) {
+            return ApiResponse::BAD_REQUEST(
+                'code_faux',
+                'Oups',
+                'Ce code ne correspond pas. Demandez au client de vous le relire.',
+            );
+        }
+
+        return ApiResponse::SUCCESS_DATA(
+            new CourseChauffeurResource($course->fresh(['vehicle.currency', 'currency', 'user'])),
+            'Course démarrée',
+            'Bonne route.',
+        );
+    }
+
+    /**
+     * Le solde est remis en especes, la course se termine.
+     *
+     * L'encaissement laisse une ligne de paiement, c'est `collectBalance()`
+     * qui s'en charge : sans elle, l'argent remis au chauffeur n'a aucune
+     * trace et le rapprochement de fin de journee est impossible.
+     *
+     * Seule une course qui roule peut etre encaissee : sur une course pas
+     * encore demarree, le chauffeur encaisserait un client qui n'est jamais
+     * monte.
+     */
+    public function encaisser(Request $request, string $uid): JsonResponse
+    {
+        $chauffeur = $this->chauffeur($request);
+        $course = $chauffeur ? $this->courseDuChauffeur($request, $uid) : null;
+
+        if (! $course || ! $chauffeur) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette course est introuvable');
+        }
+
+        if ($course->statutEffectif() !== Booking::STATUS_IN_PROGRESS) {
+            return ApiResponse::BAD_REQUEST(
+                'statut',
+                'Oups',
+                "Cette course n'est pas en cours.",
+            );
+        }
+
+        $this->workflow->collectBalance($course, $chauffeur);
+
+        return ApiResponse::SUCCESS_DATA(
+            new CourseChauffeurResource($course->fresh(['vehicle.currency', 'currency', 'user'])),
+            'Solde encaissé',
+            'La course est terminée.',
+        );
+    }
+
+    /** Une course de ce chauffeur, ou rien : l'uid seul n'autorise pas. */
+    private function courseDuChauffeur(Request $request, string $uid): ?Booking
+    {
+        $chauffeur = $this->chauffeur($request);
+        $id = $chauffeur ? Cipher::Decrypt($uid) : null;
+
+        return $id
+            ? Booking::query()
+                ->whereKey($id)
+                ->where('chauffeur_id', $chauffeur->id)
+                ->first()
+            : null;
     }
 
     /** La fiche chauffeur du compte connecte, ou rien. */
