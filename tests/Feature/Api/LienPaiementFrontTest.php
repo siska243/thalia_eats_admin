@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\TokenAbility;
 use App\Models\Precommande;
 use App\Models\Product;
 use App\Models\Town;
 use App\Models\User;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\Sanctum;
@@ -41,7 +43,7 @@ class LienPaiementFrontTest extends TestCase
      */
     private function reponseFlexPay(array $reponse): void
     {
-        $this->app->forgetInstance(\Illuminate\Http\Client\Factory::class);
+        $this->app->forgetInstance(Factory::class);
         Http::clearResolvedInstances();
         Http::fake(['*' => Http::response($reponse, 200)]);
     }
@@ -203,7 +205,7 @@ class LienPaiementFrontTest extends TestCase
         // telephone du client pour un paiement qu'aucun humain n'a confirme.
         $p = Precommande::factory()->create(['total' => 5500]);
 
-        $this->withHeader('Authorization', 'Bearer '.$this->jeton(\App\Enums\TokenAbility::agent()))
+        $this->withHeader('Authorization', 'Bearer '.$this->jeton(TokenAbility::agent()))
             ->postJson($this->lien($p), ['method' => 'mobile', 'phone' => '+243810000000'])
             ->assertStatus(403)
             ->assertJsonPath('error', 'jeton_assistant');
@@ -218,7 +220,7 @@ class LienPaiementFrontTest extends TestCase
         // l'assistant doit pouvoir verifier la pre-commande qu'il a creee.
         $p = Precommande::factory()->create(['total' => 5500]);
 
-        $this->withHeader('Authorization', 'Bearer '.$this->jeton(\App\Enums\TokenAbility::agent()))
+        $this->withHeader('Authorization', 'Bearer '.$this->jeton(TokenAbility::agent()))
             ->getJson($this->lien($p))
             ->assertStatus(200);
     }
@@ -511,7 +513,12 @@ class LienPaiementFrontTest extends TestCase
             'meme_numero' => true,
         ])->assertStatus(200);
 
-        Http::assertSent(fn ($request) => $request['phone'] === '+243810000001');
+        // FlexPay rejette un numero portant « + » ou des espaces (« la taille
+        // de votre numero ne correspond pas »), le wrapper le reduit donc aux
+        // chiffres avant l'envoi. Le « + » reste sur la pre-commande, seul le
+        // numero transmis a la passerelle est normalise. Meme attente que le
+        // test jumeau LienPaiementTest.
+        Http::assertSent(fn ($request) => $request['phone'] === '243810000001');
     }
 
     public function test_une_methode_inconnue_est_refusee(): void
