@@ -21,7 +21,6 @@ use App\Http\Controllers\Api\Rental\VehicleController;
 use App\Http\Controllers\Api\RestaurantController;
 use App\Http\Controllers\Api\UserAccountController;
 use App\Http\Controllers\Api\UserAddressController;
-use App\Wrappers\ApiResponse;
 use App\Wrappers\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -44,30 +43,17 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 /*
- * Vestige de prototype : un relais vers un Ollama local.
+ * Le relais vers un Ollama local a ete SUPPRIME.
  *
- * Il etait ouvert a tout Internet, sans authentification ni limitation, avec
- * un delai d'attente d'une heure. Deux couts, pas un : le GPU du serveur
- * tournait pour qui le demandait, et chaque requete immobilisait un worker
- * php-fpm pendant une heure — quelques dizaines suffisaient a rendre l'API
- * entiere injoignable.
+ * `POST /api/ia-model-llama3`, vestige de prototype, etait ouvert a tout
+ * Internet sans authentification ni limitation, avec un delai d'attente d'une
+ * heure : chaque appel immobilisait un worker php-fpm pendant une heure, et
+ * quelques dizaines suffisaient a rendre l'API entiere injoignable.
  *
- * Il est ferme derriere le jeton et limite, pas supprime : retirer un
- * endpoint demande une depreciation et un build mobile, et cette decision
- * revient au proprietaire. Aucun des trois clients ne l'appelle cependant,
- * c'est verifie, donc rien ne retient sa suppression le jour ou elle sera
- * tranchee. La direction du produit est de toute facon de ne pas construire
- * dessus : les agents vivront dans un service separe, avec un jeton scope.
+ * Verifie avant de le retirer : aucun des trois clients ne l'appelait. La
+ * direction du produit est de ne pas construire dessus — les agents vivent
+ * dans un service separe, avec un jeton scope — donc rien ne le remplace ici.
  */
-Route::post('/ia-model-llama3', function (Request $request) {
-    $response = Http::timeout(3600)->post('http://127.0.0.1:11434/api/generate', [
-        'model' => 'mistral',
-        'prompt' => $request->input('prompt'),
-        'stream' => false,
-    ]);
-
-    return ApiResponse::GET_DATA($response->json());
-})->middleware(['auth:sanctum', 'throttle:ia-proto']);
 
 /*
  * Mise au point, en local seulement.

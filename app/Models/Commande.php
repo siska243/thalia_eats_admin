@@ -203,6 +203,41 @@ class Commande extends Model
          * `valide`, par l'administration et par le connecteur. Un garde par
          * chemin, c'est le motif qui a deja produit deux bugs sur ce depot.
          */
+        /*
+         * La reference se derive de l'identifiant de la commande elle-meme.
+         *
+         * Elle etait calculee `1000 + id de la commande PRECEDENTE`, lue hors
+         * de tout verrou et globalement : deux clients qui commandent a la
+         * meme seconde lisaient la meme derniere commande et recevaient la
+         * meme reference. Or c'est la cle par laquelle le webhook FlexPay
+         * retrouve la commande a crediter — deux commandes de meme reference,
+         * et l'argent d'un client confirme celle d'un autre.
+         *
+         * Derivee de son propre identifiant, elle est unique par construction,
+         * sans verrou ni compteur a tenir. Le format ne change pas, et aucune
+         * ancienne reference n'est touchee : les lignes existantes valent
+         * `1000 + (id - 1)`, toujours inferieures a ce qu'une nouvelle
+         * recevra.
+         *
+         * Posee apres l'insertion, puisqu'elle a besoin de l'identifiant, et
+         * en silence pour ne pas rejouer les crochets d'enregistrement.
+         */
+        static::creating(function (self $commande) {
+            // La colonne est NOT NULL et sans defaut : il faut bien ecrire
+            // quelque chose a l'insertion. Cette valeur d'attente est unique
+            // pour ne pas heurter l'index, et vit quelques microsecondes.
+            if ($commande->refernce === null || $commande->refernce === '') {
+                $commande->refernce = 'tmp-'.uniqid('', true);
+            }
+        });
+
+        static::created(function (self $commande) {
+            if (str_starts_with((string) $commande->refernce, 'tmp-')) {
+                $commande->refernce = (string) (1000 + $commande->id);
+                $commande->saveQuietly();
+            }
+        });
+
         static::saving(function (self $commande) {
             if (in_array((int) $commande->status_id, self::STATUTS_NON_REGLES, true)) {
                 $commande->expires_at = now()->addMinutes(self::delaiExpiration());

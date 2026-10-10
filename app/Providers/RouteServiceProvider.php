@@ -53,15 +53,6 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('assistants', fn (Request $request) => Limit::perMinute(5)->by($request->user()?->id ?: $request->ip()));
 
         /*
-         * Le relais Ollama. Une generation coute des secondes de GPU et
-         * immobilise un worker php-fpm jusqu'a une heure : c'est le quota le
-         * plus serre de l'application, et il compte par compte, pas par IP,
-         * parce qu'un seul compte derriere un operateur mobile partage son
-         * adresse avec toute la ville.
-         */
-        RateLimiter::for('ia-proto', fn (Request $request) => Limit::perMinute(5)->by($request->user()?->id ?: $request->ip()));
-
-        /*
          * Les demandes de partenariat : la seule ecriture anonyme de l'API.
          *
          * Comptee par IP, faute de compte, et large sur la minute parce qu'un

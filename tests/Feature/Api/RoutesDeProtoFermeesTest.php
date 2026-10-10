@@ -22,32 +22,36 @@ use Tests\TestCase;
  * - `GET /api/notification` declenche un envoi de notification push, sans
  *   authentification.
  *
- * Aucune n'est supprimee : une suppression demande une depreciation et un
- * build mobile, ce n'est pas la decision de ce commit.
+ * Le relais Ollama a depuis ete SUPPRIME, sur decision du proprietaire : il
+ * n'etait appele par aucun client. Les deux autres restent enregistrees mais
+ * injoignables hors local. Les tests, eux, restent dans les trois cas : ils
+ * interdisent la reapparition d'une porte ouverte.
  */
 class RoutesDeProtoFermeesTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_proxy_ia_refuse_un_appel_anonyme(): void
+    /**
+     * Le relais Ollama est supprime, decision du proprietaire.
+     *
+     * Le test reste, et c'est tout l'interet : il interdit sa reapparition.
+     * Rien ne doit repartir vers `127.0.0.1:11434` depuis cette API, ni
+     * anonymement ni avec un compte — les agents vivent desormais dans un
+     * service separe.
+     */
+    public function test_le_proxy_ia_n_existe_plus(): void
     {
         Http::fake();
 
         $this->postJson('/api/ia-model-llama3', ['prompt' => 'bonjour'])
-            ->assertStatus(401);
-
-        // Rien ne part vers Ollama : le refus precede l'appel sortant.
-        Http::assertNothingSent();
-    }
-
-    public function test_le_proxy_ia_reste_ouvert_a_un_compte_authentifie(): void
-    {
-        Http::fake(['127.0.0.1:11434/*' => Http::response(['response' => 'ok'])]);
+            ->assertStatus(404);
 
         Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $this->postJson('/api/ia-model-llama3', ['prompt' => 'bonjour'])
-            ->assertStatus(200);
+            ->assertStatus(404);
+
+        Http::assertNothingSent();
     }
 
     /**
