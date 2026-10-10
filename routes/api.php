@@ -81,18 +81,37 @@ Route::get('/menu/{restaurant:slug}/{slug}', [RestaurantController::class, 'prod
 Route::get('/product/{slug}', [RestaurantController::class, 'product']);
 
 Route::post('/register', [AuthController::class, 'register'])->name('api.register');
-Route::post('/activation-account', [AuthController::class, 'activation'])->name('api.activation');
+
+/*
+ * Connexion et codes OTP sous limitation dediee.
+ *
+ * Le seul throttle:api (60 par minute) laissait parcourir les dix mille codes
+ * OTP a quatre chiffres en quelques heures ; reset-password posant un nouveau
+ * mot de passe a partir de ce code, c'etait une prise de compte. Le limiteur
+ * « auth-sensibles » compte par e-mail et par IP. Il couvre aussi
+ * forgot-password et resend-activation, sans quoi on regenererait un code
+ * frais a volonte pour contourner le compteur. Voir RouteServiceProvider.
+ */
+Route::post('/activation-account', [AuthController::class, 'activation'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.activation');
 Route::post('/login', [AuthController::class, 'login'])
-    ->middleware('guest')
+    ->middleware(['guest', 'throttle:auth-sensibles'])
     ->name('api.login');
 
 Route::get('/not-auth', [AuthController::class, 'notlogin'])
     ->middleware('guest')
     ->name('login');
 
-Route::post('/resend-activation', [AuthController::class, 'resendActivation'])->name('api.resend-activation');
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.forgot-password');
-Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('api.reset-password');
+Route::post('/resend-activation', [AuthController::class, 'resendActivation'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.resend-activation');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.forgot-password');
+Route::post('/reset-password', [AuthController::class, 'resetPassword'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.reset-password');
 
 Route::post('/refresh', [AuthController::class, 'refresh'])->name('api.refresh');
 
