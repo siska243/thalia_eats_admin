@@ -2,21 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\ActionOrderEnum;
 use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\CategorieResource;
 use App\Http\Resources\CommandeResource;
 use App\Http\Resources\RestaurantResource;
 use App\Http\Resources\StatusResource;
-use App\Http\Resources\SubCategoryProductResource;
-use App\Models\CategoryProduct;
 use App\Models\Commande;
 use App\Models\DelivreryDriver;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Status;
-use App\Models\SubCategoryProduct;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\FirebasePushNotification;
@@ -33,6 +28,7 @@ class DeliveryController extends Controller
     public function index()
     {
         $restaurant = Restaurant::query()->where('is_active', true)->get();
+
         return RestaurantResource::collection($restaurant);
     }
 
@@ -64,14 +60,18 @@ class DeliveryController extends Controller
 
             $restaurant = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+            }
 
             $commande = $this->courseEnCours($restaurant)
                 ->with(['user', 'status', 'town', 'product.product.restaurant', 'product.currency'])
                 ->orderBy('updated_at', 'desc')
                 ->first();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
+            if (! $commande) {
+                return ApiResponse::GET_DATA(null);
+            }
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
 
@@ -86,8 +86,9 @@ class DeliveryController extends Controller
 
             $restaurant = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
-
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+            }
 
             $commande = Commande::query()
                 ->with([
@@ -116,7 +117,9 @@ class DeliveryController extends Controller
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
-            if ($commande->count() == 0) return ApiResponse::GET_DATA([]);
+            if ($commande->count() == 0) {
+                return ApiResponse::GET_DATA([]);
+            }
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -125,14 +128,15 @@ class DeliveryController extends Controller
         }
     }
 
-
     public function pastOrderRestaurant()
     {
         try {
 
             $restaurant = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $status = Status::query()->where('id', '>', 2)->pluck('id');
 
@@ -150,7 +154,9 @@ class DeliveryController extends Controller
                 ->whereHas('commande_products')
                 ->get();
 
-            if ($commande->count() == 0) return ApiResponse::GET_DATA([]);
+            if ($commande->count() == 0) {
+                return ApiResponse::GET_DATA([]);
+            }
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -165,7 +171,9 @@ class DeliveryController extends Controller
 
             $livreur = $this->getCurrentDelivery();
 
-            if (!$livreur) return ApiResponse::NOT_FOUND('Oups', 'Livreur introuvable');
+            if (! $livreur) {
+                return ApiResponse::NOT_FOUND('Oups', 'Livreur introuvable');
+            }
 
             // getCurrentRestaurant() n'existe que dans RestaurantController :
             // l'appel levait une Error, que le catch (Exception) ne rattrape
@@ -175,7 +183,6 @@ class DeliveryController extends Controller
             $commande = Commande::query()
                 ->where('status_id', '>', 1)
                 ->where('delivrery_driver_id', $livreur->id);
-
 
             $columns = ['global_price', 'price_delivery', 'price_service'];
 
@@ -196,7 +203,7 @@ class DeliveryController extends Controller
                         )
                         ->perMonth()
                         ->sum($column)
-                //->count()
+                    // ->count()
                 );
             }
 
@@ -211,7 +218,7 @@ class DeliveryController extends Controller
                             end: now()->endOfYear()
                         )
                         ->perYear()
-                        //->sum($column)
+                        // ->sum($column)
                         ->count()
                 );
             }
@@ -236,7 +243,7 @@ class DeliveryController extends Controller
             $status = Status::query()->get();
 
             return ApiResponse::GET_DATA([
-                "order_per_year" => $trendYear,
+                'order_per_year' => $trendYear,
                 'order_per_month' => $trendMonth,
                 'order_per_days' => $trendDay,
                 'order' => [
@@ -245,7 +252,7 @@ class DeliveryController extends Controller
                     'order_cancel' => $order_cancelation,
                     'order_delivery' => $order_delivery,
                     'status' => StatusResource::collection($status),
-                ]
+                ],
             ]);
 
         } catch (Exception $e) {
@@ -259,27 +266,29 @@ class DeliveryController extends Controller
 
             $restaurant = $this->getCurrentDelivery();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $uid_order = $request->input('uid_order');
 
             $check_have_cmd = $this->courseEnCours($restaurant)->first();
 
-            if ($check_have_cmd) return ApiResponse::BAD_REQUEST('', 'Oups', 'Vous avez déja une commande en cours');
-
+            if ($check_have_cmd) {
+                return ApiResponse::BAD_REQUEST('', 'Oups', 'Vous avez déja une commande en cours');
+            }
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
                 ->whereNull('delivrery_driver_id')
                 ->whereNull('cancel_at')->first();
 
-
-            if (!$commande) return ApiResponse::NOT_FOUND("Oups", "Commande not found");
-
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Commande not found');
+            }
 
             $commande->delivrery_driver_id = $restaurant->id;
 
             $commande->save();
-
 
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
 
@@ -288,7 +297,6 @@ class DeliveryController extends Controller
             return ApiResponse::SERVER_ERROR($e);
         }
     }
-
 
     public function confirmReceptionRestaurant(Request $request)
     {
@@ -299,20 +307,24 @@ class DeliveryController extends Controller
             $code = $request->input('code');
             $uid_order = $request->input('uid_order');
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
-
-
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $commande = Commande::query()
                 ->where('id', Cipher::Decrypt($uid_order))
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->where('code_confirmation_restaurant', $code)
-                //->where('status_id', 2)
+                // ->where('status_id', 2)
                 ->first();
 
-            if (!$time) return ApiResponse::BAD_REQUEST('', 'Oups!!', "L'heure de livraison de la commande est obligatoire");
+            if (! $time) {
+                return ApiResponse::BAD_REQUEST('', 'Oups!!', "L'heure de livraison de la commande est obligatoire");
+            }
 
-            if (!$code) return ApiResponse::BAD_REQUEST('', 'Oups!!', "Le code de la recuperation de la commande est obligatoire");
+            if (! $code) {
+                return ApiResponse::BAD_REQUEST('', 'Oups!!', 'Le code de la recuperation de la commande est obligatoire');
+            }
 
             if ($minutes = $this->codeLockRemaining('reception', $uid_order)) {
                 return ApiResponse::TOO_MANY_ATTEMPTS(
@@ -321,28 +333,26 @@ class DeliveryController extends Controller
                 );
             }
 
-            if (!$commande) {
+            if (! $commande) {
                 $this->registerCodeFailure('reception', $uid_order);
 
-                return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
+                return ApiResponse::BAD_REQUEST('Oups', 'Commande not found', 'Code de confirmation est incorrecte');
             }
 
             $this->clearCodeFailures('reception', $uid_order);
-
 
             $commande->time_delivery = Carbon::parse($time)->format('H:i:s');
 
             $commande->save();
 
-
             if ($commande?->user->expo_push_token) {
-                $push = new FirebasePushNotification();
-                $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.");
+                $push = new FirebasePushNotification;
+                $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", 'Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.');
 
-                FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.");
+                FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", 'Votre commande a été récupérée par le livreur. Il est actuellement en route vers vous.');
             }
 
-            return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant), "Saved", "Successfully confirmed commande");
+            return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant), 'Saved', 'Successfully confirmed commande');
 
         } catch (Exception $e) {
 
@@ -358,16 +368,19 @@ class DeliveryController extends Controller
             $code = $request->input('code');
             $uid_order = $request->input('uid_order');
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Delivery introuvable');
+            }
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
                 ->where('delivrery_driver_id', $restaurant->id)
                 ->where('code_confirmation', $code)
-                //->where('status_id', 2)
+                // ->where('status_id', 2)
                 ->first();
 
-
-            if (!$code) return ApiResponse::BAD_REQUEST('', 'Oups!!', "Le code de livraison de la commande est obligatoire");
+            if (! $code) {
+                return ApiResponse::BAD_REQUEST('', 'Oups!!', 'Le code de livraison de la commande est obligatoire');
+            }
 
             if ($minutes = $this->codeLockRemaining('livraison', $uid_order)) {
                 return ApiResponse::TOO_MANY_ATTEMPTS(
@@ -376,24 +389,22 @@ class DeliveryController extends Controller
                 );
             }
 
-            if (!$commande) {
+            if (! $commande) {
                 $this->registerCodeFailure('livraison', $uid_order);
 
-                return ApiResponse::BAD_REQUEST("Oups", "Commande not found", "Code de confirmation est incorrecte");
+                return ApiResponse::BAD_REQUEST('Oups', 'Commande not found', 'Code de confirmation est incorrecte');
             }
 
             $this->clearCodeFailures('livraison', $uid_order);
-
 
             $user = CurrentHelpers::getUserByOrder($commande);
 
             if ($user) {
 
-
                 if ($user?->expo_push_token) {
 
                     $ref = $commande->refernce;
-                    FirebasePushNotification::sendNotification($user->expo_push_token, "Thalia eats commande", "La commande {$ref} à été livrée");
+                    FirebasePushNotification::sendNotification($user->expo_push_token, 'Thalia eats commande', "La commande {$ref} à été livrée");
                 }
 
             }
@@ -403,8 +414,7 @@ class DeliveryController extends Controller
 
             $commande->save();
 
-
-            return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant), "Saved", "Successfully delivery commande");
+            return ApiResponse::SUCCESS_DATA(new RestaurantResource($restaurant), 'Saved', 'Successfully delivery commande');
 
         } catch (Exception $e) {
 
@@ -422,9 +432,20 @@ class DeliveryController extends Controller
     {
         $driver = $this->getUser()?->id;
 
+        // La cle compte sur l'identifiant DECHIFFRE, pas sur le chiffre brut.
+        // Cipher n'a pas de MAC et base64_decode ignore les caracteres hors
+        // alphabet : en inserant des espaces dans l'uid, un meme ordre produit
+        // une infinite de chiffres distincts qui dechiffrent tous vers le meme
+        // id. Avec la chaine brute en cle, chaque variante repartait le
+        // compteur a zero et le verrou ne protegeait plus rien : les 9000 codes
+        // de confirmation se parcouraient malgre le blocage. On compte sur
+        // l'ordre, pas sur sa representation.
+        $id = Cipher::Decrypt((string) $uid_order);
+        $cle = ctype_digit((string) $id) ? (int) $id : 'brut:'.sha1((string) $uid_order);
+
         return [
-            "driver-code-attempts:{$step}:{$driver}:{$uid_order}",
-            "driver-code-lock:{$step}:{$driver}:{$uid_order}",
+            "driver-code-attempts:{$step}:{$driver}:{$cle}",
+            "driver-code-lock:{$step}:{$driver}:{$cle}",
         ];
     }
 
@@ -441,7 +462,9 @@ class DeliveryController extends Controller
 
         $until = Cache::get($lockKey);
 
-        if (!$until) return null;
+        if (! $until) {
+            return null;
+        }
 
         return max((int) ceil(($until - Carbon::now()->timestamp) / 60), 1);
     }
