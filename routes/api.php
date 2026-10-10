@@ -42,6 +42,22 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
+/*
+ * Vestige de prototype : un relais vers un Ollama local.
+ *
+ * Il etait ouvert a tout Internet, sans authentification ni limitation, avec
+ * un delai d'attente d'une heure. Deux couts, pas un : le GPU du serveur
+ * tournait pour qui le demandait, et chaque requete immobilisait un worker
+ * php-fpm pendant une heure — quelques dizaines suffisaient a rendre l'API
+ * entiere injoignable.
+ *
+ * Il est ferme derriere le jeton et limite, pas supprime : retirer un
+ * endpoint demande une depreciation et un build mobile, et cette decision
+ * revient au proprietaire. Aucun des trois clients ne l'appelle cependant,
+ * c'est verifie, donc rien ne retient sa suppression le jour ou elle sera
+ * tranchee. La direction du produit est de toute facon de ne pas construire
+ * dessus : les agents vivront dans un service separe, avec un jeton scope.
+ */
 Route::post('/ia-model-llama3', function (Request $request) {
     $response = Http::timeout(3600)->post('http://127.0.0.1:11434/api/generate', [
         'model' => 'mistral',
@@ -50,9 +66,16 @@ Route::post('/ia-model-llama3', function (Request $request) {
     ]);
 
     return ApiResponse::GET_DATA($response->json());
-});
+})->middleware(['auth:sanctum', 'throttle:ia-proto']);
 
+/*
+ * Mise au point, en local seulement.
+ *
+ * Celle-ci declenchait un envoi de notification push a qui la demandait.
+ */
 Route::get('/notification', function () {
+
+    abort_unless(app()->environment('local'), 404);
 
     $response = Notification::SEND_NOTIFICATION('test', 'test body');
 
@@ -268,7 +291,17 @@ Route::prefix('/default')->controller(DefaultDataController::class)->group(funct
 
 Route::post('/create-payment-intent', [CallbackUrlController::class, 'paiement'])->name('payment-intent');
 
+/*
+ * Amorcage des roles, en local seulement.
+ *
+ * Cette route CREAIT quatre roles spatie, sans authentification. Un simple
+ * GET depuis Internet ecrivait donc dans la table des roles, et le second
+ * appel repondait 500 sur la contrainte d'unicite. Les roles de production
+ * sont poses par les seeders, pas par une requete HTTP.
+ */
 Route::get('/roles', function () {
+
+    abort_unless(app()->environment('local'), 404);
 
     $role = Role::create(['guard_name' => 'api', 'name' => 'clients']);
     $role = Role::create(['guard_name' => 'api', 'name' => 'drivers']);
