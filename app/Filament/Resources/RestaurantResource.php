@@ -2,12 +2,23 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use Filament\Pages\Page;
+use App\Filament\Resources\RestaurantResource\Pages\EditRestaurant;
+use App\Filament\Resources\RestaurantResource\Pages\ManageProducts;
+use App\Filament\Resources\RestaurantResource\Pages\ListRestaurants;
+use App\Filament\Resources\RestaurantResource\Pages\CreateRestaurant;
 use App\Filament\Resources\RestaurantResource\Pages;
 use App\Filament\Resources\RestaurantResource\RelationManagers;
 use App\Models\Restaurant;
 use Filament\Forms\Components\{DatePicker, FileUpload, KeyValue, TextInput, Textarea, MarkdownEditor, Repeater, RichEditor, Section, Select, TimePicker};
-use Filament\Forms\Form;
-use Filament\Pages\SubNavigationPosition;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Columns\ImageColumn;
@@ -19,17 +30,17 @@ class RestaurantResource extends Resource
 {
     protected static ?string $model = Restaurant::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-home-modern';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-home-modern';
 
     protected static ?string $label = "Nos restaurants";
-    protected static ?string $navigationGroup = "Thalia eats";
+    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
     protected static ?int $navigationSort = 2;
-    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
-    public static function form(Form $form): Form
+    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Section::make('Information de base')->schema([
+        return $schema
+            ->components([
+                \Filament\Schemas\Components\Section::make('Information de base')->schema([
                     Select::make('user_id')
                         ->relationship('user', 'name')
                         ->native(false)
@@ -60,7 +71,7 @@ class RestaurantResource extends Resource
                         ->maxLength(50),
                         RichEditor::make('description')->columnSpanFull()
                 ])->columns(2),
-                Section::make('Information supplementaire')->schema([
+                \Filament\Schemas\Components\Section::make('Information supplementaire')->schema([
                     Repeater::make('openHours')->schema([
                         Select::make('day')
                             ->options([
@@ -87,19 +98,19 @@ class RestaurantResource extends Resource
         return $table
             ->columns([
                 ImageColumn::make('banniere')->disk('uploads_image'),
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('phone')
+                TextColumn::make('phone')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('user.name')->label(__('Responsable'))
+                TextColumn::make('user.name')->label(__('Responsable'))
                     ->badge()
                     ->searchable(),
-                Tables\Columns\ToggleColumn::make('is_active'),
-                Tables\Columns\TextColumn::make('created_at')
+                ToggleColumn::make('is_active'),
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -107,28 +118,28 @@ class RestaurantResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->headerActions([
-                Tables\Actions\CreateAction::make()
+                CreateAction::make()
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
-    public static function getRecordSubNavigation(\Filament\Pages\Page $page): array
+    public static function getRecordSubNavigation(Page $page): array
     {
         return $page->generateNavigationItems([
             // ...
-            Pages\EditRestaurant::class,
-            Pages\ManageProducts::class
+            EditRestaurant::class,
+            ManageProducts::class
 
         ]);
     }
@@ -142,10 +153,10 @@ class RestaurantResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListRestaurants::route('/'),
-            'create' => Pages\CreateRestaurant::route('/create'),
-            'edit' => Pages\EditRestaurant::route('/{record}/edit'),
-            'manage' => Pages\ManageProducts::route('/{record}/manage'),
+            'index' => ListRestaurants::route('/'),
+            'create' => CreateRestaurant::route('/create'),
+            'edit' => EditRestaurant::route('/{record}/edit'),
+            'manage' => ManageProducts::route('/{record}/manage'),
         ];
     }
 

@@ -1,0 +1,540 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Pages\SuiviDesCourses;
+use App\Filament\Resources\BookingResource\Pages\CreateBooking;
+use App\Filament\Resources\BookingResource\Pages\EditBooking;
+use App\Filament\Resources\BookingResource\Pages\ListBookings;
+use App\Filament\Resources\BookingResource\RelationManagers\PaymentsRelationManager;
+use App\Models\Booking;
+use App\Models\Chauffeur;
+use App\Models\PaimentMethod;
+use App\Models\Vehicle;
+use App\Services\Rental\BookingPricing;
+use App\Services\Rental\BookingQuote;
+use App\Services\Rental\BookingWorkflow;
+use App\Services\Rental\VehicleAvailability;
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
+use InvalidArgumentException;
+
+class BookingResource extends Resource
+{
+    protected static ?string $model = Booking::class;
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Location';
+
+    protected static ?string $label = 'Réservation';
+
+    protected static ?string $pluralLabel = 'Réservations';
+
+    protected static ?int $navigationSort = 3;
+
+    /** Les réservations à traiter sautent aux yeux depuis le menu. */
+    public static function getNavigationBadge(): ?string
+    {
+        $count = static::getModel()::query()
+            ->where('status', Booking::STATUS_CONFIRMED)
+            ->whereNull('chauffeur_id')
+            ->count();
+
+        return $count > 0 ? (string) $count : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'warning';
+    }
+
+    public static function form(Schema $schema): Schema
+    {
+        return $schema->components([
+            Section::make('La course')
+                ->columns(2)
+                ->schema([
+                    Select::make('user_id')
+                        ->label('Client')
+                        ->relationship('user', 'name')
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
+                        ->required(),
+
+                    Select::make('vehicle_id')
+                        ->label('Véhicule')
+                        ->relationship('vehicle', 'plate_number')
+                        ->getOptionLabelFromRecordUsing(fn (Vehicle $record) => "{$record->name} — {$record->plate_number}")
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
+                        ->live()
+                        /*
+                         * Choisir un vehicule propose son conducteur habituel.
+                         * L'affectation reste modifiable : un vehicule change
+                         * de chauffeur selon les jours, et c'est la
+                         * reservation qui porte la decision finale.
+                         */
+                        ->afterStateUpdated(function ($state, callable $set) {
+                            $set('chauffeur_id', Vehicle::find($state)?->default_chauffeur_id);
+                        })
+                        ->required(),
+
+                    DateTimePicker::make('starts_at')
+                        ->label('Début')
+                        ->seconds(false)
+                        ->native(false)
+                        ->displayFormat('d/m/Y H:i')
+                        ->live(onBlur: true)
+                        ->required(),
+
+                    DateTimePicker::make('ends_at')
+                        ->label('Fin')
+                        ->seconds(false)
+                        ->native(false)
+                        ->displayFormat('d/m/Y H:i')
+                        ->live(onBlur: true)
+                        ->required()
+                        ->after('starts_at')
+                        /*
+                         * La disponibilite est verifiee ici, a la saisie.
+                         *
+                         * Sans cette regle, l'administration pourrait creer un
+                         * chevauchement que tout le reste du module interdit :
+                         * deux clients sur le meme vehicule a la meme heure,
+                         * decouverts le jour de la course.
+                         */
+                        ->rule(function (Get $get, ?Booking $record) {
+                            return function (string $attribute, $value, callable $fail) use ($get, $record) {
+                                $vehicle = Vehicle::find($get('vehicle_id'));
+                                $startsAt = $get('starts_at');
+
+                                if (! $vehicle || ! $startsAt || ! $value) {
+                                    return;
+                                }
+
+                                $free = app(VehicleAvailability::class)->isVehicleAvailable(
+                                    $vehicle,
+                                    Carbon::parse($startsAt),
+                                    Carbon::parse($value),
+                                    $record,
+                                );
+
+                                if (! $free) {
+                                    $fail('Ce véhicule est déjà pris sur ce créneau.');
+                                }
+                            };
+                        })
+
+                        /*
+                         * Les bornes de duree valent aussi en back-office :
+                         * l'administrateur ne depasse pas plus que le client.
+                         *
+                         * La regle n'est pas reecrite ici, elle est demandee a
+                         * `BookingPricing`, la ou les unites facturees sont
+                         * comptees. Deux definitions auraient diverge, et ce
+                         * depot a deja paye ce motif deux fois.
+                         */
+                        ->rule(function (Get $get) {
+                            return function (string $attribute, $value, callable $fail) use ($get) {
+                                $startsAt = $get('starts_at');
+
+                                if (! $startsAt || ! $value) {
+                                    return;
+                                }
+
+                                $mode = $get('pricing_mode') ?: BookingPricing::MODE_HOURLY;
+                                $pricing = app(BookingPricing::class);
+
+                                if (! $pricing->dureeDansLesBornes($mode, Carbon::parse($startsAt), Carbon::parse($value))) {
+                                    $fail($pricing->messageHorsBornes($mode));
+                                }
+                            };
+                        }),
+
+                    /*
+                     * Le montant est affiche, jamais saisi.
+                     *
+                     * Il est recalcule par le serveur a l'enregistrement : un
+                     * total tape a la main dans l'administration divergerait du
+                     * prix annonce au client.
+                     */
+                    /*
+                     * Le mode de tarification. Le client le choisit cote
+                     * application ; l'administration doit pouvoir faire la
+                     * meme chose, sans quoi une reservation prise au telephone
+                     * ne pourrait jamais etre a la journee.
+                     */
+                    Select::make('pricing_mode')
+                        ->label('Mode de tarification')
+                        ->options([
+                            BookingPricing::MODE_HOURLY => 'À l\'heure',
+                            BookingPricing::MODE_DAILY => 'À la journée',
+                        ])
+                        ->default(BookingPricing::MODE_HOURLY)
+                        ->native(false)
+                        ->live()
+                        ->required(),
+
+                    Placeholder::make('quote')
+                        ->label('Montant')
+                        ->columnSpanFull()
+                        ->content(function (Get $get): string {
+                            $vehicle = Vehicle::find($get('vehicle_id'));
+                            $startsAt = $get('starts_at');
+                            $endsAt = $get('ends_at');
+
+                            if (! $vehicle || ! $startsAt || ! $endsAt) {
+                                return 'Choisissez un véhicule et un créneau.';
+                            }
+
+                            try {
+                                $quote = app(BookingPricing::class)->quote(
+                                    $vehicle,
+                                    Carbon::parse($startsAt),
+                                    Carbon::parse($endsAt),
+                                    $get('pricing_mode') ?: BookingPricing::MODE_HOURLY,
+                                );
+                            } catch (InvalidArgumentException $e) {
+                                return $e->getMessage();
+                            }
+
+                            $code = $quote->currency->code;
+
+                            $unite = $quote->mode === BookingPricing::MODE_DAILY ? 'j' : 'h';
+
+                            return sprintf(
+                                '%s %s × %s %s = %s %s — acompte %s %s, solde %s %s en espèces',
+                                rtrim(rtrim(number_format($quote->billedUnits, 2, ',', ' '), '0'), ','),
+                                $unite,
+                                number_format($quote->unitPrice, 2, ',', ' '), $code,
+                                number_format($quote->total, 2, ',', ' '), $code,
+                                number_format($quote->deposit, 2, ',', ' '), $code,
+                                number_format($quote->balance, 2, ',', ' '), $code,
+                            );
+                        }),
+                ]),
+
+            Section::make('Lieux')
+                ->columns(2)
+                ->schema([
+                    TextInput::make('pickup_location')
+                        ->label('Prise en charge')
+                        ->required()
+                        ->maxLength(255),
+
+                    TextInput::make('dropoff_location')
+                        ->label('Destination')
+                        ->maxLength(255)
+                        ->helperText('Facultative : le client peut ne pas la préciser.'),
+                ]),
+
+            Section::make('Affectation')
+                ->columns(2)
+                ->schema([
+                    Select::make('chauffeur_id')
+                        ->label('Chauffeur')
+                        ->native(false)
+                        ->searchable()
+                        /*
+                         * La liste ne montre que les chauffeurs reellement
+                         * affectables : permis valide, en service, et libres
+                         * sur ce creneau. Proposer les autres reviendrait a
+                         * laisser choisir une erreur.
+                         */
+                        ->options(function (Get $get, ?Booking $record): array {
+                            $startsAt = $get('starts_at');
+                            $endsAt = $get('ends_at');
+
+                            if (! $startsAt || ! $endsAt) {
+                                return Chauffeur::query()->assignable()->pluck('full_name', 'id')->all();
+                            }
+
+                            return app(VehicleAvailability::class)
+                                ->availableChauffeurs(Carbon::parse($startsAt), Carbon::parse($endsAt), $record)
+                                ->pluck('full_name', 'id')
+                                ->all();
+                        })
+                        ->helperText('Seuls les chauffeurs en service, au permis valide et libres sur ce créneau.'),
+
+                    Select::make('status')
+                        ->label('Statut')
+                        ->native(false)
+                        /*
+                         * Une reservation nait en attente de paiement, meme
+                         * creee depuis l'administration : c'est le paiement
+                         * qui retient le vehicule, pas la saisie.
+                         */
+                        ->default(Booking::STATUS_PENDING_PAYMENT)
+                        ->options([
+                            Booking::STATUS_PENDING_PAYMENT => 'En attente de paiement',
+                            Booking::STATUS_CONFIRMED => 'Confirmée',
+                            Booking::STATUS_IN_PROGRESS => 'En cours',
+                            Booking::STATUS_COMPLETED => 'Terminée',
+                            Booking::STATUS_CANCELLED => 'Annulée',
+                            Booking::STATUS_LOST => 'Ratée (à rembourser)',
+                            Booking::STATUS_EXPIRED => 'Expirée',
+                        ])
+                        ->required(),
+                ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            // Le bouton « Suivre » a besoin de savoir s'il y a quelque chose a
+            // voir : un compte en une requete, pas un comptage par ligne.
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount('releves'))
+            ->columns([
+                TextColumn::make('reference')
+                    ->label('Référence')
+                    ->searchable()
+                    ->copyable()
+                    ->sortable(),
+
+                TextColumn::make('user.name')
+                    ->label('Client')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+
+                TextColumn::make('vehicle.plate_number')
+                    ->label('Véhicule')
+                    ->formatStateUsing(fn (Booking $record) => $record->vehicle?->name)
+                    ->searchable(),
+
+                TextColumn::make('starts_at')
+                    ->label('Créneau')
+                    ->dateTime('d/m/Y H:i')
+                    ->description(fn (Booking $record) => 'jusqu\'à '.$record->ends_at?->format('H:i'))
+                    ->sortable(),
+
+                TextColumn::make('chauffeur.full_name')
+                    ->label('Chauffeur')
+                    ->placeholder('à affecter')
+                    ->color(fn (Booking $record) => $record->chauffeur_id ? null : 'warning')
+                    ->searchable(),
+
+                TextColumn::make('total')
+                    ->label('Total')
+                    ->formatStateUsing(fn ($state, Booking $record) => number_format((float) $state, 2, ',', ' ').' '.$record->currency?->code)
+                    ->alignEnd()
+                    ->sortable(),
+
+                TextColumn::make('status')
+                    ->label('Statut')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => static::statusLabels()[$state] ?? $state)
+                    ->color(fn (string $state) => match ($state) {
+                        Booking::STATUS_CONFIRMED, Booking::STATUS_IN_PROGRESS => 'success',
+                        Booking::STATUS_COMPLETED => 'gray',
+                        Booking::STATUS_PENDING_PAYMENT => 'warning',
+                        Booking::STATUS_LOST => 'danger',
+                        Booking::STATUS_CANCELLED, Booking::STATUS_EXPIRED => 'danger',
+                        default => 'gray',
+                    }),
+            ])
+            ->defaultSort('starts_at', 'desc')
+            ->recordActionsPosition(RecordActionsPosition::BeforeColumns)
+            ->filters([
+                SelectFilter::make('status')
+                    ->label('Statut')
+                    ->options(static::statusLabels()),
+
+                Filter::make('unassigned')
+                    ->label('Sans chauffeur')
+                    ->query(fn (Builder $query) => $query
+                        ->where('status', Booking::STATUS_CONFIRMED)
+                        ->whereNull('chauffeur_id')),
+
+                Filter::make('to_refund')
+                    ->label('À rembourser')
+                    ->query(fn (Builder $query) => $query
+                        ->where('status', Booking::STATUS_LOST)
+                        ->whereNull('refunded_at')),
+
+                Filter::make('pickup_locked')
+                    ->label('Code bloqué')
+                    ->query(fn (Builder $query) => $query->whereNotNull('pickup_code_locked_at')),
+            ])
+            ->recordActions([
+                /*
+                 * Le parcours courant, en un clic chacun.
+                 *
+                 * L'administrateur garde par ailleurs le droit de tout
+                 * modifier a la main depuis le formulaire : ces actions ne
+                 * restreignent rien, elles evitent d'avoir a se souvenir
+                 * quels champs vont ensemble. Encaisser un solde sans laisser
+                 * de ligne de paiement, par exemple, priverait le
+                 * rapprochement de fin de journee de sa seule trace.
+                 */
+                ActionGroup::make([
+                    Action::make('payDeposit')
+                        ->label("Encaisser l'acompte")
+                        ->icon('heroicon-o-banknotes')
+                        ->color('success')
+                        ->visible(fn (Booking $record) => $record->status === Booking::STATUS_PENDING_PAYMENT)
+                        ->schema([
+                            Select::make('paiment_method_id')
+                                ->label('Moyen de paiement')
+                                ->options(fn () => PaimentMethod::query()->where('is_active', true)->pluck('title', 'id')->all())
+                                ->native(false)
+                                ->required(),
+                            TextInput::make('reference')->label('Référence'),
+                            TextInput::make('phone')->label('Numéro débité')->tel(),
+                        ])
+                        ->modalDescription(fn (Booking $record) => "Acompte de {$record->deposit} {$record->currency?->code}. Le créneau est vérifié : si un autre client a payé avant, la réservation passe en « ratée » et un remboursement est calculé.")
+                        ->action(function (Booking $record, array $data) {
+                            $confirmed = app(BookingWorkflow::class)->payDeposit(
+                                $record,
+                                (int) $data['paiment_method_id'],
+                                $data['reference'] ?? null,
+                                $data['phone'] ?? null,
+                            );
+
+                            Notification::make()
+                                ->title($confirmed ? 'Réservation confirmée' : 'Créneau déjà pris')
+                                ->body($confirmed
+                                    ? 'Le code de prise en charge a été généré.'
+                                    : 'Un autre client avait payé avant. La réservation passe en « ratée », avec un remboursement à effectuer.')
+                                ->status($confirmed ? 'success' : 'warning')
+                                ->send();
+                        }),
+
+                    Action::make('startRide')
+                        ->label('Démarrer la course')
+                        ->icon('heroicon-o-play')
+                        ->requiresConfirmation()
+                        ->modalDescription('À utiliser quand le chauffeur ne peut pas le faire depuis son application.')
+                        ->visible(fn (Booking $record) => $record->status === Booking::STATUS_CONFIRMED)
+                        ->action(fn (Booking $record) => app(BookingWorkflow::class)->startRide($record)),
+
+                    Action::make('collectBalance')
+                        ->label('Encaisser le solde')
+                        ->icon('heroicon-o-check-badge')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->modalDescription(fn (Booking $record) => "Solde de {$record->balance} {$record->currency?->code}, remis en espèces au chauffeur. La course passe en « terminée ».")
+                        ->visible(fn (Booking $record) => $record->status === Booking::STATUS_IN_PROGRESS)
+                        ->action(fn (Booking $record) => app(BookingWorkflow::class)->collectBalance($record)),
+
+                    Action::make('cancelBooking')
+                        ->label('Annuler')
+                        ->icon('heroicon-o-x-circle')
+                        ->color('danger')
+                        ->schema([
+                            Textarea::make('reason')->label('Motif')->rows(2),
+                        ])
+                        ->modalDescription('Le remboursement dû est calculé sur ce qui a réellement été payé. Le virement, lui, reste à faire à la main.')
+                        ->visible(fn (Booking $record) => in_array($record->status, [Booking::STATUS_PENDING_PAYMENT, Booking::STATUS_CONFIRMED], true))
+                        ->action(fn (Booking $record, array $data) => app(BookingWorkflow::class)->cancel($record, $data['reason'] ?? null)),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->button(),
+
+                Action::make('unlockPickupCode')
+                    ->label('Débloquer le code')
+                    ->icon('heroicon-o-lock-open')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalDescription('Le chauffeur a épuisé ses essais. Vérifiez avec le client avant de débloquer.')
+                    ->visible(fn (Booking $record) => $record->isPickupCodeLocked())
+                    ->action(fn (Booking $record) => app(BookingWorkflow::class)->unlockPickupCode($record)),
+
+                Action::make('markRefunded')
+                    ->label('Marquer remboursée')
+                    ->icon('heroicon-o-banknotes')
+                    ->requiresConfirmation()
+                    ->modalDescription('À cocher une fois le virement réellement effectué : cette application ne rembourse pas elle-même.')
+                    ->visible(fn (Booking $record) => $record->refund_amount > 0 && $record->refunded_at === null)
+                    ->action(fn (Booking $record) => app(BookingWorkflow::class)->markRefunded($record)),
+
+                Action::make('suivre')
+                    ->label('Suivre')
+                    ->icon('heroicon-o-map-pin')
+                    ->color('info')
+                    // Le suivi vit la ou vit la course : l'administrateur a
+                    // la reservation sous les yeux, il n'a pas a aller la
+                    // rechercher dans une liste a part.
+                    ->visible(fn () => SuiviDesCourses::canAccess())
+                    ->disabled(fn (Booking $record) => ! $record->releves_count)
+                    ->tooltip(fn (Booking $record) => $record->releves_count
+                        ? null
+                        : 'Aucune position relevée pour cette réservation : il n\'y a rien à afficher sur la carte.')
+                    ->url(fn (Booking $record) => SuiviDesCourses::urlPour($record)),
+
+                EditAction::make(),
+            ])
+            ->toolbarActions([]);
+    }
+
+    /**
+     * Le chiffrage d'une reservation depuis les donnees du formulaire.
+     *
+     * Appele a la creation comme a la modification : le montant ne vient
+     * jamais du formulaire, il est refait par le serveur a partir du vehicule
+     * et du creneau. Un total saisi a la main divergerait du prix annonce au
+     * client.
+     */
+    public static function quoteFor(array $data): BookingQuote
+    {
+        return app(BookingPricing::class)->quote(
+            Vehicle::findOrFail($data['vehicle_id']),
+            Carbon::parse($data['starts_at']),
+            Carbon::parse($data['ends_at']),
+            $data['pricing_mode'] ?? BookingPricing::MODE_HOURLY,
+        );
+    }
+
+    /** @return array<string, string> */
+    public static function statusLabels(): array
+    {
+        return [
+            Booking::STATUS_PENDING_PAYMENT => 'En attente de paiement',
+            Booking::STATUS_CONFIRMED => 'Confirmée',
+            Booking::STATUS_IN_PROGRESS => 'En cours',
+            Booking::STATUS_COMPLETED => 'Terminée',
+            Booking::STATUS_CANCELLED => 'Annulée',
+            Booking::STATUS_LOST => 'Ratée',
+            Booking::STATUS_EXPIRED => 'Expirée',
+        ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            PaymentsRelationManager::class,
+        ];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => ListBookings::route('/'),
+            'create' => CreateBooking::route('/create'),
+            'edit' => EditBooking::route('/{record}/edit'),
+        ];
+    }
+}

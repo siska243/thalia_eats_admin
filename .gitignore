@@ -10,6 +10,12 @@
 .env.backup
 .env.production
 .env.testing
+# Les sauvegardes horodatees que laissent les scripts de deploiement. Elles
+# portent les memes secrets que le .env qu'elles copient, et un `git add -A`
+# distrait suffisait a les committer : .env.bak-1791572463 trainait a la
+# racine depuis le 9 octobre.
+.env.bak-*
+.env.*.bak
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -37,6 +43,7 @@ yarn-error.log
 # Les dumps de base. *.sql etait deja couvert, pas *.sql.gz.
 *.sql.gz
 /deploy/transfert/
+.gstack/
 
 # L'unite systemd reellement installee se fabrique dans /etc/systemd/system/
 # a partir de deploy/systemd/thalia-deploy.service.example. Suivre un
@@ -44,3 +51,4 @@ yarn-error.log
 # auto-deploy.sh refuse de deployer des qu'un fichier suivi est modifie sur
 # le serveur : un seul « User=ubuntu » gelait toute la livraison continue.
 deploy/systemd/thalia-deploy.service
+

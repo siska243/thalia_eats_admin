@@ -2,10 +2,14 @@
 
 namespace App\Filament\Resources\CommandeResource\Pages;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\BulkActionGroup;
 use App\Filament\Resources\CommandeResource;
 use Filament\Actions;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -18,18 +22,18 @@ class ManageCommandeProducts extends ManageRelatedRecords
 
     protected static string $relationship = 'commande_products';
 
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
 
     public static function getNavigationLabel(): string
     {
         return 'Commande Products';
     }
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('title')
+        return $schema
+            ->components([
+                TextInput::make('title')
                     ->required()
                     ->maxLength(255),
             ]);
@@ -41,19 +45,19 @@ class ManageCommandeProducts extends ManageRelatedRecords
             ->recordTitleAttribute('title')
             ->columns([
 
-                Tables\Columns\ImageColumn::make('product.picture')
+                ImageColumn::make('product.picture')
                     ->disk('uploads_image')->circular()
                     ,
-                Tables\Columns\TextColumn::make('product.title')
+                TextColumn::make('product.title')
                 ->searchable()
                 ,
-                Tables\Columns\TextColumn::make('product.restaurant.name'),
-                Tables\Columns\TextColumn::make('quantity'),
-                Tables\Columns\TextColumn::make('price'),
-                Tables\Columns\TextColumn::make('currency.code')->badge(),
+                TextColumn::make('product.restaurant.name'),
+                TextColumn::make('quantity'),
+                TextColumn::make('price'),
+                TextColumn::make('currency.code')->badge(),
 
-                Tables\Columns\TextColumn::make('user.name'),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('user.name'),
+                TextColumn::make('created_at')
                 ->dateTime()
                 ,
             ])
@@ -63,11 +67,11 @@ class ManageCommandeProducts extends ManageRelatedRecords
             ->headerActions([
 
             ])
-            ->actions([
+            ->recordActions([
 
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
+            ->toolbarActions([
+                BulkActionGroup::make([
 
                 ]),
             ]);

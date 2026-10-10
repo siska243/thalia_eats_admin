@@ -158,22 +158,7 @@ class PrecommandeController extends Controller
             ->find((int) $id);
     }
 
-    /**
-     * Le lien que le client reçoit : une page du SITE, plus une page Blade
-     * servie par le backend.
-     *
-     * URL::temporarySignedRoute() signe l'URL complète, hôte compris : un lien
-     * signé pour thaliaeats.com ne peut donc pas être vérifié sur
-     * app.thaliaeats.com. On signe l'adresse d'API — celle qui sera réellement
-     * appelée et validée — et on ne recopie dans le lien du client que sa
-     * chaîne de requête (`expires` et `signature`). La page la repasse à chaque
-     * appel, et le middleware `signed` valide contre l'URL signée.
-     *
-     * L'origine du site vient de config('site.url'), pas d'APP_URL : cette
-     * dernière n'est pas maintenue comme l'origine publique du projet
-     * (.env.example la livre sur 127.0.0.1:8000).
-     */
-    protected function lienDePaiement(\App\Models\Precommande $precommande): string
+    protected function lienDePaiement(Precommande $precommande): string
     {
         $uid = Cipher::Encrypt($precommande->id);
 

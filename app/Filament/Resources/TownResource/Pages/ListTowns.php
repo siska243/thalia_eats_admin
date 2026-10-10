@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\TownResource\Pages;
 
+use Filament\Actions\CreateAction;
 use App\Filament\Resources\TownResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
@@ -13,7 +14,7 @@ class ListTowns extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            CreateAction::make(),
         ];
     }
 }

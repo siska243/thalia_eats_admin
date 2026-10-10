@@ -17,6 +17,21 @@
             <directory>app</directory>
         </include>
     </source>
+    <!--
+        Aucune base n'est epinglee ici, et c'est voulu.
+
+        La suite tourne sur la base nommee par .env.testing (voir
+        .env.testing.example), poste par poste : epingler un nom unique ici
+        ferait tourner deux sessions de travail sur la meme base et les ferait
+        se tronquer l'une l'autre en plein run.
+
+        Ce qui protege les donnees reelles n'est donc pas ce fichier mais le
+        garde de Tests\CreatesApplication::createApplication(), qui refuse de
+        demarrer sur une base dont le nom ne se termine pas par « _test ». Il
+        s'execute avant setUpTraits(), donc avant que RefreshDatabase ou
+        DatabaseTruncation n'aient touche quoi que ce soit : un poste mal
+        configure s'arrete au lieu d'effacer.
+    -->
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="CACHE_DRIVER" value="array"/>

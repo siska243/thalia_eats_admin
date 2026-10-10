@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Enums\CallBackEnum;
 use App\Events\PayementEvent;
 use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
@@ -12,21 +11,24 @@ use App\Models\Commande;
 use App\Models\CommandeProduct;
 use App\Models\Payement;
 use App\Models\Product;
+use App\Models\Restaurant;
 use App\Models\StatusPayement;
 use App\Models\Town;
-use App\Models\TrackOrder;
+use App\Services\Quotation;
 use App\Services\QuotationService;
+use App\Services\Suivi\SuiviPositions;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
-use App\Wrappers\EasyPay;
 use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
-use App\Wrappers\Geocode;
 use App\Wrappers\LibPhoneNumber;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Throwable;
 
 class CommandeController extends Controller
 {
@@ -52,6 +54,90 @@ class CommandeController extends Controller
     }
 
     /**
+     * Refuse toute ecriture sur une commande qui n'est plus un panier.
+     *
+     * Quatre routes composaient le panier : `store`, `add-product`,
+     * `delete-product` et `update-address-delivery`. Seule la premiere avait
+     * ete fermee, en comparant status_id a 5 sur place ; les trois autres
+     * laissaient un client reecrire sa commande pendant que la passerelle en
+     * tenait deja le montant. Il payait un panier et en recevait un autre.
+     *
+     * La question est posee une seule fois ici, au statut effectif, parce
+     * qu'un garde par chemin est precisement le motif qui a deja produit deux
+     * bugs de production sur ce depot.
+     *
+     * La forme de la reponse est celle que `store` renvoyait deja : les deux
+     * clients savent la lire et proposent de payer ou d'annuler.
+     */
+    private function refuserSiVerrouillee(?Commande $commande): ?JsonResponse
+    {
+        if (! $commande || $commande->estModifiable()) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            ['uid' => Cipher::Encrypt($commande->id), 'reference' => $commande->refernce],
+            __('Commande en attente'),
+            __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $commande->refernce])
+        );
+    }
+
+    /**
+     * Refuse une commande dont un produit vient d'un restaurant ferme.
+     *
+     * Le proprietaire, le 10 octobre : « on refuse car c'est fermer et
+     * personne peut preparer la commande ». Donc aucune marge, et c'est
+     * l'heure du REGLEMENT qui compte, pas celle ou le panier a ete rempli :
+     * un panier constitue avant la fermeture et paye apres est refuse.
+     *
+     * La regle d'ouverture elle-meme vit sur `Restaurant::estOuvert()`, une
+     * seule fois. Elle etait ecrite dans les deux applications et nulle part
+     * sur le serveur : le site affichait « Ferme » et laissait payer, le
+     * mobile grisait son bouton, et un appel direct a l'API passait dans les
+     * deux cas.
+     *
+     * Le message nomme l'heure de reouverture quand il y en a une : « ouvre a
+     * 9h » dit au client quoi faire, « ferme » le laisse devant une impasse.
+     *
+     * @param  array<int, array<string, mixed>>|null  $products  Les lignes recues, portant un uid chiffre.
+     */
+    private function refuserSiRestaurantFerme(?array $products, string $cle = 'product_id'): ?JsonResponse
+    {
+        $ids = collect($products ?? [])
+            ->map(fn ($ligne) => Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null))
+            ->filter(fn ($id) => $id !== false && $id !== '' && ctype_digit((string) $id))
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (! $ids) {
+            return null;
+        }
+
+        $ferme = Product::query()
+            ->with('restaurant')
+            ->whereIn('id', $ids)
+            ->get()
+            ->pluck('restaurant')
+            ->filter()
+            ->unique('id')
+            ->first(fn (Restaurant $restaurant) => ! $restaurant->estOuvert());
+
+        if (! $ferme) {
+            return null;
+        }
+
+        $ouvreA = $ferme->ouvreA();
+
+        return ApiResponse::BAD_REQUEST(
+            ['restaurant' => $ferme->name],
+            __('Restaurant fermé'),
+            $ouvreA
+                ? __(':restaurant est fermé. Il ouvre à :heure.', ['restaurant' => $ferme->name, 'heure' => $ouvreA])
+                : __(":restaurant est fermé et ne prend pas de commande pour l'instant.", ['restaurant' => $ferme->name]),
+        );
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(CommandeRequest $request)
@@ -65,16 +151,31 @@ class CommandeController extends Controller
 
             $url = $request->url;
 
-            $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
-
             $user = auth()->user();
+
+            /*
+             * Les commandes perimees sont annulees avant toute chose.
+             *
+             * La lecture les ignore deja — `nonReglee()` les exclut — mais
+             * sans cette ecriture elles resteraient affichees « en attente »
+             * au client et dans l'administration jusqu'au prochain passage de
+             * la tache planifiee. Le client ne doit pas voir deux commandes
+             * dont l'une est un fantome.
+             */
+            Commande::expirerPour($user->id);
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
 
-            if (!$commande) {
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
 
-                $commande = new Commande();
+            $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
+
+            if (! $commande) {
+
+                $commande = new Commande;
                 $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
                 $commande->user_id = $user->id;
                 $commande->refernce = $refernce;
@@ -82,12 +183,11 @@ class CommandeController extends Controller
 
             }
 
-
             $commande->price_delivery = $pricing['frais_livraison'];
             $commande->price_service = $pricing['service_price'];
 
             $commande->town_id = $town->id;
-            $commande->reference_adresse = !empty($adresse['reference']) ? $adresse['reference'] : null;
+            $commande->reference_adresse = ! empty($adresse['reference']) ? $adresse['reference'] : null;
             $commande->adresse_delivery = $adresse['adresse'];
             $commande->street = $adresse['street'];
             $commande->number_street = $adresse['number_street'];
@@ -102,19 +202,20 @@ class CommandeController extends Controller
             $commande->recipient_name = $request->input('recipient_name');
             $commande->recipient_phone = $request->input('recipient_phone');
             $commande->save();
-            $globale_price = 0;
 
-            if (!empty($products)) {
-                return ApiResponse::BAD_REQUEST(__('Oups'), __("Error"), __("Veuillez ajouter au moins un produits"));
+            if (! empty($products)) {
+                return ApiResponse::BAD_REQUEST(__('Oups'), __('Error'), __('Veuillez ajouter au moins un produits'));
             }
 
             foreach ($products as $product) {
-                # code...
+                // code...
                 $product_id = Product::query()->find(Cipher::Decrypt($product['uid']));
                 $commande_product = CommandeProduct::query()
-                    ->where("user_id", $user->id)
+                    ->where('user_id', $user->id)
                     ->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
-                if (!$commande_product) $commande_product = new CommandeProduct();
+                if (! $commande_product) {
+                    $commande_product = new CommandeProduct;
+                }
                 $commande_product->product_id = $product_id->id;
                 $commande_product->price = $product_id->price;
                 $commande_product->quantity = intval($product['quantity']);
@@ -122,11 +223,13 @@ class CommandeController extends Controller
                 $commande_product->user_id = $user->id;
                 $commande_product->currency_id
                     = $pricing['currency']['id'];
-                $globale_price += $commande_product->price * $commande_product->quantity;
                 $commande_product->save();
             }
 
-            $commande->global_price = $globale_price;
+            // Livraison et service compris : l'ecran presente ce champ comme
+            // « Total », il doit etre le montant qu'on paiera.
+            $commande->load('product');
+            $commande->recalculerTotal();
 
             $commande->save();
 
@@ -141,16 +244,26 @@ class CommandeController extends Controller
     {
 
         try {
-            $products = $request->input("products");
+            $products = $request->input('products');
 
             $user = auth()->user();
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user->id)->first();
 
+            // Avant la creation du panier de repli : sans ce refus, un client
+            // ayant une commande au paiement en aurait ouvert une seconde par
+            // cet appel, ce qui contourne aussi le « une commande a la fois ».
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
 
-            if (!$commande) {
+            if ($refus = $this->refuserSiRestaurantFerme($products)) {
+                return $refus;
+            }
 
-                $commande = new Commande();
+            if (! $commande) {
+
+                $commande = new Commande;
                 $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
                 $commande->user_id = $user->id;
                 $commande->refernce = $refernce;
@@ -161,12 +274,13 @@ class CommandeController extends Controller
             if (count($products) > 0) {
                 foreach ($products as $product) {
 
-
                     $product_id = Product::query()->find(Cipher::Decrypt($product['product_id']));
                     $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)
-                        ->where("user_id", $user->id)
+                        ->where('user_id', $user->id)
                         ->where('commande_id', $commande->id)->first();
-                    if (!$commande_product) $commande_product = new CommandeProduct();
+                    if (! $commande_product) {
+                        $commande_product = new CommandeProduct;
+                    }
 
                     $commande_product->product_id = $product_id->id;
                     $commande_product->price = $product_id->price;
@@ -180,15 +294,18 @@ class CommandeController extends Controller
                 }
             }
 
-
-            $commande_product = CommandeProduct::query()->where('product_id', $product_id->id)->where('commande_id', $commande->id)->get();
-            $sum = 0;
-            collect($commande_product)->each(function ($commande_product) use (&$sum) {
-
-                $sum = $commande_product->price * $commande_product->quantity;
-            });
-
-            $commande->global_price = $sum;
+            /*
+             * Le total ne comptait que les lignes du dernier produit ajoute,
+             * et l'affectation `=` au lieu de `+=` n'en gardait qu'une seule :
+             * un panier de trois plats s'affichait au prix du dernier. Il
+             * dependait de surcroit d'une variable de boucle, donc d'un appel
+             * sans produit pour planter.
+             *
+             * Livraison et service y sont compris, parce que les deux clients
+             * affichent ce champ sous le libelle « Total ».
+             */
+            $commande->load('product');
+            $commande->recalculerTotal();
             $commande->save();
 
             return $this->current();
@@ -230,7 +347,7 @@ class CommandeController extends Controller
                 return ApiResponse::BAD_REQUEST(
                     $validator->errors(),
                     'Oups',
-                    "Indiquez une adresse et une commune desservie"
+                    'Indiquez une adresse et une commune desservie'
                 );
             }
 
@@ -244,10 +361,14 @@ class CommandeController extends Controller
                 ->when($uid, fn ($query) => $query->where('id', Cipher::Decrypt($uid)))
                 ->first();
 
-            if (!$commande) {
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
+
+            if (! $commande) {
                 return ApiResponse::NOT_FOUND(
                     'Oups',
-                    "Aucune commande en attente ne correspond"
+                    'Aucune commande en attente ne correspond'
                 );
             }
 
@@ -278,10 +399,10 @@ class CommandeController extends Controller
         try {
 
             $user = Auth()->user();
-            $commandId = $request->input("uid");
+            $commandId = $request->input('uid');
 
-            if (!$commandId) {
-                return ApiResponse::BAD_REQUEST(__("Error"), __("Oups"), __("Commande is required"));
+            if (! $commandId) {
+                return ApiResponse::BAD_REQUEST(__('Error'), __('Oups'), __('Commande is required'));
             }
             $commande = Commande::with('product')->nonReglee()
                 ->where('id', Cipher::Decrypt($commandId))
@@ -289,14 +410,13 @@ class CommandeController extends Controller
                 ->latest()
                 ->first();
 
-            if (!$commande) {
+            if (! $commande) {
                 return ApiResponse::NOT_FOUND(__('messages.commandes.not_found'), __('messages.commandes.not_found'));
             }
 
             $commande->status_id = 4;
             $commande->cancel_at = now()->format('Y-m-d H:i:s');
             $commande->save();
-
 
             return ApiResponse::SUCCESS_DATA([]);
         } catch (Exception $e) {
@@ -316,8 +436,8 @@ class CommandeController extends Controller
 
             $commande = Commande::with('product')->nonReglee()->where('user_id', $user?->id)->first();
 
-            if (!$commande) {
-                return ApiResponse::NOT_FOUND(__("Not found"), __('messages.commandes.not_found'));
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND(__('Not found'), __('messages.commandes.not_found'));
             }
 
             return ApiResponse::GET_DATA(new CommandeResource($commande));
@@ -356,6 +476,17 @@ class CommandeController extends Controller
 
             $product_id = $request->input('product_id');
             $commande = Commande::with('product')->nonReglee()->where('user_id', $user?->id)->first();
+
+            if ($refus = $this->refuserSiVerrouillee($commande)) {
+                return $refus;
+            }
+
+            // Sans commande en cours il n'y a rien a retirer : l'appel ecrivait
+            // sur null et repondait 500.
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Aucune commande en attente ne correspond');
+            }
+
             CommandeProduct::query()->where('commande_id', $commande->id)->where('product_id', Cipher::Decrypt($product_id))->delete();
 
             return $this->current();
@@ -371,9 +502,14 @@ class CommandeController extends Controller
 
             $user = Auth()->user();
 
+            // `nonExpiree()` autant que `nonAnnulee()` : une commande en
+            // attente de paiement dont le delai est passe est annulee pour le
+            // serveur. Sans ce filtre, elle restait listee « en cours » alors
+            // que plus rien ne pouvait lui arriver, ni paiement ni annulation.
             $commande = Commande::with(['product', 'delivrery_driver', 'status'])
-                ->whereIn('status_id', [2, 5])
+                ->whereIn('status_id', [Commande::STATUT_EN_COURS, Commande::STATUT_ATTENTE_PAIEMENT])
                 ->nonAnnulee()
+                ->nonExpiree()
                 ->where('user_id', $user->id)
                 ->latest()
                 ->get();
@@ -403,10 +539,30 @@ class CommandeController extends Controller
         }
     }
 
-    public function show($refernce)
+    /**
+     * La fiche d'une commande, retrouvee par sa reference.
+     *
+     * Elle n'etait filtree par rien : `where('refernce', ...)` et c'est tout.
+     * Et la reference n'est meme pas chiffree, c'est 1000 + l'identifiant de
+     * la commande precedente. Un seul compte suffisait donc a parcourir
+     * toutes les commandes de la plateforme, avec l'adresse de livraison, le
+     * nom et le telephone du destinataire et les coordonnees GPS. Le filtre
+     * est le meme que pour showOrder : client, livreur affecte, restaurant
+     * concerne.
+     */
+    public function show(Commande $commande)
     {
-        $commande = Commande::with(['product', 'delivrery_driver', 'status'])->where('refernce', $refernce)->first();
-        return ApiResponse::GET_DATA($commande ? new CommandeResource($commande) : null);
+        $commande = $this->clauseAcces(
+            Commande::query()->with(['product', 'delivrery_driver', 'status'])->whereKey($commande->getKey())
+        )->first();
+
+        // Une commande d'autrui et une reference inconnue donnent la meme
+        // reponse : sinon l'ecart renseigne sur l'existence des commandes.
+        if (! $commande) {
+            return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+        }
+
+        return ApiResponse::GET_DATA(new CommandeResource($commande));
     }
 
     /**
@@ -425,25 +581,41 @@ class CommandeController extends Controller
     {
         $id = Cipher::Decrypt((string) $uid);
 
-        if ($id === false || !ctype_digit((string) $id)) return null;
+        if ($id === false || ! ctype_digit((string) $id)) {
+            return null;
+        }
 
+        if (! auth()->check()) {
+            return null;
+        }
+
+        return $this->clauseAcces(
+            Commande::query()->with($with)->where('id', (int) $id)
+        )->first();
+    }
+
+    /**
+     * La clause d'acces, ecrite une seule fois.
+     *
+     * Trois profils y ont legitimement acces : le client qui a commande, le
+     * livreur qui en a la charge, et le restaurant dont elle contient les
+     * plats. showOrder, get_track_order et show la partagent ; une seconde
+     * copie aurait diverge des la premiere evolution du modele, comme la
+     * definition « commande non reglee » l'a deja fait huit fois ici.
+     */
+    private function clauseAcces(Builder $query): Builder
+    {
         $user = auth()->user();
 
-        if (!$user) return null;
-
-        return Commande::query()
-            ->with($with)
-            ->where('id', (int) $id)
-            ->where(function ($query) use ($user) {
-                $query
-                    ->where('user_id', $user->id)
-                    ->orWhereHas('delivrery_driver', fn ($q) => $q->where('user_id', $user->id))
-                    ->orWhereHas(
-                        'commande_products.product.restaurant',
-                        fn ($q) => $q->where('user_id', $user->id)
-                    );
-            })
-            ->first();
+        return $query->where(function (Builder $sous) use ($user) {
+            $sous
+                ->where('user_id', $user?->id)
+                ->orWhereHas('delivrery_driver', fn ($q) => $q->where('user_id', $user?->id))
+                ->orWhereHas(
+                    'commande_products.product.restaurant',
+                    fn ($q) => $q->where('user_id', $user?->id)
+                );
+        });
     }
 
     public function showOrder(string $uid)
@@ -453,7 +625,7 @@ class CommandeController extends Controller
         // Un uid inconnu et un uid appartenant a autrui donnent la meme
         // reponse : sinon l'ecart renseigne sur l'existence des commandes.
         // L'ancienne version renvoyait en plus l'identifiant entier decode.
-        if (!$commande) {
+        if (! $commande) {
             return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
         }
 
@@ -469,12 +641,12 @@ class CommandeController extends Controller
             $order = $request->input('uid');
             $location = $request->input('location');
 
-            if (!$order) {
-                return ApiResponse::BAD_REQUEST(__("Oups"), __("error"), __('messages.commandes.not_found'));
+            if (! $order) {
+                return ApiResponse::BAD_REQUEST(__('Oups'), __('error'), __('messages.commandes.not_found'));
             }
 
-            if (!$location) {
-                return ApiResponse::BAD_REQUEST(__("Oups"), __("error"), __('messages.commandes.not_found'));
+            if (! $location) {
+                return ApiResponse::BAD_REQUEST(__('Oups'), __('error'), __('messages.commandes.not_found'));
             }
 
             // Remonter une position n'appartient qu'au livreur affecte : sans
@@ -487,24 +659,14 @@ class CommandeController extends Controller
                 ->first();
 
             if ($current_order) {
-
-                $address = "{$current_order->adresse_delivery}, {$current_order->town?->title}";
-
-                $track = TrackOrder::query()->where('commande_id', $current_order->id)->first();
-                if ($track) {
-                    TrackOrder::query()->create([
-                        'commande_id' => $current_order->id,
-                        'location_customer' => $track->location_customer,
-                        'location_delivery' => $location
-                    ]);
-                } else {
-                    $geo_code = Geocode::getLatLngByAddress($address);
-                    TrackOrder::query()->create([
-                        'commande_id' => $current_order->id,
-                        'location_customer' => $geo_code,
-                        'location_delivery' => $location
-                    ]);
-                }
+                /*
+                 * L'ecriture passe par le service, qui tient la cadence et la
+                 * fenetre active. Les livreurs emettaient parfois plusieurs
+                 * fois par seconde et la table accumulait tout ; le refus est
+                 * silencieux, parce que l'application installee ne sait pas
+                 * le lire et le repeterait sans fin.
+                 */
+                app(SuiviPositions::class)->enregistrer($current_order, $location);
             }
 
             return ApiResponse::SUCCESS_DATA([]);
@@ -520,9 +682,25 @@ class CommandeController extends Controller
 
             $commande = $this->commandeAccessible($uid);
 
-            if (!$commande) return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+            }
 
-            $data = TrackOrder::query()->where('commande_id', $commande->id)->first();
+            /*
+             * Le DERNIER releve, et non le premier.
+             *
+             * `first()` sans tri rendait la plus ancienne ligne : le plan du
+             * client affichait la position ou le livreur se trouvait au
+             * moment du tout premier releve, et ne bougeait plus jusqu'a la
+             * livraison. Le point restait fige a l'endroit ou le livreur
+             * avait quitte le restaurant.
+             *
+             * `latest('id')` et non `latest('created_at')` : deux releves
+             * peuvent partager la meme seconde, seul l'ordre d'insertion ne
+             * ment pas. La lecture passe par le service, qui porte deja cette
+             * definition pour la location.
+             */
+            $data = app(SuiviPositions::class)->dernier($commande);
 
             return ApiResponse::GET_DATA($data);
         } catch (Exception $e) {
@@ -542,10 +720,29 @@ class CommandeController extends Controller
     {
 
         try {
+            /*
+             * La commande est d'abord reconnue comme celle du demandeur.
+             *
+             * L'ancienne version partait directement interroger FlexPay avec
+             * la reference recue, puis ecrivait le statut et declenchait la
+             * notification au restaurateur sur la commande que la passerelle
+             * lui nommait. La reference est une suite d'entiers : tout compte
+             * authentifie pouvait donc suivre, et faire avancer, le paiement
+             * de n'importe qui.
+             */
+            $commande = Commande::query()
+                ->where('refernce', $orderNumber)
+                ->where('user_id', auth()->id())
+                ->first();
+
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Commande introuvable');
+            }
+
             $result = FlexPay::checkPaiement($orderNumber);
             if ($result['code'] != 0) {
 
-                return ApiResponse::BAD_REQUEST("Oups!!", $result['title'], $result['message']);
+                return ApiResponse::BAD_REQUEST('Oups!!', $result['title'], $result['message']);
             } else {
 
                 $status = $result['transaction']['status'];
@@ -554,15 +751,16 @@ class CommandeController extends Controller
 
                 if ($status_paiement?->is_paid) {
 
-                    $order = Commande::query()
-                        ->with('user')
-                        ->where('refernce', $result['transaction']['reference'])->first();
+                    // La commande deja reconnue, et non celle que la reponse
+                    // de la passerelle designe : sinon la verification de
+                    // propriete faite plus haut ne servirait a rien.
+                    $order = $commande->load('user');
 
                     $order->status_id = 2;
                     $order->reference_paiement = $result['transaction']['provider_reference'];
-                    //envoyer la commande au restaurateur
-                    if (!$order->paied_at) {
-                        $order->paied_at = now()->format("Y-m-d H:i:s");
+                    // envoyer la commande au restaurateur
+                    if (! $order->paied_at) {
+                        $order->paied_at = now()->format('Y-m-d H:i:s');
 
                         $user = CurrentHelpers::getUserByOrder($order);
 
@@ -572,10 +770,10 @@ class CommandeController extends Controller
                         ];
 
                         if ($user->expo_push_token) {
-                            $push = new FirebasePushNotification();
-                            $push->sendPushNotification($user->expo_push_token, "Nouvelle commande", json_encode($body));
+                            $push = new FirebasePushNotification;
+                            $push->sendPushNotification($user->expo_push_token, 'Nouvelle commande', json_encode($body));
 
-                            FirebasePushNotification::sendNotification($user->expo_push_token, "Thalia eats commande", "Nouvelle commande");
+                            FirebasePushNotification::sendNotification($user->expo_push_token, 'Thalia eats commande', 'Nouvelle commande');
                         }
                     }
 
@@ -585,8 +783,88 @@ class CommandeController extends Controller
 
                 return ApiResponse::GET_DATA($status_paiement);
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    /**
+     * Le repli sur le total du client, une fois le serveur declare souverain.
+     *
+     * Retomber sur le montant annonce par le telephone n'est alors plus un
+     * filet, c'est une porte : il suffit de faire echouer la cotation pour
+     * reprendre la main sur le prix. Chaque cas est donc tranche ici, et
+     * nulle part ailleurs.
+     *
+     * Refuses — on ne facture pas un panier qu'on ne sait pas lire :
+     * - produit_introuvable : un uid qui ne resout a rien. La suite de
+     *   valide() plantait de toute facon sur ce panier ;
+     * - panier_vide / quantite_invalide : il n'y a rien a facturer ;
+     * - commune_inconnue : sans commune, pas de grille, donc pas de prix.
+     *
+     * Gardent le repli, faute d'arbitrage du proprietaire :
+     * - multi_restaurant : trois commandes livrees en production sont dans ce
+     *   cas et aucun des deux paniers ne l'interdit — refuser casserait un
+     *   parcours reel ;
+     * - devises_melangees : meme raison ;
+     * - erreur_technique : une panne de la mesure ne peut pas, a elle seule,
+     *   decider de perdre une commande.
+     * Ces trois-la sont journalises en alerte : ils doivent se voir.
+     */
+    private function refuserFauteDeCotation(?Quotation $quotation, ?string $indisponibilite, $reference): ?JsonResponse
+    {
+        $refus_moteur = [
+            QuotationService::RAISON_PANIER_VIDE,
+            QuotationService::RAISON_QUANTITE_INVALIDE,
+        ];
+
+        $motif = null;
+
+        if ($quotation !== null && ! $quotation->disponible && in_array($quotation->raison, $refus_moteur, true)) {
+            $motif = $quotation->raison;
+        } elseif (in_array($indisponibilite, ['produit_introuvable', 'panier_vide', 'commune_inconnue'], true)) {
+            $motif = $indisponibilite;
+        }
+
+        if ($motif !== null) {
+            $this->journalQuotation('error', 'refus_facturation', [
+                'commande' => $reference,
+                'raison' => $motif,
+            ]);
+
+            return ApiResponse::BAD_REQUEST(
+                'panier_impossible_a_chiffrer',
+                __('Oups'),
+                __("Votre panier n'a pas pu être chiffré. Actualisez-le, puis réessayez.")
+            );
+        }
+
+        $repli = $quotation !== null && ! $quotation->disponible
+            ? $quotation->raison
+            : $indisponibilite;
+
+        if ($repli !== null) {
+            $this->journalQuotation('alert', 'repli_prix_client', [
+                'commande' => $reference,
+                'raison' => $repli,
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Journaliser ne doit jamais faire echouer une commande : le canal
+     * « quotation » est peut-etre precisement ce qui vient de tomber.
+     *
+     * @param  array<string, mixed>  $contexte
+     */
+    private function journalQuotation(string $niveau, string $evenement, array $contexte): void
+    {
+        try {
+            Log::channel('quotation')->{$niveau}($evenement, $contexte);
+        } catch (Throwable) {
+            // Rien a faire.
         }
     }
 
@@ -606,14 +884,19 @@ class CommandeController extends Controller
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
             $total_price = $request->input('total_price');
-            $mobile=$request->input('mobile');
+            $mobile = $request->input('mobile');
 
             $user = auth()->user();
             $user->phone = $mobile;
 
-            if (!$user) {
+            if (! $user) {
                 return ApiResponse::NOT_AUTHORIZED();
             }
+
+            // Les commandes perimees sont annulees avant le controle : sinon le
+            // client reste bloque un quart d'heure par une commande morte,
+            // sans savoir combien de temps ni pourquoi.
+            Commande::expirerPour($user->id);
 
             $last_commande = Commande::query()->orderBy('created_at', 'desc')->first();
             $commande = Commande::query()->nonReglee()->where('user_id', $user?->id)->first();
@@ -629,37 +912,42 @@ class CommandeController extends Controller
                 );
             }
 
-            $products = $request->input("products");
+            $products = $request->input('products');
 
-            $adresse = $request->input("address");
+            // Avant toute ecriture et avant tout appel a la passerelle : un
+            // refus plus tard laisserait une commande posee, ou pire, un
+            // debit lance pour un repas que personne ne prepare.
+            if ($refus = $this->refuserSiRestaurantFerme($products, 'uid')) {
+                return $refus;
+            }
 
-            $town = Town::query()->where('slug', !empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
+            $adresse = $request->input('address');
 
+            $town = Town::query()->where('slug', ! empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
 
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
 
             $getExistOrder = Commande::query()->nonReglee()->where('user_id', $user?->id)->first();
-            $commande = $getExistOrder ?? new Commande();
+            $commande = $getExistOrder ?? new Commande;
 
-            if (!$getExistOrder) {
+            if (! $getExistOrder) {
 
                 $refernce = $last_commande ? 1000 + $last_commande->id : 1000;
                 $commande->user_id = $user->id;
                 $commande->refernce = $refernce;
                 $commande->status_id = 5;
 
-
             }
 
             $commande->price_delivery = $pricing['frais_livraison'];
             $commande->price_service = $pricing['service_price'];
 
-            if ($total_price <= 2 && $method == "cart") {
-                return ApiResponse::BAD_REQUEST(__('Oups'), __("Error paiement"), __("Pour le paiement par cart le montant minimum c'est 2USD"));
+            if ($total_price <= 2 && $method == 'cart') {
+                return ApiResponse::BAD_REQUEST(__('Oups'), __('Error paiement'), __("Pour le paiement par cart le montant minimum c'est 2USD"));
             }
 
             $commande->town_id = $town->id;
-            $commande->reference_adresse = !empty($adresse['reference']) ? $adresse['reference'] : null;
+            $commande->reference_adresse = ! empty($adresse['reference']) ? $adresse['reference'] : null;
             $commande->adresse_delivery = $adresse['adresse'];
             $commande->street = $adresse['street'];
             $commande->number_street = $adresse['number_street'];
@@ -679,6 +967,8 @@ class CommandeController extends Controller
             // que quotation.authoritative vaut false. Toute exception y est
             // absorbée : une commande ne peut pas échouer à cause de la mesure.
             $quotation = null;
+            // Pourquoi la cotation n'a pas eu lieu, quand elle n'a pas eu lieu.
+            $indisponibilite = null;
 
             try {
                 $ids = [];
@@ -722,6 +1012,7 @@ class CommandeController extends Controller
                 }
 
                 if ($unresolved) {
+                    $indisponibilite = 'produit_introuvable';
                     // Une ligne non résolue chiffrerait un panier partiel : le
                     // moteur crierait à l'écart sur un panier qu'il n'a jamais
                     // vraiment vu. On ne chiffre pas, on journalise la raison.
@@ -764,8 +1055,11 @@ class CommandeController extends Controller
                             'warnings' => $quotation->warnings,
                         ]);
                     }
+                } else {
+                    $indisponibilite = $quotation_lines === [] ? 'panier_vide' : 'commune_inconnue';
                 }
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
+                $indisponibilite = 'erreur_technique';
                 // Le canal « quotation » est peut-être précisément ce qui vient
                 // d'échouer : ne jamais laisser la récupération relever.
                 try {
@@ -773,74 +1067,116 @@ class CommandeController extends Controller
                         'commande' => $commande->refernce,
                         'message' => $e->getMessage(),
                     ]);
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     // Rien à faire : une commande ne peut pas échouer à cause
                     // de la mesure.
                 }
             }
 
-            $montant_facture = (config('quotation.authoritative') && $quotation !== null && $quotation->disponible)
-                ? $quotation->total
-                : $total_price;
+            $autorite = (bool) config('quotation.authoritative');
+
+            if ($autorite) {
+                $refus = $this->refuserFauteDeCotation($quotation, $indisponibilite, $commande->refernce);
+
+                if ($refus) {
+                    return $refus;
+                }
+            }
+
+            $serveur_fait_foi = $autorite && $quotation !== null && $quotation->disponible;
+
+            if ($serveur_fait_foi) {
+                // La ventilation suit le total. Un total du serveur avec des
+                // frais du client donnerait une commande dont les lignes ne
+                // font pas la somme : personne, ensuite, ne sait laquelle croire.
+                $commande->price_delivery = $quotation->frais_livraison;
+                $commande->price_service = $quotation->service_price;
+            }
+
+            // La devise aussi : annoncer CDF sur un panier en USD ferait
+            // encaisser mille fois moins que le panier ne vaut.
+            $devise_facturee = $serveur_fait_foi ? $quotation->currency : null;
+
+            $montant_facture = $serveur_fait_foi ? $quotation->total : $total_price;
             // ----------------------------------------------------------------
 
             $commande->global_price = $montant_facture;
-            $commande->save();
+
+            /*
+             * La section critique, et le seul endroit qui decide.
+             *
+             * Le controle fait en entree de methode a servi a refuser vite et
+             * a afficher un message utile ; il ne prouve plus rien ici, tout
+             * ce qui precede ayant pris du temps. Deux « Payer » simultanes y
+             * passaient tous deux et creaient chacun leur commande, avec deux
+             * references et deux montants engages aupres de FlexPay.
+             *
+             * La reservation est posee ici et pas plus haut pour qu'un refus
+             * en amont — montant minimum par carte, panier impossible a
+             * chiffrer — ne laisse pas derriere lui une commande fantome qui
+             * bloquerait le client pendant tout le delai d'expiration.
+             */
+            if ($conflit = Commande::reserverPour($user, $commande)) {
+                return ApiResponse::BAD_REQUEST(
+                    ['uid' => Cipher::Encrypt($conflit->id), 'reference' => $conflit->refernce],
+                    __('Commande en attente'),
+                    __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $conflit->refernce])
+                );
+            }
 
             $commande->refresh();
 
             foreach ($products as $product) {
-                # code...
+                // code...
                 $product_id = Product::query()->find(Cipher::Decrypt($product['uid']));
                 $commande_product = CommandeProduct::query()
-                    ->where("user_id", $user->id)
+                    ->where('user_id', $user->id)
                     ->where('product_id', $product_id->id)->where('commande_id', $commande->id)->first();
-                if (!$commande_product) $commande_product = new CommandeProduct();
+                if (! $commande_product) {
+                    $commande_product = new CommandeProduct;
+                }
                 $commande_product->product_id = $product_id->id;
                 $commande_product->price = $product_id->price;
                 $commande_product->quantity = intval($product['quantity']);
                 $commande_product->commande_id = $commande->id;
                 $commande_product->user_id = $user->id;
                 $commande_product->currency_id
-                    = $pricing['currency']['id'];
-                //$globale_price += $commande_product->price * $commande_product->quantity;
+                    = $devise_facturee?->id ?? $pricing['currency']['id'];
                 $commande_product->save();
             }
-
 
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
 
-            if ($method != "cart") {
+            if ($method != 'cart') {
                 $phone_check = new LibPhoneNumber($phone);
 
-                if (!$phone_check->checkValidationNumber()) {
-                    return ApiResponse::BAD_REQUEST("Oups", "Numéro de téléphone invalide", "Mpesa");
+                if (! $phone_check->checkValidationNumber()) {
+                    return ApiResponse::BAD_REQUEST('Oups', 'Numéro de téléphone invalide', 'Mpesa');
                 }
             }
-
 
             $data = [
                 'amount' => floatval($montant_facture),
                 'phone' => $phone,
                 'name' => $user_name,
                 'email' => $user_email,
-                'currency' => !empty($pricing['currency']['code']) ? $pricing['currency']['code'] : "CDF",
+                'currency' => $devise_facturee?->code
+                    ?? (! empty($pricing['currency']['code']) ? $pricing['currency']['code'] : 'CDF'),
                 'reference' => $commande->refernce,
                 'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
-                "decline_url" => $error_url,
-                'language' => "fr",
-                'description' => "Paiement facture thalia eats",
+                'decline_url' => $error_url,
+                'language' => 'fr',
+                'description' => 'Paiement facture thalia eats',
             ];
 
             $result = FlexPay::sendData($data, $method);
 
+            if (! empty($result['code']) && $result['code'] != 0) {
 
-            if (!empty($result['code']) && $result['code'] != 0) {
-
-                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result["message"]);
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result['message']);
 
             }
 
@@ -849,22 +1185,21 @@ class CommandeController extends Controller
             $commande->code_confirmation_restaurant = rand(1000, 9999);
             $commande->save();
 
-
             $status_paiement = StatusPayement::query()->where('is_default', true)->first();
 
             Payement::query()->updateOrCreate([
                 'commande_id' => $commande->id,
                 'phone' => preg_replace('/[\s+]/', '', $phone),
-                'channel' => "MPESA",
+                'channel' => 'MPESA',
             ], [
                 'code' => $result['code'],
                 'commande_id' => $commande->id,
                 'phone' => preg_replace('/[\s+]/', '', $phone),
-                'channel' => "MPESA",
+                'channel' => 'MPESA',
                 'status_payement_id' => $status_paiement?->id,
                 'amount' => $montant_facture,
                 'amount_customer' => $montant_facture,
-                'webhook_sse_url' => $webhook_url
+                'webhook_sse_url' => $webhook_url,
             ]);
 
             $body = [
@@ -872,20 +1207,18 @@ class CommandeController extends Controller
                 'status' => $status_paiement,
             ];
 
-            $user=auth()->user();
-            if($user->expo_push_token){
-                $push = new FirebasePushNotification();
+            $user = auth()->user();
+            if ($user->expo_push_token) {
+                $push = new FirebasePushNotification;
                 $push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', json_encode($body));
                 event(new PayementEvent($result['orderNumber']));
 
-                FirebasePushNotification::sendNotification($user->expo_push_token,"Paiment", $result['message']);;
+                FirebasePushNotification::sendNotification($user->expo_push_token, 'Paiment', $result['message']);
             }
 
-
-            return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
+            return ApiResponse::SUCCESS_DATA($result, 'Save', $result['message']);
 
         } catch (Exception $e) {
-
 
             return ApiResponse::SERVER_ERROR($e);
         }
@@ -897,29 +1230,26 @@ class CommandeController extends Controller
             $uid = $request->input('uid');
             $user = Auth()->user();
 
-
             $validator = Validator::make($request->all(), [
                 'uid' => 'required|string',
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST("Oups", "Error", $validator->errors());
+                return ApiResponse::BAD_REQUEST('Oups', 'Error', $validator->errors());
             }
-
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid))
                 ->where('status_id', '>', 1)
                 ->where('user_id', $user->id)->first();
-            if (!$commande) {
-                return ApiResponse::BAD_REQUEST("Oups", "Erreur", "Erreur du paiement");
+            if (! $commande) {
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', 'Erreur du paiement');
             }
 
             if ($commande->status_id == 2) {
-                return ApiResponse::SUCCESS_DATA("", "Success", "Merci pour votre confiance");
+                return ApiResponse::SUCCESS_DATA('', 'Success', 'Merci pour votre confiance');
             }
 
-
-            return ApiResponse::SUCCESS_DATA("", "Success", "Commande déjà traitée");
+            return ApiResponse::SUCCESS_DATA('', 'Success', 'Commande déjà traitée');
 
         } catch (Exception $e) {
 
@@ -931,11 +1261,27 @@ class CommandeController extends Controller
     public function paiement(Request $request, $uid)
     {
         try {
+            /*
+             * Trois clauses la ou il n'y en avait qu'une.
+             *
+             * - `user_id` : l'uid n'est pas une capacite, Cipher chiffre un
+             *   entier avec une cle du depot et sans MAC. Sans ce filtre, tout
+             *   compte authentifie pouvait envoyer la commande d'autrui a la
+             *   passerelle et en lire le montant ;
+             * - `nonReglee()` : le `where('status_id', 5)` nu laissait passer
+             *   une commande annulee ou perimee, dont la colonne est restee a
+             *   5. Le client etait debite pour une commande morte. C'est la
+             *   definition partagee, celle que lisent les ecrans ;
+             * - le statut, nomme : seule une commande deja envoyee au paiement
+             *   se regle ici, pas un panier en cours de composition.
+             */
             $order = Commande::query()->where('id', Cipher::Decrypt($uid))
-                ->where('status_id', 5)
+                ->where('user_id', auth()->id())
+                ->nonReglee()
+                ->where('status_id', Commande::STATUT_ATTENTE_PAIEMENT)
                 ->first();
-            if (!$order) {
-                return ApiResponse::BAD_REQUEST(__("Oups"), __("Error"), __("Commande invalide déjà payer ou annuler"));
+            if (! $order) {
+                return ApiResponse::BAD_REQUEST(__('Oups'), __('Error'), __('Commande invalide déjà payer ou annuler'));
             }
 
             $success_url = $request->input('success_url');
@@ -948,8 +1294,7 @@ class CommandeController extends Controller
             $webhook_url = config('sse.webhook_url');
             $phone = $request->input('phone');
             $method = $request->input('method', 'mobile');
-            $mobile=$request->input('mobile');
-
+            $mobile = $request->input('mobile');
 
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
@@ -957,21 +1302,20 @@ class CommandeController extends Controller
             $user->phone = $mobile;
             $user->save();
 
-            if ($method != "cart") {
+            if ($method != 'cart') {
                 $phone_check = new LibPhoneNumber($phone);
 
-                if (!$phone_check->checkValidationNumber()) {
-                    return ApiResponse::BAD_REQUEST("Oups", "Numéro de téléphone invalide", "Mpesa");
+                if (! $phone_check->checkValidationNumber()) {
+                    return ApiResponse::BAD_REQUEST('Oups', 'Numéro de téléphone invalide', 'Mpesa');
                 }
             }
-
 
             $data = [
                 'amount' => floatval($order->global_price),
                 'phone' => $phone,
                 'name' => $user_name,
                 'email' => $user_email,
-                'currency' => !empty($order->product) ? $order->product[0]->currency->code : "CDF",
+                'currency' => ! empty($order->product) ? $order->product[0]->currency->code : 'CDF',
                 'reference' => $order->refernce,
                 // Le client ne decide pas ou son paiement est confirme : une
                 // adresse fournie par l'appelant enverrait la confirmation
@@ -979,17 +1323,16 @@ class CommandeController extends Controller
                 'callback_url' => config('flexpay.callback_url'),
                 'approve_url' => $success_url,
                 'cancel_url' => $cancle_url,
-                "decline_url" => $error_url,
-                'language' => "fr",
-                'description' => "Paiement facture thalia eats",
+                'decline_url' => $error_url,
+                'language' => 'fr',
+                'description' => 'Paiement facture thalia eats',
             ];
 
             $result = FlexPay::sendData($data, $method);
 
+            if (! empty($result['code']) && $result['code'] != 0) {
 
-            if (!empty($result['code']) && $result['code'] != 0) {
-
-                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result["message"]);
+                return ApiResponse::BAD_REQUEST('Oups', 'Erreur', $result['message']);
 
             }
 
@@ -998,22 +1341,21 @@ class CommandeController extends Controller
             $order->code_confirmation_restaurant = rand(1000, 9999);
             $order->save();
 
-
             $status_paiement = StatusPayement::query()->where('is_default', true)->first();
 
             Payement::query()->updateOrCreate([
                 'commande_id' => $order->id,
                 'phone' => preg_replace('/[\s+]/', '', $phone),
-                'channel' => "MPESA",
+                'channel' => 'MPESA',
             ], [
                 'code' => $result['code'],
                 'commande_id' => $order->id,
                 'phone' => preg_replace('/[\s+]/', '', $phone),
-                'channel' => "MPESA",
+                'channel' => 'MPESA',
                 'status_payement_id' => $status_paiement?->id,
                 'amount' => $order->global_price,
                 'amount_customer' => $order->global_price,
-                'webhook_sse_url' => $webhook_url
+                'webhook_sse_url' => $webhook_url,
             ]);
 
             $body = [
@@ -1021,22 +1363,20 @@ class CommandeController extends Controller
                 'status' => $status_paiement,
             ];
 
-            $user=auth()->user();
+            $user = auth()->user();
 
-            if($user->expo_push_token){
+            if ($user->expo_push_token) {
 
-                $push = new FirebasePushNotification();
+                $push = new FirebasePushNotification;
                 $push->sendPushNotification(auth()->user()->expo_push_token, 'paiement', json_encode($body));
                 event(new PayementEvent($result['orderNumber']));
 
-                FirebasePushNotification::sendNotification($user->expo_push_token,"Paiement",$result['message']);
+                FirebasePushNotification::sendNotification($user->expo_push_token, 'Paiement', $result['message']);
             }
 
+            return ApiResponse::SUCCESS_DATA($result, 'Save', $result['message']);
 
-            return ApiResponse::SUCCESS_DATA($result, "Save", $result['message']);
-
-
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }

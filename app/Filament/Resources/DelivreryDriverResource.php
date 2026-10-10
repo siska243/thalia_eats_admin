@@ -2,13 +2,28 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\DelivreryDriverResource\Pages\EditDelivreryDriver;
+use App\Filament\Resources\DelivreryDriverResource\Pages\ManageCommandeProducts;
+use App\Filament\Resources\DelivreryDriverResource\Pages\ListDelivreryDrivers;
+use App\Filament\Resources\DelivreryDriverResource\Pages\CreateDelivreryDriver;
 use App\Filament\Resources\DelivreryDriverResource\Pages;
 use App\Filament\Resources\DelivreryDriverResource\RelationManagers;
 use App\Models\DelivreryDriver;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Form;
 use Filament\Resources\Pages\Page;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -20,15 +35,15 @@ class DelivreryDriverResource extends Resource
 {
     protected static ?string $model = DelivreryDriver::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-user';
-    protected static ?string $navigationGroup = "Livraison";
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user';
+    protected static string | \UnitEnum | null $navigationGroup = "Livraison";
     protected static ?string $navigationLabel = "Livreur";
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Section::make()
+        return $schema
+            ->components([
+                Section::make()
                     ->columns(2)
                     ->schema(
                         [
@@ -36,13 +51,13 @@ class DelivreryDriverResource extends Resource
                                 ->relationship('user', 'name')
                                 ->preload()
                                 ->searchable(),
-                            Forms\Components\DatePicker::make('birth_date'),
-                            Forms\Components\TextInput::make('id_card')
+                            DatePicker::make('birth_date'),
+                            TextInput::make('id_card')
                                 ->required()
                                 ->maxLength(255),
-                            Forms\Components\Textarea::make('contract')
+                            Textarea::make('contract')
                                 ->columnSpanFull(),
-                            Forms\Components\Toggle::make('is_active')
+                            Toggle::make('is_active')
                                 ->required(),
                         ]
                     )
@@ -54,20 +69,20 @@ class DelivreryDriverResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')
+                TextColumn::make('user.name')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('birth_date')
+                TextColumn::make('birth_date')
                     ->date()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('id_card')->label('Numéro pièce d\'identité')
+                TextColumn::make('id_card')->label('Numéro pièce d\'identité')
                     ->searchable(),
-                Tables\Columns\ToggleColumn::make('is_active')
+                ToggleColumn::make('is_active')
                 ,
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -75,16 +90,16 @@ class DelivreryDriverResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -99,18 +114,18 @@ class DelivreryDriverResource extends Resource
     {
         return $page->generateNavigationItems([
 
-            Pages\EditDelivreryDriver::class,
-            Pages\ManageCommandeProducts::class
+            EditDelivreryDriver::class,
+            ManageCommandeProducts::class
         ]);
     }
 
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListDelivreryDrivers::route('/'),
-            'create' => Pages\CreateDelivreryDriver::route('/create'),
-            'edit' => Pages\EditDelivreryDriver::route('/{record}/edit'),
-            'commande' => Pages\ManageCommandeProducts::route('/{record}/commandes'),
+            'index' => ListDelivreryDrivers::route('/'),
+            'create' => CreateDelivreryDriver::route('/create'),
+            'edit' => EditDelivreryDriver::route('/{record}/edit'),
+            'commande' => ManageCommandeProducts::route('/{record}/commandes'),
         ];
     }
 }

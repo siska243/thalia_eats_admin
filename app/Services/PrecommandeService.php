@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Product;
 use App\Exceptions\PrecommandeRefusee;
 use App\Models\Precommande;
 use App\Models\Town;
@@ -18,7 +19,7 @@ class PrecommandeService
      * (adresse, nom et téléphone du destinataire) restent nulles : le client
      * les saisit lui-même sur la page du lien de paiement.
      *
-     * @param  array<int, array{product: \App\Models\Product, quantity: int|float}>  $lines
+     * @param array<int, array{product: Product, quantity: int|float}> $lines
      *
      * @throws PrecommandeRefusee
      */

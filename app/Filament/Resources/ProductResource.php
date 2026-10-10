@@ -2,6 +2,10 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use App\Filament\Resources\ProductResource\Pages\ListProducts;
+use App\Filament\Resources\ProductResource\Pages\CreateProduct;
+use App\Filament\Resources\ProductResource\Pages\EditProduct;
 use App\Filament\Resources\ProductResource\Pages;
 use App\Filament\Resources\ProductResource\RelationManagers;
 use App\Models\Currency;
@@ -9,7 +13,6 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\SubCategoryProduct;
 use Filament\Forms\Components\{FileUpload, Section, Select, Textarea, TextInput};
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\{ImageColumn, TextColumn, ToggleColumn};
 use Filament\Tables\Table;
@@ -26,19 +29,19 @@ class ProductResource extends Resource
 {
     protected static ?string $model = Product::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = "Liste";
-    protected static ?string $navigationGroup = "Produits";
+    protected static string | \UnitEnum | null $navigationGroup = "Produits";
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
 
-        return $form
-            ->schema(
+        return $schema
+            ->components(
                 [
-                    Section::make()->schema(
+                    \Filament\Schemas\Components\Section::make()->schema(
                         [
-                            Section::make('Information basique')
+                            \Filament\Schemas\Components\Section::make('Information basique')
                                 ->schema([
                                     TextInput::make('title')
                                         ->required()
@@ -63,7 +66,7 @@ class ProductResource extends Resource
                                         ->options(Currency::query()->where('is_active', 1)->pluck('title', 'id'))
                                 ])->columns(2),
 
-                            Section::make('Information complementaire')
+                            \Filament\Schemas\Components\Section::make('Information complementaire')
                                 ->schema([TextInput::make('price')
                                     ->required()
                                     ->numeric()
@@ -114,21 +117,21 @@ class ProductResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                ActionGroup::make([
-                    EditAction::make(),
-                    ViewAction::make(),
-                    DeleteAction::make(),
+            ->recordActions([
+                \Filament\Actions\ActionGroup::make([
+                    \Filament\Actions\EditAction::make(),
+                    \Filament\Actions\ViewAction::make(),
+                    \Filament\Actions\DeleteAction::make(),
                 ])
 
             ])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+            ->toolbarActions([
+                \Filament\Actions\BulkActionGroup::make([
+                    \Filament\Actions\DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                CreateAction::make(),
+                \Filament\Actions\CreateAction::make(),
             ]);
     }
 
@@ -142,9 +145,9 @@ class ProductResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListProducts::route('/'),
-            'create' => Pages\CreateProduct::route('/create'),
-            'edit' => Pages\EditProduct::route('/{record}/edit'),
+            'index' => ListProducts::route('/'),
+            'create' => CreateProduct::route('/create'),
+            'edit' => EditProduct::route('/{record}/edit'),
         ];
     }
 }

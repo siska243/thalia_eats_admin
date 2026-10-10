@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Precommande;
+use App\Services\ConversionPrecommande;
 use App\Events\PayementEvent;
 use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
@@ -10,6 +12,7 @@ use App\Http\Resources\CommandeResource;
 use App\Models\Commande;
 use App\Models\Payement;
 use App\Models\StatusPayement;
+use App\Services\Rental\DepositWebhook;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\FirebasePushNotification;
 use App\Wrappers\FlexPay;
@@ -39,13 +42,33 @@ class PayementController extends Controller
             $phone = $request->input('phone');
             $provider_reference = $request->input('provider_reference');
 
+            /*
+             * Les locations partent avant tout le reste.
+             *
+             * Leur reference porte le prefixe « R- », qu'aucune commande de
+             * repas (un entier nu) ni aucune pre-commande (« P- ») ne peut
+             * produire : la separation est sure. Elles sont traitees dans leur
+             * propre service, plus strict, et ce retour laisse le code
+             * ci-dessous — le chemin vivant de la production — rigoureusement
+             * inchange.
+             */
+            if (DepositWebhook::concerne($reference)) {
+                $resultat = app(DepositWebhook::class)->traiter($reference, $orderNumber, [
+                    'phone' => $phone,
+                    'channel' => $channel,
+                    'provider_reference' => $provider_reference,
+                ]);
+
+                return ApiResponse::GET_DATA($resultat);
+            }
+
             $order = Commande::query()
                 ->with('user')
                 ->where('refernce', $reference)->first();
 
             try {
                 $result = FlexPay::checkPaiement($orderNumber);
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
 
                 return ApiResponse::SERVER_ERROR($e);
             }
@@ -163,7 +186,7 @@ class PayementController extends Controller
                         // n'importe quel total. Le montant est lu sur la
                         // transaction VERIFIEE, jamais sur la requete : c'est
                         // tout l'interet.
-                        $precommande = \App\Models\Precommande::query()
+                        $precommande = Precommande::query()
                             ->where('refernce', $reference)
                             ->first();
 
@@ -196,7 +219,7 @@ class PayementController extends Controller
                             );
                         }
 
-                        $order = app(\App\Services\ConversionPrecommande::class)
+                        $order = app(ConversionPrecommande::class)
                             ->convertirSiPossible($reference);
                     }
 

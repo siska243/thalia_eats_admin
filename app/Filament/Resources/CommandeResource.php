@@ -2,63 +2,71 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\CommandeResource\Pages;
-use App\Filament\Resources\CommandeResource\RelationManagers;
+use App\Filament\Pages\SuiviDesCourses;
+use App\Filament\Resources\CommandeResource\Pages\EditCommande;
+use App\Filament\Resources\CommandeResource\Pages\ListCommandes;
+use App\Filament\Resources\CommandeResource\Pages\ManageCommandeProducts;
+use App\Filament\Resources\CommandeResource\Pages\ViewCommande;
 use App\Models\Commande;
-use Filament\Forms;
-use Filament\Forms\Form;
-use Filament\Pages\SubNavigationPosition;
-use Filament\Resources\Pages\Page;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\HtmlString;
 
 class CommandeResource extends Resource
 {
     protected static ?string $model = Commande::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';
-    protected static ?string $navigationGroup = "Thalia eats";
-    protected static ?string $navigationModeleLabel = "Commande";
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
 
-    public static function form(Form $form): Form
+    protected static string|\UnitEnum|null $navigationGroup = 'Thalia eats';
+
+    protected static ?string $navigationModeleLabel = 'Commande';
+
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Section::make()
+        return $schema
+            ->components([
+                Section::make()
                     ->columns(3)
                     ->schema([
-                        Forms\Components\Select::make('user_id')->relationship('user', 'name'),
-                        Forms\Components\Select::make('status_id')
+                        Select::make('user_id')->relationship('user', 'name'),
+                        Select::make('status_id')
                             ->relationship('status', 'title'),
-                        Forms\Components\TextInput::make('refernce')
+                        TextInput::make('refernce')
                             ->required()
                             ->maxLength(255),
-                        Forms\Components\TextInput::make('global_price')
+                        TextInput::make('global_price')
                             ->numeric(),
-                        Forms\Components\TextInput::make('price_delivery')
+                        TextInput::make('price_delivery')
                             ->numeric(),
-                        Forms\Components\TextInput::make('price_service')
+                        TextInput::make('price_service')
                             ->numeric(),
-                        Forms\Components\TextInput::make('delivrery_driver_id')
+                        TextInput::make('delivrery_driver_id')
                             ->numeric(),
-                        Forms\Components\TextInput::make('adresse_delivery')
-                        ,
-                        Forms\Components\TextInput::make('street')
-                        ,
-                        Forms\Components\TextInput::make('number_street')
-                        ,
+                        TextInput::make('adresse_delivery'),
+                        TextInput::make('street'),
+                        TextInput::make('number_street'),
 
-                        Forms\Components\Select::make('town_id')
+                        Select::make('town_id')
                             ->relationship('town', 'title'),
 
-                        Forms\Components\DateTimePicker::make('cancel_at'),
-                        Forms\Components\DateTimePicker::make('delivery_at'),
-                        Forms\Components\DateTimePicker::make('paied_at'),
-                    ])
+                        DateTimePicker::make('cancel_at'),
+                        DateTimePicker::make('delivery_at'),
+                        DateTimePicker::make('paied_at'),
+                    ]),
 
             ]);
     }
@@ -67,73 +75,71 @@ class CommandeResource extends Resource
     {
         return $table
             ->defaultSort('id', 'desc')
+            // Le bouton « Suivre » a besoin de savoir s'il y a quelque chose a
+            // voir : un compte en une requete, pas un comptage par ligne.
+            ->modifyQueryUsing(fn (Builder $query) => $query->withCount('releves'))
             ->columns([
-                Tables\Columns\TextColumn::make('user.name'),
-                Tables\Columns\TextColumn::make('status')
-                    ->formatStateUsing(fn($state) => new HtmlString("<div class='flex gap-1'>
+                TextColumn::make('user.name'),
+                TextColumn::make('status')
+                    ->formatStateUsing(fn ($state) => new HtmlString("<div class='flex gap-1'>
 <div class='w-5 h-5 rounded' style='background:$state->color'></div>
 <div>{$state->title}</div>
 </div>"))
                     ->searchable(),
-                Tables\Columns\TextColumn::make('refernce')
+                TextColumn::make('refernce')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('code_confirmation')
+                TextColumn::make('code_confirmation')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('code_confirmation_restaurant')
+                TextColumn::make('code_confirmation_restaurant')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->searchable(),
-                Tables\Columns\TextColumn::make('global_price')
+                TextColumn::make('global_price')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('price_service')
+                TextColumn::make('price_service')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('price_delivery')
+                TextColumn::make('price_delivery')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('delivrery_driver.user.name')
-                    ->label(__("Livreur"))
-                    ->searchable()
-                ,
-                Tables\Columns\TextColumn::make('adresse_delivery')
+                TextColumn::make('delivrery_driver.user.name')
+                    ->label(__('Livreur'))
+                    ->searchable(),
+                TextColumn::make('adresse_delivery')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('street')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
-                Tables\Columns\TextColumn::make('number_street')
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
-                Tables\Columns\TextColumn::make('town.title')
-                    ->toggleable(isToggledHiddenByDefault: true)
-
-                ,
-                Tables\Columns\TextColumn::make('cancel_at')
+                TextColumn::make('street')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('number_street')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('town.title')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('cancel_at')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->dateTime()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('delivery_at')
+                TextColumn::make('delivery_at')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->dateTime()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('paied_at')
+                TextColumn::make('paied_at')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->dateTime()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('accepted_at')
+                TextColumn::make('accepted_at')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->dateTime()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -141,16 +147,29 @@ class CommandeResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\ViewAction::make(),
+            ->recordActions([
+                ViewAction::make(),
+
+                Action::make('suivre')
+                    ->label('Suivre')
+                    ->icon('heroicon-o-map-pin')
+                    ->color('info')
+                    // Meme bouton que sur les reservations : le suivi s'ouvre
+                    // depuis la ligne de la commande, pas depuis un annuaire.
+                    ->visible(fn () => SuiviDesCourses::canAccess())
+                    ->disabled(fn (Commande $record) => ! $record->releves_count)
+                    ->tooltip(fn (Commande $record) => $record->releves_count
+                        ? null
+                        : 'Aucune position relevée pour cette commande : il n\'y a rien à afficher sur la carte.')
+                    ->url(fn (Commande $record) => SuiviDesCourses::urlPour($record)),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -161,15 +180,14 @@ class CommandeResource extends Resource
         ];
     }
 
-    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
-
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
     public static function getRecordSubNavigation(\Filament\Pages\Page $page): array
     {
         return $page->generateNavigationItems([
             // ...
-            Pages\ViewCommande::class,
-            Pages\ManageCommandeProducts::class
+            ViewCommande::class,
+            ManageCommandeProducts::class,
 
         ]);
     }
@@ -177,10 +195,10 @@ class CommandeResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListCommandes::route('/'),
-            'view' => Pages\ViewCommande::route('/{record}/view'),
-            'edit' => Pages\EditCommande::route('/{record}/edit'),
-            'commande_product' => Pages\ManageCommandeProducts::route('/{record}/commande-products'),
+            'index' => ListCommandes::route('/'),
+            'view' => ViewCommande::route('/{record}/view'),
+            'edit' => EditCommande::route('/{record}/edit'),
+            'commande_product' => ManageCommandeProducts::route('/{record}/commande-products'),
         ];
     }
 }

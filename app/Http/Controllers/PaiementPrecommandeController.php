@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Throwable;
 use App\Models\Precommande;
 use App\Services\PaiementPrecommande;
 use Illuminate\Http\Request;
@@ -146,6 +147,87 @@ class PaiementPrecommandeController extends Controller
      */
     public function initierFlexPay(Precommande $precommande, string $phone, string $method): array
     {
-        return $this->paiements->initierFlexPay($precommande, $phone, $method);
+        $result = FlexPay::sendData([
+            // Le total figé, jamais un montant venu de la requête.
+            'amount' => (float) $precommande->total,
+            // Chaîne vide en carte : c'est ce que fait l'application.
+            'phone' => $phone,
+            'name' => $precommande->recipient_name,
+            'email' => $precommande->user?->email,
+            'currency' => $precommande->currency?->code ?: 'CDF',
+            'reference' => $precommande->refernce,
+            'callback_url' => config('flexpay.callback_url'),
+            'approve_url' => config('app.url'),
+            'cancel_url' => config('app.url'),
+            'decline_url' => config('app.url'),
+            'language' => 'fr',
+            'description' => 'Paiement pré-commande Thalia Eats',
+        ], $method);
+
+        if (empty($result['code']) || $result['code'] == 0) {
+            $precommande->reference_paiement = $result['orderNumber'] ?? null;
+            $precommande->save();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Écrit les coordonnées champ par champ, jamais depuis le tableau de
+     * requête : Model::unguard() est global, les règles de validation sont la
+     * seule liste blanche.
+     */
+    private function figerCoordonnees(Request $request, Precommande $precommande): void
+    {
+        $donnees = $request->validate([
+            'adresse' => ['required', 'string', 'max:255'],
+            'street' => ['nullable', 'string', 'max:255'],
+            'number_street' => ['nullable', 'string', 'max:50'],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'recipient_name' => ['required', 'string', 'max:120'],
+            'recipient_phone' => ['required', 'string', 'max:30'],
+        ], [
+            'adresse.required' => 'L\'adresse de livraison est obligatoire.',
+            'recipient_name.required' => 'Le nom de la personne à livrer est obligatoire.',
+            'recipient_phone.required' => 'Le numéro que le livreur appellera est obligatoire.',
+        ]);
+
+        // La commune n'est jamais reprise du formulaire : elle a servi à
+        // choisir la tranche de livraison, donc le total figé. L'accepter
+        // laisserait payer un tarif du centre pour une livraison en périphérie.
+        $precommande->adresse_delivery = $donnees['adresse'];
+        $precommande->street = $donnees['street'] ?? null;
+        $precommande->number_street = $donnees['number_street'] ?? null;
+        $precommande->reference_adresse = $donnees['reference'] ?? null;
+        $precommande->recipient_name = $donnees['recipient_name'];
+        $precommande->recipient_phone = $donnees['recipient_phone'];
+        $precommande->save();
+    }
+
+    /**
+     * Le garde contre la TypeError de LibPhoneNumber vit désormais dans le
+     * wrapper lui-même, seule définition de « ce numéro est valide » : les
+     * trois autres appelants en bénéficient, dont le chemin de commande de
+     * production qui rendait un 500 sur un numéro mal tapé. On ne garde ici
+     * qu'un nom lisible au point d'appel.
+     */
+    private function numeroValide(string $phone): bool
+    {
+        try {
+            return (new LibPhoneNumber($phone))->checkValidationNumber();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function trouver(string $uid): ?Precommande
+    {
+        $id = Cipher::Decrypt($uid);
+
+        if ($id === false || ! ctype_digit((string) $id)) {
+            return null;
+        }
+
+        return Precommande::query()->with(['user', 'town'])->find((int) $id);
     }
 }
