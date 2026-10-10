@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\PayementController;
 use App\Http\Controllers\Api\PrecommandeController;
 use App\Http\Controllers\Api\ProductSearchController;
+use App\Http\Controllers\Api\ProspectController;
 use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\Rental\BookingController;
 use App\Http\Controllers\Api\Rental\BookingTrackingController;
@@ -283,6 +284,18 @@ Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
             Route::post('/courses/{uid}/encaisser', 'encaisser');
         });
 });
+
+/*
+ * Une demande de partenariat, restaurant ou livreur.
+ *
+ * Publique comme le catalogue : exiger un compte pour dire « je voudrais
+ * travailler avec vous » perdrait le restaurateur avant qu'il ait une raison
+ * de s'inscrire. Rien n'est cree pour le demandeur, ni compte ni acces : la
+ * demande arrive dans l'administration et la societe rappelle.
+ *
+ * C'est la seule ecriture anonyme de cette API, d'ou la limitation de debit.
+ */
+Route::post('/prospects', [ProspectController::class, 'store'])->middleware('throttle:prospects');
 
 Route::prefix('/default')->controller(DefaultDataController::class)->group(function () {
     Route::get('/', 'index');

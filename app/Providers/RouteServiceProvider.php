@@ -61,6 +61,20 @@ class RouteServiceProvider extends ServiceProvider
          */
         RateLimiter::for('ia-proto', fn (Request $request) => Limit::perMinute(5)->by($request->user()?->id ?: $request->ip()));
 
+        /*
+         * Les demandes de partenariat : la seule ecriture anonyme de l'API.
+         *
+         * Comptee par IP, faute de compte, et large sur la minute parce qu'un
+         * operateur mobile a Kinshasa fait partager une adresse a toute une
+         * ville : trop serre, deux restaurateurs du meme quartier se
+         * bloqueraient l'un l'autre. La borne horaire est la vraie protection
+         * contre le remplissage automatique de la table.
+         */
+        RateLimiter::for('prospects', fn (Request $request) => [
+            Limit::perMinute(5)->by($request->ip()),
+            Limit::perHour(20)->by($request->ip()),
+        ]);
+
         // La signature n'identifie pas l'appelant : on compte par IP.
         RateLimiter::for('lien-paiement', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
 
