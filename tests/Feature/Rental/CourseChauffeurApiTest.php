@@ -101,6 +101,8 @@ class CourseChauffeurApiTest extends TestCase
             'balance' => 24,
             'pickup_location' => 'Gombe',
             'pickup_code' => '4821',
+            'pricing_mode' => 'hourly',
+            'billed_units' => 3,
         ]);
     }
 
@@ -206,6 +208,26 @@ class CourseChauffeurApiTest extends TestCase
         $course = $this->getJson('/api/rental/chauffeur/courses')->assertOk()->json('data.0');
 
         $this->assertSame('0810000001', $course['client']['phone']);
+    }
+
+    /**
+     * La duree facturee sort telle que le serveur l'a arrondie.
+     *
+     * L'ecran ecrivait « 3 h » sur une course reservee a la journee, en
+     * divisant les heures par 24 de son cote : le chauffeur lisait une duree
+     * qui n'etait pas celle facturee au client.
+     */
+    public function test_la_duree_facturee_est_rendue_au_chauffeur(): void
+    {
+        $course = $this->course(Booking::STATUS_IN_PROGRESS);
+        $course->forceFill(['pricing_mode' => 'daily', 'billed_units' => 2])->save();
+
+        Sanctum::actingAs($this->compteChauffeur, ['*']);
+
+        $rendue = $this->getJson('/api/rental/chauffeur/courses')->assertOk()->json('data.0');
+
+        $this->assertSame('daily', $rendue['pricing_mode']);
+        $this->assertEquals(2, $rendue['billed_units']);
     }
 
     public function test_le_tableau_de_bord_donne_la_course_en_cours_et_la_suivante(): void

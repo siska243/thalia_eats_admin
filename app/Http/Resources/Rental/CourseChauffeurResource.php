@@ -42,6 +42,20 @@ class CourseChauffeurResource extends JsonResource
             'ends_at' => $this->resource->ends_at,
             'duration_hours' => (float) $this->resource->duration_hours,
 
+            /*
+             * Le mode et les unites facturees, pour que l'ecran puisse ecrire
+             * « 2 jours » la ou le client a reserve a la journee.
+             *
+             * C'est le serveur qui a arrondi les heures et les journees
+             * entamees. Les deriver dans l'application — diviser les heures
+             * par 24 — ferait afficher au chauffeur une duree differente de
+             * celle qui a ete facturee, sur la meme course.
+             */
+            'pricing_mode' => $this->resource->pricing_mode,
+            'billed_units' => $this->resource->billed_units !== null
+                ? (float) $this->resource->billed_units
+                : null,
+
             'pickup_location' => $this->resource->pickup_location,
             'pickup_lat' => $this->resource->pickup_lat,
             'pickup_lng' => $this->resource->pickup_lng,
