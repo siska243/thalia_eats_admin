@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Database\Factories\StatusPayementFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class StatusPayement extends Model
 {
-    /** @use HasFactory<\Database\Factories\StatusPayementFactory> */
+    /** @use HasFactory<StatusPayementFactory> */
     use HasFactory;
 
     protected $fillable = [

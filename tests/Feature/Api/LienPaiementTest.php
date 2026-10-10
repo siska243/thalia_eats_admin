@@ -2,11 +2,17 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\TokenAbility;
 use App\Models\Precommande;
+use App\Models\Product;
+use App\Models\Town;
+use App\Models\User;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\URL;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class LienPaiementTest extends TestCase
@@ -29,7 +35,7 @@ class LienPaiementTest extends TestCase
      */
     private function reponseFlexPay(array $reponse): void
     {
-        $this->app->forgetInstance(\Illuminate\Http\Client\Factory::class);
+        $this->app->forgetInstance(Factory::class);
         Http::clearResolvedInstances();
         Http::fake(['*' => Http::response($reponse, 200)]);
     }
@@ -110,7 +116,7 @@ class LienPaiementTest extends TestCase
         // Masquer ne doit pas empecher le payeur de savoir ce qu'il paie :
         // le plat commande doit rester nomme, et le total lisible.
         $p = Precommande::factory()->create(['total' => 5500]);
-        $produit = \App\Models\Product::factory()->create(['title' => 'Poulet moambe']);
+        $produit = Product::factory()->create(['title' => 'Poulet moambe']);
 
         $p->products()->create([
             'product_id' => $produit->id,
@@ -252,8 +258,8 @@ class LienPaiementTest extends TestCase
 
     public function test_l_application_peut_initier_le_paiement_sans_lien(): void
     {
-        $moi = \App\Models\User::factory()->create();
-        \Laravel\Sanctum\Sanctum::actingAs($moi, ['*']);
+        $moi = User::factory()->create();
+        Sanctum::actingAs($moi, ['*']);
 
         $p = Precommande::factory()->create(['user_id' => $moi->id, 'total' => 5500]);
 
@@ -266,7 +272,7 @@ class LienPaiementTest extends TestCase
 
     public function test_l_application_ne_paie_pas_la_precommande_d_un_autre(): void
     {
-        \Laravel\Sanctum\Sanctum::actingAs(\App\Models\User::factory()->create(), ['*']);
+        Sanctum::actingAs(User::factory()->create(), ['*']);
 
         $p = Precommande::factory()->create();
 
@@ -281,8 +287,8 @@ class LienPaiementTest extends TestCase
     {
         // L'ability n'existe pas : le lien de paiement EST la confirmation
         // humaine, un agent ne doit jamais engager d'argent seul.
-        $moi = \App\Models\User::factory()->create();
-        \Laravel\Sanctum\Sanctum::actingAs($moi, \App\Enums\TokenAbility::agent());
+        $moi = User::factory()->create();
+        Sanctum::actingAs($moi, TokenAbility::agent());
 
         $p = Precommande::factory()->create(['user_id' => $moi->id]);
 
@@ -295,7 +301,7 @@ class LienPaiementTest extends TestCase
 
     public function test_le_formulaire_demande_les_coordonnees_quand_elles_manquent(): void
     {
-        $town = \App\Models\Town::factory()->create(['title' => 'Ibanda']);
+        $town = Town::factory()->create(['title' => 'Ibanda']);
         $p = Precommande::factory()->sansCoordonnees()->create(['town_id' => $town->id]);
 
         $reponse = $this->get($this->lien($p))->assertStatus(200);
@@ -373,7 +379,9 @@ class LienPaiementTest extends TestCase
             'meme_numero' => '1',
         ])->assertStatus(200);
 
-        Http::assertSent(fn ($request) => $request['phone'] === '+243810000001');
+        // FlexPay refuse le « + » : le wrapper n'envoie que les chiffres.
+        // Ce test porte sur le numero RETENU, pas sur sa mise en forme.
+        Http::assertSent(fn ($request) => $request['phone'] === '243810000001');
     }
 
     public function test_la_case_decochee_fait_payer_un_autre_numero(): void
@@ -389,7 +397,7 @@ class LienPaiementTest extends TestCase
             'phone' => '+243810000000',
         ])->assertStatus(200);
 
-        Http::assertSent(fn ($request) => $request['phone'] === '+243810000000');
+        Http::assertSent(fn ($request) => $request['phone'] === '243810000000');
     }
 
     public function test_un_second_post_ne_reecrit_pas_des_coordonnees_figees(): void
@@ -535,8 +543,8 @@ class LienPaiementTest extends TestCase
     {
         // La commune a choisi la tranche de livraison, donc le total fige :
         // l'accepter laisserait payer un tarif du centre pour la peripherie.
-        $ibanda = \App\Models\Town::factory()->create(['title' => 'Ibanda']);
-        $autre = \App\Models\Town::factory()->create(['title' => 'Bagira']);
+        $ibanda = Town::factory()->create(['title' => 'Ibanda']);
+        $autre = Town::factory()->create(['title' => 'Bagira']);
 
         $p = Precommande::factory()->sansCoordonnees()->create([
             'town_id' => $ibanda->id,

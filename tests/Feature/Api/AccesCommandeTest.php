@@ -28,7 +28,6 @@ class AccesCommandeTest extends TestCase
 {
     use DatabaseTruncation;
 
-
     private function commande(User $client, ?DelivreryDriver $driver = null): Commande
     {
         $status = Status::query()->firstOrCreate(
@@ -103,6 +102,53 @@ class AccesCommandeTest extends TestCase
         $this->getJson('/api/user/commande/show-order/'.Cipher::Encrypt(999999))
             ->assertStatus(404)
             ->assertJsonMissing(['data' => 999999]);
+    }
+
+    /**
+     * La fiche par reference n'etait filtree par rien du tout.
+     *
+     * show() repondait `where('refernce', $reference)->first()` sans la
+     * moindre clause de propriete, et la reference n'est meme pas chiffree :
+     * c'est 1000 + l'identifiant de la commande precedente, donc une suite
+     * d'entiers. Un seul compte suffisait a parcourir toutes les commandes de
+     * la plateforme, avec l'adresse de livraison, le nom et le telephone du
+     * destinataire et les coordonnees GPS.
+     */
+    public function test_la_fiche_par_reference_n_est_pas_lisible_par_un_tiers(): void
+    {
+        $commande = $this->commande(User::factory()->create());
+
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+
+        $this->getJson('/api/user/commande/show/'.$commande->refernce)
+            ->assertStatus(404);
+    }
+
+    public function test_le_client_lit_sa_fiche_par_reference(): void
+    {
+        $client = User::factory()->create();
+        $commande = $this->commande($client);
+
+        Sanctum::actingAs($client, ['*']);
+
+        $this->getJson('/api/user/commande/show/'.$commande->refernce)
+            ->assertStatus(200)
+            ->assertJsonPath('reference', $commande->refernce);
+    }
+
+    /**
+     * swr-check-paiement prenait une reference et allait interroger FlexPay,
+     * puis ecrivait le statut et declenchait la notification au restaurateur,
+     * sans jamais verifier a qui appartenait la commande.
+     */
+    public function test_le_suivi_de_paiement_n_est_pas_lisible_par_un_tiers(): void
+    {
+        $commande = $this->commande(User::factory()->create());
+
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+
+        $this->getJson('/api/user/commande/swr-check-paiement/'.$commande->refernce)
+            ->assertStatus(404);
     }
 
     public function test_le_suivi_n_est_pas_lisible_par_un_tiers(): void

@@ -2,6 +2,20 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TagsColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\UserResource\Pages\ListUsers;
+use App\Filament\Resources\UserResource\Pages\CreateUser;
+use App\Filament\Resources\UserResource\Pages\EditUser;
 use App\Enums\Device;
 use App\Enums\MobilePermissions;
 use App\Filament\Resources\UserResource\Pages;
@@ -10,7 +24,6 @@ use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -23,34 +36,34 @@ class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-user-group';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user-group';
     protected static ?string $label = "Nos utilisateurs";
-    protected static ?string $navigationGroup = "Thalia eats";
+    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Section::make()
+        return $schema
+            ->components([
+                Section::make()
                     ->columns(2)
                     ->schema([
-                        Forms\Components\TextInput::make('name')
+                        TextInput::make('name')
                             ->required()
                             ->maxLength(255),
                         TextInput::make('last_name')->required(),
                         TextInput::make('principal_adresse')->label('Principal adresse'),
                         Select::make('town_id')->label('Commune')
                             ->relationship('town', 'title')->searchable()->preload(),
-                        Forms\Components\TextInput::make('email')
+                        TextInput::make('email')
                             ->email()
                             ->required()
                             ->maxLength(255),
-                        Forms\Components\TextInput::make('password')
+                        TextInput::make('password')
                             ->password()
                             ->required()
                             ->maxLength(255)
                             ->hidden(fn($operation) => $operation == "edit"),
-                        Forms\Components\Select::make('type_user')->label('Type de compte')
+                        Select::make('type_user')->label('Type de compte')
                             ->options([
                                 'drivers' => 'Livreur',
                                 'restaurant' => 'Restaurant',
@@ -58,14 +71,14 @@ class UserResource extends Resource
                             ])
                             ->required(fn($operation) => $operation == "create"),
 
-                        Forms\Components\TextInput::make('phone')
+                        TextInput::make('phone')
                             ->tel()
                             ->maxLength(255),
-                        Forms\Components\Fieldset::make('Permissions')
+                        Fieldset::make('Permissions')
                             ->label(__('filament-shield::filament-shield.column.permissions'))
                             ->extraAttributes(['class' => 'text-primary-600', 'style' => 'border-color:var(--primary)'])
                             ->schema([
-                                Forms\Components\Select::make('roles')
+                                Select::make('roles')
                                     ->multiple()
                                     ->preload()
                                     ->extraAttributes(['class' => 'text-primary-600'])
@@ -83,7 +96,7 @@ class UserResource extends Resource
                                     ->extraAttributes(['class' => 'text-primary-600'])
                                     ->options(MobilePermissions::getOptions()),
 
-                                Forms\Components\Toggle::make('changePassword')
+                                Toggle::make('changePassword')
                                     ->label(__('Change password'))
                                     ->columnSpan(1)
                                     ->hiddenOn('create')
@@ -96,16 +109,16 @@ class UserResource extends Resource
                                     //->regex('/^(?=.*[A-Z])(?=.*[!@#$&*])(?=.*[0-9])(?=.*[a-z]).{8}/m')
                                     ->confirmed()
                                     ->autocomplete('password')
-                                    ->required(fn(\Filament\Forms\Get $get): bool => $get('changePassword'))
+                                    ->required(fn(Get $get): bool => $get('changePassword'))
                                     ->dehydrateStateUsing(function ($state) {
                                         return Hash::make($state);
                                     })
                                     //->validationAttribute(__('password must contain at least 8 characters, have at least 1 uppercase, 1 lowercase, 1 number, 1 special character.'))
-                                    ->hidden(fn(\Filament\Forms\Get $get) => !$get('changePassword')),
+                                    ->hidden(fn(Get $get) => !$get('changePassword')),
                                 Password::make('password_confirmation')
                                     ->label(__('Confirm Password'))
                                     ->password()
-                                    ->hidden(fn(\Filament\Forms\Get $get) => !$get('changePassword'))
+                                    ->hidden(fn(Get $get) => !$get('changePassword'))
 
 
                             ])->columns(3),
@@ -120,27 +133,27 @@ class UserResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('email')
+                TextColumn::make('email')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('type_user')
+                TextColumn::make('type_user')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('phone')
+                TextColumn::make('phone')
                     ->searchable(),
-                Tables\Columns\TagsColumn::make('roles.name'),
-                Tables\Columns\TextColumn::make('email_verified_at')
+                TagsColumn::make('roles.name'),
+                TextColumn::make('email_verified_at')
                     ->dateTime()
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
                 ,
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true)
@@ -149,16 +162,16 @@ class UserResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -172,9 +185,9 @@ class UserResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListUsers::route('/'),
-            'create' => Pages\CreateUser::route('/create'),
-            'edit' => Pages\EditUser::route('/{record}/edit'),
+            'index' => ListUsers::route('/'),
+            'create' => CreateUser::route('/create'),
+            'edit' => EditUser::route('/{record}/edit'),
         ];
     }
 }

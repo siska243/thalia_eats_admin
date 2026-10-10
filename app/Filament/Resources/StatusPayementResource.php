@@ -2,11 +2,21 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use App\Filament\Resources\StatusPayementResource\Pages\ListStatusPayements;
+use App\Filament\Resources\StatusPayementResource\Pages\CreateStatusPayement;
+use App\Filament\Resources\StatusPayementResource\Pages\EditStatusPayement;
 use App\Filament\Resources\StatusPayementResource\Pages;
 use App\Filament\Resources\StatusPayementResource\RelationManagers;
 use App\Models\StatusPayement;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -17,27 +27,27 @@ class StatusPayementResource extends Resource
 {
     protected static ?string $model = StatusPayement::class;
 
-    protected static ?string $navigationGroup = "Parametre";
+    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('code')
+        return $schema
+            ->components([
+                TextInput::make('code')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('name')
+                TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('description')
+                TextInput::make('description')
                     ->maxLength(255),
-                Forms\Components\TextInput::make('color')
+                TextInput::make('color')
                     ->maxLength(255),
-                Forms\Components\Toggle::make('is_default')
+                Toggle::make('is_default')
                     ->required(),
-                Forms\Components\Toggle::make('is_paid')
+                Toggle::make('is_paid')
                     ->required(),
             ]);
     }
@@ -46,23 +56,23 @@ class StatusPayementResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('code')
+                TextColumn::make('code')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('description')
+                TextColumn::make('description')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('color')
+                TextColumn::make('color')
                     ->searchable(),
-                Tables\Columns\IconColumn::make('is_default')
+                IconColumn::make('is_default')
                     ->boolean(),
-                Tables\Columns\IconColumn::make('is_paid')
+                IconColumn::make('is_paid')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -70,12 +80,12 @@ class StatusPayementResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }
@@ -90,9 +100,9 @@ class StatusPayementResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListStatusPayements::route('/'),
-            'create' => Pages\CreateStatusPayement::route('/create'),
-            'edit' => Pages\EditStatusPayement::route('/{record}/edit'),
+            'index' => ListStatusPayements::route('/'),
+            'create' => CreateStatusPayement::route('/create'),
+            'edit' => EditStatusPayement::route('/{record}/edit'),
         ];
     }
 }

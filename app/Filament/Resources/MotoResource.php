@@ -2,11 +2,23 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\MotoResource\Pages\ListMotos;
+use App\Filament\Resources\MotoResource\Pages\CreateMoto;
+use App\Filament\Resources\MotoResource\Pages\EditMoto;
 use App\Filament\Resources\MotoResource\Pages;
 use App\Filament\Resources\MotoResource\RelationManagers;
 use App\Models\Moto;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -17,24 +29,24 @@ class MotoResource extends Resource
 {
     protected static ?string $model = Moto::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-cube-transparent';
-    protected static ?string $navigationGroup="Livraison";
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-cube-transparent';
+    protected static string | \UnitEnum | null $navigationGroup="Livraison";
 
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('delivrery_driver_id')
+        return $schema
+            ->components([
+                TextInput::make('delivrery_driver_id')
                     ->required()
                     ->numeric(),
-                Forms\Components\Textarea::make('picture')
+                Textarea::make('picture')
                     ->columnSpanFull(),
-                Forms\Components\Toggle::make('is_verified')
+                Toggle::make('is_verified')
                     ->required(),
-                Forms\Components\TextInput::make('matricule')
+                TextInput::make('matricule')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('slug')
+                TextInput::make('slug')
                     ->required()
                     ->maxLength(255),
             ]);
@@ -44,20 +56,20 @@ class MotoResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('delivrery_driver_id')
+                TextColumn::make('delivrery_driver_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\IconColumn::make('is_verified')
+                IconColumn::make('is_verified')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('matricule')
+                TextColumn::make('matricule')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('slug')
+                TextColumn::make('slug')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -65,16 +77,16 @@ class MotoResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -88,9 +100,9 @@ class MotoResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListMotos::route('/'),
-            'create' => Pages\CreateMoto::route('/create'),
-            'edit' => Pages\EditMoto::route('/{record}/edit'),
+            'index' => ListMotos::route('/'),
+            'create' => CreateMoto::route('/create'),
+            'edit' => EditMoto::route('/{record}/edit'),
         ];
     }
 }

@@ -4,11 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\CallBackEnum;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\DelivreryPriceResource;
-use App\Http\Resources\TownResource;
-use App\Models\DelivreryPrice;
-use App\Models\Town;
 use App\Wrappers\ApiResponse;
+use Exception;
 use Illuminate\Http\Request;
 use Stripe\PaymentIntent;
 use Stripe\Stripe;
@@ -16,20 +13,20 @@ use Stripe\Stripe;
 class CallbackUrlController extends Controller
 {
     //
-    public function index(Request $request, $action){
-
+    public function index(Request $request, $action)
+    {
 
         switch ($action) {
             case CallBackEnum::SUCCESS->value:
-                # code...
-                $mobileAppUrl=session('callback_success_url');
+                // code...
+                $mobileAppUrl = session('callback_success_url');
                 break;
             case CallBackEnum::CANCEL->value:
-                $mobileAppUrl=session('callback_cancel_url');
+                $mobileAppUrl = session('callback_cancel_url');
                 break;
             default:
-                # code...
-                $mobileAppUrl=session('callback_error_url');
+                // code...
+                $mobileAppUrl = session('callback_error_url');
                 break;
         }
 
@@ -41,23 +38,22 @@ class CallbackUrlController extends Controller
     public function paiement(Request $request)
     {
 
-        try{
-            Stripe::setApiKey(CallBackEnum::SK_KEY->value);
+        try {
+            Stripe::setApiKey(config('services.stripe.secret'));
 
             $intent = PaymentIntent::create([
                 'amount' => 1099,
                 'currency' => 'usd',
                 'payment_method_types' => ['card'],
-                'return_url'=>$request->input('url')
-              ]);
+                'return_url' => $request->input('url'),
+            ]);
             $client_secret = $intent->client_secret;
+
             return ApiResponse::GET_DATA(['clientSecret' => $client_secret]);
 
-        }
-        catch(\Exception $e){
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
-
 
     }
 }

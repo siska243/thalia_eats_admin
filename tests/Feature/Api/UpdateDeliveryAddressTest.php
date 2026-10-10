@@ -21,11 +21,20 @@ class UpdateDeliveryAddressTest extends TestCase
 {
     use DatabaseTruncation;
 
+    /**
+     * Le panier en cours de composition, statut 1.
+     *
+     * Ces lignes portaient le statut 5 — « envoyee au paiement » — et le test
+     * assurait donc, sans le dire, qu'on pouvait changer l'adresse d'une
+     * commande dont la passerelle tenait deja le montant. C'etait la faille,
+     * pas le contrat : voir PanierVerrouilleApresPaiementTest, qui verifie
+     * desormais le refus sur le statut 5.
+     */
     private function pendingOrder(User $user, Town $town, string $reference): Commande
     {
         $status = Status::query()->firstOrCreate(
-            ['id' => 5],
-            ['title' => 'En attente paiement', 'slug' => 'en-attente-paiement']
+            ['id' => Commande::STATUT_EN_ATTENTE],
+            ['title' => 'En attente', 'slug' => 'en-attente']
         );
 
         return Commande::query()->create([

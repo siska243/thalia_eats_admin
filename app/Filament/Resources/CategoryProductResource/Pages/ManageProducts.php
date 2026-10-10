@@ -2,22 +2,22 @@
 
 namespace App\Filament\Resources\CategoryProductResource\Pages;
 
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Grid;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
 use App\Filament\Resources\CategoryProductResource;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Form;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Tables;
-use Filament\Tables\Actions\BulkActionGroup;
-use Filament\Tables\Actions\CreateAction;
-use Filament\Tables\Actions\DeleteBulkAction;
-use Filament\Tables\Actions\EditAction;
-use Filament\Tables\Actions\ViewAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
@@ -31,16 +31,16 @@ class ManageProducts extends ManageRelatedRecords
 
     protected static string $relationship = 'sub_category_product';
 
-    protected static ?string $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
 
     public static function getNavigationLabel(): string
     {
         return 'Products';
     }
 
-    public function form(Form $form): Form
+    public function form(Schema $schema): Schema
     {
-        return $form->schema([
+        return $schema->components([
             Grid::make(2)->schema([
                 Select::make('category_product_id')->label('Categorie')
                     ->relationship('category_product', 'title')
@@ -84,12 +84,12 @@ class ManageProducts extends ManageRelatedRecords
                 ->filters([
                     //
                 ])
-                ->actions([
+                ->recordActions([
                     EditAction::make(),
                     ViewAction::make()
 
                 ])
-                ->bulkActions([
+                ->toolbarActions([
                     BulkActionGroup::make([
                         DeleteBulkAction::make(),
                     ]),

@@ -2,13 +2,19 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Schemas\Schema;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\TextInput;
+use App\Filament\Resources\CategoryProductResource\Pages\EditCategoryProduct;
+use App\Filament\Resources\CategoryProductResource\Pages\ManageProducts;
+use App\Filament\Resources\CategoryProductResource\Pages\ListCategoryProducts;
+use App\Filament\Resources\CategoryProductResource\Pages\CreateCategoryProduct;
 use App\Filament\Resources\CategoryProductResource\Pages;
 use App\Filament\Resources\CategoryProductResource\RelationManagers;
 use App\Models\CategoryProduct;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Pages\Page;
-use Filament\Pages\SubNavigationPosition;
 use Filament\Resources\Resource;
 use Filament\Tables\Actions\{BulkActionGroup, CreateAction, DeleteAction, DeleteBulkAction, EditAction};
 use Filament\Tables\Columns\{TextColumn, ToggleColumn};
@@ -21,19 +27,19 @@ class CategoryProductResource extends Resource
 {
     protected static ?string $model = CategoryProduct::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-table-cells';
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-table-cells';
 
     protected static ?string $navigationLabel = "Categorie";
-    protected static ?string $navigationGroup = "Produits";
+    protected static string | \UnitEnum | null $navigationGroup = "Produits";
 
 
-    protected static SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
-    public static function form(Form $form): Form
+    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\Section::make()->schema([
-                    Forms\Components\TextInput::make('title')
+        return $schema
+            ->components([
+                Section::make()->schema([
+                    TextInput::make('title')
                         ->required()
                         ->maxLength(65535)
                         ->columnSpanFull()
@@ -60,17 +66,17 @@ class CategoryProductResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-               EditAction::make(),
-                DeleteAction::make()
+            ->recordActions([
+               \Filament\Actions\EditAction::make(),
+                \Filament\Actions\DeleteAction::make()
             ])
-            ->bulkActions([
-               BulkActionGroup::make([
-                   DeleteBulkAction::make(),
+            ->toolbarActions([
+               \Filament\Actions\BulkActionGroup::make([
+                   \Filament\Actions\DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-               CreateAction::make(),
+               \Filament\Actions\CreateAction::make(),
             ]);
     }
 
@@ -86,18 +92,18 @@ class CategoryProductResource extends Resource
     {
         return $page->generateNavigationItems([
             // ...
-            Pages\EditCategoryProduct::class,
-            Pages\ManageProducts::class,
+            EditCategoryProduct::class,
+            ManageProducts::class,
 
         ]);
     }
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListCategoryProducts::route('/'),
-            'create' => Pages\CreateCategoryProduct::route('/create'),
-            'edit' => Pages\EditCategoryProduct::route('/{record}/edit'),
-            'products'=>Pages\ManageProducts::route('/{record}/products'),
+            'index' => ListCategoryProducts::route('/'),
+            'create' => CreateCategoryProduct::route('/create'),
+            'edit' => EditCategoryProduct::route('/{record}/edit'),
+            'products'=>ManageProducts::route('/{record}/products'),
         ];
     }
 }

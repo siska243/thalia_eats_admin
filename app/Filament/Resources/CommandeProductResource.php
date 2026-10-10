@@ -2,11 +2,20 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Schemas\Schema;
+use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\EditAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\CreateAction;
+use App\Filament\Resources\CommandeProductResource\Pages\ListCommandeProducts;
+use App\Filament\Resources\CommandeProductResource\Pages\CreateCommandeProduct;
+use App\Filament\Resources\CommandeProductResource\Pages\EditCommandeProduct;
 use App\Filament\Resources\CommandeProductResource\Pages;
 use App\Filament\Resources\CommandeProductResource\RelationManagers;
 use App\Models\CommandeProduct;
 use Filament\Forms;
-use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -17,28 +26,28 @@ class CommandeProductResource extends Resource
 {
     protected static ?string $model = CommandeProduct::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
-    protected static ?string $navigationGroup = "Thalia eats";
+    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
     protected static ?string $navigationModeleLabel = "Produit commande";
     protected static bool $shouldRegisterNavigation=false;
-    public static function form(Form $form): Form
+    public static function form(Schema $schema): Schema
     {
-        return $form
-            ->schema([
-                Forms\Components\TextInput::make('user_id')
+        return $schema
+            ->components([
+                TextInput::make('user_id')
                     ->required()
                     ->numeric(),
-                Forms\Components\TextInput::make('product_id')
+                TextInput::make('product_id')
                     ->required()
                     ->numeric(),
-                Forms\Components\TextInput::make('price')
+                TextInput::make('price')
                     ->required()
                     ->numeric()
                     ->prefix('$'),
-                Forms\Components\TextInput::make('currency_id')
+                TextInput::make('currency_id')
                     ->required()
                     ->numeric(),
-                Forms\Components\TextInput::make('quantity')
+                TextInput::make('quantity')
                     ->required()
                     ->numeric()
                     ->default(1),
@@ -49,26 +58,26 @@ class CommandeProductResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('user_id')
+                TextColumn::make('user_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('product_id')
+                TextColumn::make('product_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('price')
+                TextColumn::make('price')
                     ->money()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('currency_id')
+                TextColumn::make('currency_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('quantity')
+                TextColumn::make('quantity')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-                Tables\Columns\TextColumn::make('updated_at')
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -76,16 +85,16 @@ class CommandeProductResource extends Resource
             ->filters([
                 //
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                Tables\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
@@ -99,9 +108,9 @@ class CommandeProductResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListCommandeProducts::route('/'),
-            'create' => Pages\CreateCommandeProduct::route('/create'),
-            'edit' => Pages\EditCommandeProduct::route('/{record}/edit'),
+            'index' => ListCommandeProducts::route('/'),
+            'create' => CreateCommandeProduct::route('/create'),
+            'edit' => EditCommandeProduct::route('/{record}/edit'),
         ];
     }
 }
