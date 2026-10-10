@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ProductSearchController;
 use App\Http\Controllers\Api\QuotationController;
 use App\Http\Controllers\Api\Rental\BookingController;
 use App\Http\Controllers\Api\Rental\BookingTrackingController;
+use App\Http\Controllers\Api\Rental\CourseChauffeurController;
 use App\Http\Controllers\Api\Rental\RentalConfigController;
 use App\Http\Controllers\Api\Rental\VehicleController;
 use App\Http\Controllers\Api\RestaurantController;
@@ -233,6 +234,21 @@ Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
         ->group(function () {
             Route::post('/{uid}/position', 'position');
             Route::get('/{uid}/suivi', 'suivi');
+        });
+
+    /*
+     * Les ecrans du chauffeur de location.
+     *
+     * Trois lectures, aucune ecriture : il n'accepte ni ne refuse une course,
+     * l'affectation vient de l'administration. Son autorisation ne vient pas
+     * d'un role mais de sa fiche `Chauffeur` et de `bookings.chauffeur_id`.
+     */
+    Route::controller(CourseChauffeurController::class)
+        ->prefix('/chauffeur')
+        ->group(function () {
+            Route::get('/resume', 'resume');
+            Route::get('/courses', 'courses');
+            Route::get('/historique', 'historique');
         });
 });
 

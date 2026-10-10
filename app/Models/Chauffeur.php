@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Permission\Models\Role;
 
 /**
  * Un chauffeur de location.
@@ -29,6 +30,36 @@ class Chauffeur extends Model
         'licence_expires_at' => 'date',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Le role `chauffeurs` suit la fiche, il ne se pose pas a la main.
+     *
+     * L'application mobile route sur les roles rendus par la connexion, comme
+     * elle le fait deja pour `drivers`. Laisser l'administrateur y penser
+     * aurait produit ce qu'on a deja vu sur les livreurs : une fiche creee,
+     * un compte qui ouvre l'application cliente, et personne pour comprendre
+     * pourquoi.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (self $chauffeur) {
+            if (! $chauffeur->user) {
+                return;
+            }
+
+            // `findOrCreate` et non `assignRole('chauffeurs')` : le role peut
+            // ne pas exister encore — base fraiche, migration rejouee a
+            // l'envers, suite de tests qui vide la table — et `assignRole`
+            // leve alors une exception qui ferait echouer l'enregistrement de
+            // la fiche. Le role est une consequence, il n'a pas a faire
+            // tomber la cause.
+            $chauffeur->user->assignRole(Role::findOrCreate('chauffeurs', 'web'));
+        });
+
+        static::deleted(function (self $chauffeur) {
+            $chauffeur->user?->removeRole('chauffeurs');
+        });
+    }
 
     public function user(): BelongsTo
     {
