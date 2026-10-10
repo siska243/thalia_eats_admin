@@ -1034,7 +1034,28 @@ class CommandeController extends Controller
             // ----------------------------------------------------------------
 
             $commande->global_price = $montant_facture;
-            $commande->save();
+
+            /*
+             * La section critique, et le seul endroit qui decide.
+             *
+             * Le controle fait en entree de methode a servi a refuser vite et
+             * a afficher un message utile ; il ne prouve plus rien ici, tout
+             * ce qui precede ayant pris du temps. Deux « Payer » simultanes y
+             * passaient tous deux et creaient chacun leur commande, avec deux
+             * references et deux montants engages aupres de FlexPay.
+             *
+             * La reservation est posee ici et pas plus haut pour qu'un refus
+             * en amont — montant minimum par carte, panier impossible a
+             * chiffrer — ne laisse pas derriere lui une commande fantome qui
+             * bloquerait le client pendant tout le delai d'expiration.
+             */
+            if ($conflit = Commande::reserverPour($user, $commande)) {
+                return ApiResponse::BAD_REQUEST(
+                    ['uid' => Cipher::Encrypt($conflit->id), 'reference' => $conflit->refernce],
+                    __('Commande en attente'),
+                    __("Votre commande #:reference n'est pas encore réglée. Payez-la ou annulez-la depuis « Mes commandes » avant d'en passer une nouvelle.", ['reference' => $conflit->refernce])
+                );
+            }
 
             $commande->refresh();
 

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 
 class Commande extends Model
 {
@@ -310,6 +311,45 @@ class Commande extends Model
             });
 
         return $annulees;
+    }
+
+    /**
+     * Reserve l'unique commande ouverte d'un client, sous verrou de ligne.
+     *
+     * « Une commande non reglee a la fois » n'etait qu'une lecture suivie
+     * d'une ecriture, sans rien entre les deux : deux appels simultanes a
+     * `valide()` lisaient tous deux « aucune commande en attente » et creaient
+     * chacun la leur. Le client repartait avec deux references et deux
+     * montants engages aupres de FlexPay. Un double-clic sur « Payer » suffit.
+     *
+     * Le verrou porte sur la ligne du client et non sur la commande : c'est
+     * lui la ressource disputee, et il n'y a justement pas encore de commande
+     * a verrouiller. Meme raisonnement que `BookingConfirmation`, ou le verrou
+     * porte sur le vehicule et non sur la reservation.
+     *
+     * L'appel sortant vers la passerelle reste en dehors : une transaction ne
+     * tient pas une ligne pendant une requete HTTP.
+     *
+     * @return self|null La commande deja ouverte qui s'oppose a la
+     *                   reservation, ou null si celle-ci a eu lieu.
+     */
+    public static function reserverPour(User $user, self $commande): ?self
+    {
+        return DB::transaction(function () use ($user, $commande) {
+            User::query()->whereKey($user->getKey())->lockForUpdate()->first();
+
+            // Relue sous verrou : la lecture faite avant la section critique
+            // ne prouve plus rien une fois qu'on y entre.
+            $existante = static::query()->nonReglee()->where('user_id', $user->getKey())->first();
+
+            if ($existante) {
+                return $existante;
+            }
+
+            $commande->save();
+
+            return null;
+        });
     }
 
     public function scopeNonAnnulee(Builder $query): Builder
