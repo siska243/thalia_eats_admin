@@ -1211,7 +1211,7 @@ class CommandeController extends Controller
             if ($user->expo_push_token) {
                 $push = new FirebasePushNotification;
                 $push->sendPushNotification(auth()->user()->expo_push_token, 'paiemnt', json_encode($body));
-                event(new PayementEvent($result['orderNumber']));
+                $this->diffuserPaiement($result['orderNumber']);
 
                 FirebasePushNotification::sendNotification($user->expo_push_token, 'Paiment', $result['message']);
             }
@@ -1369,7 +1369,7 @@ class CommandeController extends Controller
 
                 $push = new FirebasePushNotification;
                 $push->sendPushNotification(auth()->user()->expo_push_token, 'paiement', json_encode($body));
-                event(new PayementEvent($result['orderNumber']));
+                $this->diffuserPaiement($result['orderNumber']);
 
                 FirebasePushNotification::sendNotification($user->expo_push_token, 'Paiement', $result['message']);
             }
@@ -1378,6 +1378,22 @@ class CommandeController extends Controller
 
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
+        }
+    }
+
+    /**
+     * Diffuse l'evenement de paiement en temps reel sans jamais faire
+     * echouer le paiement. Une panne Pusher (404 app/host/cluster, reseau,
+     * identifiants absents en prod) ne doit pas casser une transaction deja
+     * encaissee : on journalise et on continue. Le temps reel est un confort,
+     * pas une condition du paiement.
+     */
+    private function diffuserPaiement($orderNumber): void
+    {
+        try {
+            event(new PayementEvent($orderNumber));
+        } catch (\Throwable $e) {
+            logger()->warning('Diffusion paiement Pusher echouee : '.$e->getMessage());
         }
     }
 }
