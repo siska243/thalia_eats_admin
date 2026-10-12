@@ -15,10 +15,15 @@ mkdir -p \
     storage/framework/testing \
     storage/framework/views \
     storage/logs \
-    bootstrap/cache
+    bootstrap/cache \
+    public/images
 
-chown -R www-data:www-data storage bootstrap/cache
-chmod -R ug+rwX storage bootstrap/cache
+# public/images est un volume monte (racine du disque « uploads_image »).
+# Appartenant a l'hote, www-data ne pouvait pas y creer de sous-dossier :
+# l'upload Livewire (public/images/livewire-tmp) et les champs a ->directory()
+# echouaient (UnableToCreateDirectory). On en reprend la propriete ici.
+chown -R www-data:www-data storage bootstrap/cache public/images
+chmod -R ug+rwX storage bootstrap/cache public/images
 
 # Le lien public/storage du depot pointe vers un ancien chemin de la machine
 # de developpement (« thalia_eats_admin ») qui n'existe plus : il est casse,
