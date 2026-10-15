@@ -20,6 +20,8 @@
 - Domaine et commentaires **en français**. Messages utilisateur en français.
 - Les réponses passent par `App\Wrappers\ApiResponse` ; leur forme est du contrat public.
 - Les erreurs axios côté clients sont **retournées**, pas levées : ne pas convertir en `throw`.
+- **Le design actuel est la référence. Il n'y a pas de maquette.** Le propriétaire, le 15 octobre : « regarde ce qui existe déjà pour l'interface restaurant, c'est pareil que maintenant sauf que tu ajoutes le nouveau truc. Garde le design actuel de l'application. » Concrètement : **aucun token nouveau, aucun composant de base nouveau, aucune mise en page refaite.** Un écran touché garde sa structure et gagne le seul élément qui manque. Un composant qui existe se réutilise avec une prop de plus — c'est déjà la règle écrite dans `DESIGN.md`.
+- Avant de modifier un écran, le lire en entier et décalquer ce qu'il fait déjà : ses classes, son espacement, sa façon de rendre un état. Ne rien inventer.
 - Aucune couleur en dur côté mobile : tokens de `tailwind.config.js` / `theme/tokens.ts` uniquement (`DESIGN.md`).
 - Jamais de commit sur `prod`. Tout passe par `feat/T81-portee-geographique`.
 - `phpunit.xml` ne bascule pas sur SQLite en mémoire : la suite tape la base du `.env`. Vérifier la connexion avant de lancer, et ne pas écrire dans le projet depuis une autre session pendant un run.
@@ -2200,7 +2202,10 @@ git commit -m "T81 : le restaurant hors rayon est grise, avec sa distance"
 ### Task 11: Web — la carte grisée et le refus du devis
 
 Le web a les mêmes tokens que le mobile (`surface`, `ink-muted`, `brand-700`,
-`success-surface`, `rounded-card`) : rien de nouveau à définir.
+`success-surface`, `rounded-card`) : rien de nouveau à définir. La carte garde
+sa structure actuelle — image, pastille, nom, adresse, ligne du bas — et aucune
+de ces quatre zones ne bouge. Seul leur contenu change quand le restaurant est
+hors rayon.
 
 `app/restaurant/page.jsx` appelle `Route.list_restaurant` **sans position** —
 le catalogue web ne connaît pas l'adresse de livraison à ce moment-là. Les
