@@ -17,6 +17,8 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Status;
 use App\Models\SubCategoryProduct;
+use App\Models\Town;
+use App\Services\PorteeLivraison;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\FirebasePushNotification;
@@ -34,18 +36,47 @@ class RestaurantController extends Controller
     {
         $search = $request->input('search');
         $restaurant = Restaurant::query()->where('is_active', true)
-            ->when($search, fn($query) => $query->where('name', 'like', '%' . $search . '%')
-                ->orWhere('description', 'like', '%' . $search . '%')
+            // La regle de portee lit la ville du restaurant pour connaitre son
+            // rayon : sans ce prechargement, chaque ligne couterait trois
+            // requetes de plus.
+            ->with('town.city')
+            ->when($search, fn ($query) => $query->where('name', 'like', '%'.$search.'%')
+                ->orWhere('description', 'like', '%'.$search.'%')
             )
             ->get();
+
+        /*
+         * La portee est calculee ici et attachee a chaque restaurant.
+         *
+         * La ressource ne la calcule pas elle-meme : une ressource est
+         * serialisee une fois par ligne, et y loger une regle metier la
+         * rendrait impossible a tester sans passer par HTTP.
+         *
+         * Aucun restaurant n'est retire de la liste. Le proprietaire veut voir
+         * « Hunga Busta de Brazzaville flou », pas le voir disparaitre.
+         */
+        $livraison = $request->filled('town')
+            ? Town::query()->where('slug', $request->input('town'))->first()
+            : null;
+
+        $lat = $request->filled('lat') ? (float) $request->input('lat') : null;
+        $lng = $request->filled('lng') ? (float) $request->input('lng') : null;
+
+        $portees = app(PorteeLivraison::class);
+
+        $restaurant->each(fn (Restaurant $item) => $item->setAttribute(
+            'portee', $portees->pour($item, $livraison, $lat, $lng),
+        ));
+
         return RestaurantResource::collection($restaurant);
     }
 
     public function product(string $slug)
     {
         try {
-            $product = Product::with(['restaurant', "currency", "sub_category_product"])
+            $product = Product::with(['restaurant', 'currency', 'sub_category_product'])
                 ->where('slug', $slug)->first();
+
             return new ProductResource($product);
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
@@ -61,7 +92,6 @@ class RestaurantController extends Controller
     public function categorie(Restaurant $restaurant)
     {
         $restaurantId = $restaurant->id;
-
 
         $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
             $query->whereHas('product', function ($subQuery) use ($restaurantId) {
@@ -79,13 +109,14 @@ class RestaurantController extends Controller
                 $subQuery->where('restaurant_id', $restaurantId);
             });
         })->get();
+
         return CategorieResource::collection($categories);
     }
 
     public function productRestaurant(Restaurant $restaurant, string $slug)
     {
         try {
-            //code...
+            // code...
             $menu = SubCategoryProduct::query()
                 // Meme contrainte que dans categorie() : la sous-categorie est
                 // partagee entre restaurants, ses produits ne le sont pas.
@@ -113,7 +144,9 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             return ApiResponse::GET_DATA(new RestaurantResource($restaurant));
         } catch (Exception $e) {
@@ -127,7 +160,9 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $commande = Commande::query()->where('status_id', 2)
                 // Une commande annulee n'est pas a preparer : le restaurateur
@@ -135,11 +170,13 @@ class RestaurantController extends Controller
                 // personne ne viendrait chercher.
                 ->nonAnnulee()
                 ->whereNotNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->whereHas('commande_products', fn ($q) => $q->whereHas('product', fn ($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
+            if (! $commande) {
+                return ApiResponse::GET_DATA(null);
+            }
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -154,7 +191,9 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $commande = Commande::query()->where('status_id', 2)
                 // Une commande annulee n'est pas a preparer : le restaurateur
@@ -162,11 +201,13 @@ class RestaurantController extends Controller
                 // personne ne viendrait chercher.
                 ->nonAnnulee()
                 ->whereNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->whereHas('commande_products', fn ($q) => $q->whereHas('product', fn ($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
+            if (! $commande) {
+                return ApiResponse::GET_DATA(null);
+            }
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -181,7 +222,9 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $commande = Commande::query()->where('status_id', 2)
                 // Une commande annulee n'est pas a preparer : le restaurateur
@@ -189,11 +232,13 @@ class RestaurantController extends Controller
                 // personne ne viendrait chercher.
                 ->nonAnnulee()
                 ->whereNotNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->whereHas('commande_products', fn ($q) => $q->whereHas('product', fn ($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->orderBy('updated_at', 'desc')
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA(null);
+            if (! $commande) {
+                return ApiResponse::GET_DATA(null);
+            }
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
 
@@ -208,18 +253,22 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $status = Status::query()->where('id', '>', 2)->pluck('id');
 
             $commande = Commande::query()->whereIn('status_id', $status)
                 ->orderBy('updated_at', 'desc')
-                //->whereNotNull('accepted_at')
+                // ->whereNotNull('accepted_at')
 
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)))
+                ->whereHas('commande_products', fn ($q) => $q->whereHas('product', fn ($q) => $q->where('restaurant_id', $restaurant->id)))
                 ->get();
 
-            if (!$commande) return ApiResponse::GET_DATA([]);
+            if (! $commande) {
+                return ApiResponse::GET_DATA([]);
+            }
 
             return ApiResponse::GET_DATA(CommandeResource::collection($commande));
         } catch (Exception $e) {
@@ -233,13 +282,14 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $commande = Commande::query()
                 ->where('status_id', '>', 1)
-                //>whereNotNull('accepted_at')
-                ->whereHas('commande_products', fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id)));
-
+                // >whereNotNull('accepted_at')
+                ->whereHas('commande_products', fn ($q) => $q->whereHas('product', fn ($q) => $q->where('restaurant_id', $restaurant->id)));
 
             $columns = ['global_price', 'price_delivery', 'price_service'];
 
@@ -260,7 +310,7 @@ class RestaurantController extends Controller
                         )
                         ->perMonth()
                         ->sum($column)
-                //->count()
+                    // ->count()
                 );
             }
 
@@ -275,7 +325,7 @@ class RestaurantController extends Controller
                             end: now()->endOfYear()
                         )
                         ->perYear()
-                        //->sum($column)
+                        // ->sum($column)
                         ->count()
                 );
             }
@@ -307,7 +357,7 @@ class RestaurantController extends Controller
             $status = Status::query()->get();
 
             return ApiResponse::GET_DATA([
-                "order_per_year" => $trendYear,
+                'order_per_year' => $trendYear,
                 'order_per_month' => $trendMonth,
                 'order_per_days' => $trendDay,
                 'order' => [
@@ -316,7 +366,7 @@ class RestaurantController extends Controller
                     'order_cancel' => $order_cancelation,
                     'order_delivery' => $order_delivery,
                     'status' => StatusResource::collection($status),
-                ]
+                ],
             ]);
 
         } catch (Exception $e) {
@@ -330,7 +380,9 @@ class RestaurantController extends Controller
 
             $restaurant = $this->getCurrentRestaurant();
 
-            if (!$restaurant) return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            if (! $restaurant) {
+                return ApiResponse::NOT_FOUND('Oups', 'Restaurant introuvable');
+            }
 
             $uid_order = $request->input('uid_order');
 
@@ -338,27 +390,30 @@ class RestaurantController extends Controller
 
             $time = $request->input('time');
 
-            if (!$action) {
+            if (! $action) {
 
-                return ApiResponse::BAD_REQUEST("Oups", "Action", "Action is required");
+                return ApiResponse::BAD_REQUEST('Oups', 'Action', 'Action is required');
             }
 
             $commande = Commande::query()->where('id', Cipher::Decrypt($uid_order))
                 ->whereHas(
                     'commande_products',
-                    fn($q) => $q->whereHas('product', fn($q) => $q->where('restaurant_id', $restaurant->id))
+                    fn ($q) => $q->whereHas('product', fn ($q) => $q->where('restaurant_id', $restaurant->id))
                 )
                 ->whereNull('accepted_at')
                 ->whereNull('cancel_at')->first();
 
-
-            if (!$commande) return ApiResponse::NOT_FOUND("Oups", "Commande not found");
+            if (! $commande) {
+                return ApiResponse::NOT_FOUND('Oups', 'Commande not found');
+            }
 
             switch ($action) {
 
                 case ActionOrderEnum::Accept->value:
 
-                    if (!$time) return ApiResponse::BAD_REQUEST("Oups", "Time is required", "Time is required");
+                    if (! $time) {
+                        return ApiResponse::BAD_REQUEST('Oups', 'Time is required', 'Time is required');
+                    }
 
                     $commande->accepted_at = now()->format('Y-m-d');
 
@@ -368,15 +423,15 @@ class RestaurantController extends Controller
 
                     $commande->reception = true;
 
-                    //envoyer une notification au client et au livreur
+                    // envoyer une notification au client et au livreur
 
                     if ($commande?->user->expo_push_token) {
-                        $push = new FirebasePushNotification();
-                        $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
+                        $push = new FirebasePushNotification;
+                        $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", 'Votre commande est en cours de preparation');
 
-                        FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande est en cours de preparation");
+                        FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", 'Votre commande est en cours de preparation');
                     }
-                    //notification au livreur
+                    // notification au livreur
 
                     self::sendDeliveryNotification($commande);
                     break;
@@ -386,13 +441,13 @@ class RestaurantController extends Controller
                     $commande->cancel_at = now()->format('Y-m-d');
                     $commande->status_id = 4;
 
-                    //envoyer une notification au client
+                    // envoyer une notification au client
 
                     if ($commande?->user->expo_push_token) {
-                        $push = new FirebasePushNotification();
-                        $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
+                        $push = new FirebasePushNotification;
+                        $push->sendPushNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", 'Votre commande a été annuler par le restaurant');
 
-                        FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", "Votre commande a été annuler par le restaurant");
+                        FirebasePushNotification::sendNotification($commande?->user->expo_push_token, "Etat d'avancemant de votre commande", 'Votre commande a été annuler par le restaurant');
                     }
 
                     break;
@@ -404,6 +459,7 @@ class RestaurantController extends Controller
         } catch (Exception $e) {
 
             Log::info($e);
+
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -423,11 +479,11 @@ class RestaurantController extends Controller
     public static function sendDeliveryNotification(Commande $commande)
     {
         $deliveries = DelivreryDriver::query()
-            ->with("user")
-            ->whereDoesntHave('commandes', fn($query) => $query->whereIn('status_id', [3]))->get();
+            ->with('user')
+            ->whereDoesntHave('commandes', fn ($query) => $query->whereIn('status_id', [3]))->get();
 
         $tokens = [];
-        collect($deliveries)->each(function ($delivery) use ($commande, &$tokens) {
+        collect($deliveries)->each(function ($delivery) use (&$tokens) {
 
             if ($delivery?->user->expo_push_token) {
                 $tokens[] = $delivery?->user->expo_push_token;
@@ -435,11 +491,11 @@ class RestaurantController extends Controller
 
         });
 
-        if (!empty($tokens)) {
-            $push = new FirebasePushNotification();
-            $push->sendPushNotificationMultiUser($tokens, "Nouvelle commande", "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
+        if (! empty($tokens)) {
+            $push = new FirebasePushNotification;
+            $push->sendPushNotificationMultiUser($tokens, 'Nouvelle commande', "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
 
-            FirebasePushNotification::sendMultiNotification($tokens, "Nouvelle commande", "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
+            FirebasePushNotification::sendMultiNotification($tokens, 'Nouvelle commande', "Une nouvelle commande sera bientôt disponible. N'oubliez pas de l'accepter pour procéder à la livraison");
         }
 
     }
