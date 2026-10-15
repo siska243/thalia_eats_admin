@@ -61,11 +61,14 @@ class ProductSearchService
             $query->where(fn (Builder $q) => $q->whereNull('town_id')->orWhere('town_id', $town_id));
         }
 
-        $restaurants = $query->get(['id', 'name', 'location']);
+        // `town.city` : le plafond de rayon vient de la ville du restaurant.
+        $restaurants = $query->with('town.city')->get(['id', 'name', 'location', 'town_id']);
 
         $lat = isset($filters['lat']) ? (float) $filters['lat'] : null;
         $lng = isset($filters['lng']) ? (float) $filters['lng'] : null;
         $radius = isset($filters['radius']) ? (float) $filters['radius'] : null;
+
+        $portees = app(PorteeLivraison::class);
 
         $geolocalises = [];
         $sans_position = [];
@@ -86,8 +89,21 @@ class ProductSearchService
 
             $distance = RestaurantGeo::distanceKm($lat, $lng, $coords['lat'], $coords['lng']);
 
-            // Le rayon n'exclut que les restaurants dont on connaît la position.
-            if ($radius !== null && $distance > $radius) {
+            /*
+             * Le rayon du client ne fait que RESSERRER celui du réglage.
+             *
+             * Avant, `radius` venait entièrement du client : il filtrait un
+             * affichage sans rien contraindre, et `radius=10000` rendait tout
+             * le pays éligible. La borne haute appartient au serveur, comme le
+             * prix.
+             *
+             * Il n'exclut toujours que les restaurants dont on connaît la
+             * position : un parc mal renseigné ne doit pas devenir invisible.
+             */
+            $plafond = $portees->rayonPour($restaurant);
+            $limite = $radius !== null ? min($radius, $plafond) : $plafond;
+
+            if ($distance > $limite) {
                 continue;
             }
 
