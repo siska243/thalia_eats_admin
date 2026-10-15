@@ -1,217 +1,141 @@
-# Lot 1 — Comment tester la limite de distance
+# Tester la limite de distance — par l'application, le web et l'admin
 
-**Ticket :** T81 · **Branche :** `feat/T81-portee-geographique` (backend) et `integration/octobre` (mobile, web)
+**Tickets :** T81 (limite de distance) et T83 (deux défauts du panier)
 
-Rien n'est déployé. Tout ce qui suit se teste en local, ou sur une préproduction.
+Aucun test de code ici. Tout se fait par les écrans.
 
 ---
 
-## 0. Avant tout : lancer les migrations
+## 0. Mettre la base à jour — une seule commande
 
 ```bash
 cd "back end"
+git checkout feat/T81-portee-geographique
 php artisan migrate
-```
-
-Deux choses arrivent :
-- `cities.max_delivery_radius_km` (nullable) ;
-- les deux réglages `food.max_delivery_radius_km` (30) et `food.out_of_radius_message`.
-
-**Sans ces migrations, la limite ne s'applique pas** — et c'est voulu : le catalogue continue de fonctionner normalement plutôt que de répondre 500. C'est exactement le scénario qui vous est arrivé en production au ticket T76.
-
-Pour vérifier que les réglages sont bien posés :
-
-```bash
-php artisan tinker --execute="dump(app(App\Settings\FoodSettings::class)->max_delivery_radius_km);"
-```
-
-Attendu : `30.0`.
-
----
-
-## 1. Tester en automatique (le plus rapide)
-
-```bash
-cd "back end"
-php artisan test --filter=Portee
-```
-
-Attendu : **42 tests verts**. Le filtre attrape les six fichiers du lot, la
-règle (`tests/Unit/PorteeLivraisonTest.php`) comprise.
-
-La suite complète :
-
-```bash
-php artisan test
-```
-
-Attendu : **736 passent, 1 échoue**. L'échec est `tests/Feature/ExampleTest.php` (« the application returns a successful response ») — il échouait déjà avant ce travail, c'est le test `GET /` livré avec Laravel. C'est le seuil : s'il y en a deux, quelque chose a cassé.
-
-Côté mobile :
-
-```bash
-cd "front end/thalia-delivery"
-npx jest components/__tests__/restaurant-row.test.tsx
-```
-
-Attendu : **3 tests verts**.
-
----
-
-## 2. Tester l'administration
-
-C'est la partie à faire à la main, parce que c'est vous qui allez saisir ces données en vrai.
-
-```bash
-cd "back end"
 php artisan serve
 ```
 
-Puis `http://127.0.0.1:8000/admin`.
+C'est la seule ligne de commande de tout le document. Sans `migrate`, la limite ne s'applique à rien — et c'est voulu : l'application continue de fonctionner normalement au lieu de tomber en 500, comme lors de votre incident de déploiement.
 
-### 2.1 Le rayon d'une ville — `Paramètre > Cities`
+Pour le mobile, pensez au tunnel ngrok habituel vers `127.0.0.1:8000`.
 
-Ouvrez une ville, par exemple Kinshasa. Un champ nouveau : **« Rayon de livraison (km) »**.
+---
+
+## 1. Préparer le terrain dans l'admin
+
+`http://127.0.0.1:8000/admin`
+
+### 1.1 Donner un centre à deux communes
+
+**Paramètre → Communes.** Deux champs nouveaux : **Latitude du centre** et **Longitude du centre**.
+
+| Commune | Latitude | Longitude |
+|---|---|---|
+| Une commune de Kinshasa (Gombé) | `-4.3045` | `15.3075` |
+| Une commune de Lubumbashi | `-11.6600` | `27.4800` |
+
+> Pour une autre commune : sur Google Maps, clic droit sur le point, le premier élément du menu affiche `-4.3045, 15.3075`. Cliquez dessus, c'est copié. La latitude est le premier nombre.
+
+**Essayez de saisir `120` en latitude** → le formulaire doit refuser.
+
+### 1.2 Donner une position à deux restaurants
+
+**Restaurants.** Deux champs nouveaux dans « Information de base » : **Latitude** et **Longitude**.
+
+- **Al-Dar Kinshasa** → commune Gombé, `-4.3045` / `15.3075`
+- **Al-Dar Lubumbashi** → commune de Lubumbashi, `-11.6600` / `27.4800`
+
+Donnez un plat à chacun, et vérifiez qu'ils sont actifs.
+
+> **Vous allez buter sur quelque chose** : le formulaire restaurant ouvre une ligne d'horaires vide et obligatoire. Remplissez un créneau, ou supprimez la ligne avec la corbeille. C'est un défaut qui existait déjà (ticket T82), sans rapport avec ce travail.
+
+### 1.3 Régler le rayon d'une ville
+
+**Paramètre → Cities.** Champ nouveau : **Rayon de livraison (km)**.
 
 | Ce que vous faites | Ce qui doit se passer |
 |---|---|
-| Laisser vide | La ville applique le rayon global (30 km). C'est le cas normal. |
+| Laisser vide sur Kinshasa | La ville applique le rayon général de 30 km. C'est le cas normal. |
 | Saisir `20` | Les restaurants de cette ville ne livrent plus au-delà de 20 km. |
-| Saisir `0` | **Refusé**, message d'erreur sous le champ. Pour fermer une ville, désactivez-la — un zéro sur une faute de frappe fermerait toute la ville sans prévenir. |
-| Saisir `600` | Refusé (plafond à 500). |
-
-### 2.2 Le centre d'une commune — `Paramètre > Communes`
-
-Deux champs nouveaux : **« Latitude du centre »** et **« Longitude du centre »**.
-
-C'est la position de repli. Quand un restaurant de cette commune n'a pas ses propres coordonnées, c'est celle-ci qui sert. Approximatif suffit : il faut séparer Gombé de Lubumbashi, pas deux avenues voisines.
-
-Pour Gombé : latitude `-4.3045`, longitude `15.3075`.
-Pour le centre de Lubumbashi : latitude `-11.6600`, longitude `27.4800`.
-
-Une latitude à `120` doit être refusée.
-
-> **Où trouver les coordonnées d'une commune ?** Sur Google Maps, clic droit sur le point → le premier élément du menu est « -4.3045, 15.3075 », cliquez dessus, c'est copié. La latitude est le premier nombre.
-
-### 2.3 La position d'un restaurant — `Restaurants`
-
-Deux champs nouveaux dans « Information de base » : **« Latitude »** et **« Longitude »**.
-
-Ils restent **facultatifs**. Un restaurant sans coordonnées utilise le centre de sa commune. Mais une position précise évite de refuser un client qui est à portée.
-
-**Attention, défaut préexistant** : le formulaire restaurant ouvre une ligne d'horaires vide et obligatoire. Pour enregistrer, il faut soit remplir un créneau, soit supprimer la ligne avec la corbeille. Ce n'est pas lié à ce travail, mais vous allez le rencontrer en testant.
+| Saisir `0` | **Refusé**, avec un message sous le champ. Pour fermer une ville, désactivez-la : un zéro saisi par erreur la fermerait sans prévenir personne. |
+| Saisir `600` | Refusé, le plafond est à 500. |
 
 ---
 
-## 3. Tester le refus, bout en bout
+## 2. Le test principal, sur mobile
 
-### 3.1 Préparer deux restaurants
+**Choisissez une commune de livraison à Kinshasa** dans la barre en haut de l'accueil. C'est elle qui est envoyée au serveur — l'application n'a pas besoin du GPS.
 
-Dans l'administration :
-
-1. Un restaurant **« Al-Dar Kinshasa »**, commune Gombé, latitude `-4.3045`, longitude `15.3075`.
-2. Un restaurant **« Al-Dar Lubumbashi »**, commune de Lubumbashi, latitude `-11.6600`, longitude `27.4800`.
-
-Donnez un plat à chacun.
-
-### 3.2 Depuis l'application mobile
-
-Avec une adresse de livraison à Kinshasa :
-
-| Écran | Attendu |
+| Écran | Ce que vous devez voir |
 |---|---|
-| Liste des restaurants | Les **deux** apparaissent. Al-Dar Lubumbashi est **grisé**, avec en bas « À 1569.4 km · hors zone de livraison ». Il n'a pas disparu, c'est voulu. |
-| Appui sur Al-Dar Lubumbashi | La fiche s'ouvre quand même. On peut regarder la carte. |
-| Tentative de commande | Refus, avec le message : « Al-Dar Lubumbashi est à 1569.361 km de votre adresse de livraison. Nous ne livrons que dans un rayon de 30 km. » |
-| Al-Dar Kinshasa | Rien ne change. Commande normale. |
+| Accueil, liste des restaurants | **Les deux restaurants sont là.** Al-Dar Lubumbashi est **grisé**, et sa troisième ligne dit « À 1569.4 km · hors zone de livraison ». Il n'a pas disparu : c'est ce que vous aviez demandé, le restaurant lointain se voit mais ne s'atteint pas. |
+| Appui sur Al-Dar Lubumbashi | **La fiche s'ouvre quand même.** On peut regarder la carte. Un restaurant grisé qui ne réagit pas à l'appui donne l'impression d'un bug. |
+| Essayer de commander chez lui | Refus, avec le message : « Al-Dar Lubumbashi est à 1569.361 km de votre adresse de livraison. Nous ne livrons que dans un rayon de 30 km. » |
+| Al-Dar Kinshasa | Rien ne change. La commande passe comme avant. |
 
-### 3.3 Sans passer par l'application (le vrai test)
+**Puis changez de commune pour celle de Lubumbashi**, en haut de l'accueil. Les deux restaurants échangent leurs rôles : Al-Dar Lubumbashi devient commandable, Al-Dar Kinshasa passe en gris. C'est exactement le scénario que vous décriviez — « s'il voyage à Brazzaville, il voit les restaurants de Brazzaville ».
 
-C'est le test qui compte : la règle doit tenir même quand on appelle l'API directement, puisque c'est précisément la faille des règles qui ne vivent que dans les écrans.
+---
 
-Il vous faut un token. Depuis l'application, ou :
+## 3. Le même test sur le web
+
+Le catalogue web n'affiche les distances **que si une adresse de livraison a déjà été choisie** : elle se saisit au moment du paiement, pas en parcourant le catalogue.
+
+1. Passez une commande jusqu'à l'écran de paiement, en renseignant une adresse à Kinshasa. Vous pouvez abandonner le paiement, l'adresse est retenue.
+2. Revenez sur la liste des restaurants.
+
+| Ce que vous regardez | Ce que vous devez voir |
+|---|---|
+| La carte d'Al-Dar Lubumbashi | Grisée, pastille **« Hors zone »** en haut à gauche, et en bas « À 1569.4 km · hors zone de livraison ». |
+| La carte reste cliquable | Oui, comme sur mobile. |
+| Al-Dar Kinshasa | Inchangé : pastille « Ouvert » ou « Fermé » selon l'heure. |
+| Payer une commande chez Al-Dar Lubumbashi | Refusée, avec le message du serveur affiché. |
+
+Tant qu'aucune adresse n'a été choisie, le catalogue s'affiche exactement comme avant. C'est normal.
+
+---
+
+## 4. Tester T83 — les deux défauts du panier
+
+Branche séparée, elle peut être testée indépendamment :
 
 ```bash
 cd "back end"
-php artisan tinker --execute="echo App\Models\User::first()->createToken('test', ['*'])->plainTextToken;"
+git checkout fix/T83-panier
+php artisan serve
 ```
 
-Puis, en remplaçant `<TOKEN>` et les identifiants chiffrés par ceux que renvoie votre catalogue :
+**Sur le web uniquement** — le mobile n'est pas concerné, son panier reste dans l'application jusqu'au paiement.
 
-```bash
-curl -s -X POST http://127.0.0.1:8000/api/quote \
-  -H "Authorization: Bearer <TOKEN>" \
-  -H "Accept: application/json" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "town": "gombe",
-    "products": [{"uid": "<UID_DU_PLAT_DE_LUBUMBASHI>", "quantity": 1}]
-  }'
-```
-
-Attendu :
-
-```json
-{
-  "disponible": false,
-  "raison": "hors_rayon",
-  "message": "Al-Dar Lubumbashi est à 1569.361 km de votre adresse de livraison. Nous ne livrons que dans un rayon de 30 km."
-}
-```
-
-Le même appel avec le plat de Kinshasa doit rendre `"disponible": true` et un prix.
-
-### 3.4 Le catalogue avec une position
-
-```bash
-curl -s "http://127.0.0.1:8000/api/list-restaurant?lat=-4.3045&lng=15.3075" | head -40
-```
-
-Chaque restaurant porte trois clés nouvelles :
-
-```json
-{
-  "name": "Al-Dar Lubumbashi",
-  "distance_km": 1569.361,
-  "livrable": false,
-  "portee_message": "Al-Dar Lubumbashi est à 1569.361 km..."
-}
-```
-
-**Et sans position** — c'est le test de non-régression le plus important :
-
-```bash
-curl -s "http://127.0.0.1:8000/api/list-restaurant" | head -40
-```
-
-Attendu : `"livrable": true` et `"distance_km": null` partout. Un client mobile déjà installé, qui n'envoie pas sa position, voit exactement ce qu'il voyait avant.
-
----
-
-## 4. Les cas tordus à vérifier
-
-Ce sont ceux qui cassent les fonctionnalités de ce genre.
-
-| Cas | Comment le provoquer | Attendu |
+| Étape | Avant la correction | Après |
 |---|---|---|
-| **GPS non fixé** | Envoyer `lat=0&lng=0` | Aucun refus. Un téléphone qui n'a pas encore accroché les satellites renvoie le point zéro, dans le golfe de Guinée. Le prendre au mot fermerait tout le catalogue. |
-| **Restaurant sans coordonnées** | Vider latitude et longitude d'un restaurant, et de sa commune | Aucun refus, `distance_km: null`. Un parc mal renseigné ne doit pas fermer la plateforme. |
-| **Pile sur la limite** | Mettre le rayon de la ville à la distance exacte | Autorisé. La borne est inclusive. |
-| **Panier vide ou multi-restaurant** | Mettre deux plats de deux restaurants | La raison rendue doit être `multi_restaurant`, pas `hors_rayon`. Sinon on envoie le client corriger son adresse pour un problème qui n'est pas là. |
-| **Réglages absents** | `DELETE FROM settings WHERE \`group\` = 'food';` puis recharger le catalogue | Le catalogue **fonctionne**, sans limite de distance. Il ne répond pas 500. Puis `php artisan migrate` les remet. |
+| Videz votre panier, ajoutez **un seul** plat, allez au panier | La commande est créée **vide**, total à 0. Le plat n'y est pas. | Le plat est là, total correct. |
+| Ajoutez un deuxième plat | Les deux apparaissent enfin — mais le premier a laissé une ligne fantôme en base. | Les deux apparaissent, sans ligne fantôme. |
+
+Dans l'admin, **Commandes** : ouvrez la commande en attente après avoir ajouté un seul plat. Avant la correction elle est vide. Après, elle contient le plat.
 
 ---
 
-## 5. Ce qui n'est pas encore là
+## 5. Les cas tordus, toujours par les écrans
 
-Ce lot ne traite **que** la distance de livraison des repas. Ne cherchez pas :
+Ce sont ceux qui cassent ce genre de fonctionnalité.
 
-- le cloisonnement des gérants par enseigne et par ville (lot 2) ;
-- la ville d'origine des véhicules et les types de course A/B/C (lot 3).
+| Cas | Comment le provoquer | Ce qui doit se passer |
+|---|---|---|
+| **Restaurant sans coordonnées** | Dans l'admin, videz latitude et longitude d'Al-Dar Lubumbashi, **et** celles de sa commune | Il redevient commandable depuis Kinshasa. Sans position, on ne refuse pas : un parc mal renseigné ne doit pas fermer la plateforme. |
+| **Coordonnées laissées à zéro** | Mettez `0` en latitude **et** longitude sur un restaurant | Il doit se comporter comme s'il n'avait aucune position, et retomber sur le centre de sa commune. Il ne doit **pas** disparaître du catalogue. |
+| **Rayon resserré** | Mettez `5` km sur Kinshasa, avec deux restaurants kinois éloignés de 9 km | Le plus lointain passe en gris. Remettez vide pour revenir à 30 km. |
+| **Aucune commune choisie** | Sur mobile, avant de choisir une commune de livraison | Aucune distance affichée, tout est commandable. C'est le comportement d'avant : une application déjà installée ne doit rien voir changer. |
 
-Les deux ont leur place dans le spec et auront leur propre plan.
+---
 
-Deux limites assumées de ce lot, écrites ici pour que vous les voyiez avant de les découvrir :
+## 6. Ce qui n'est pas encore là
 
-- Le **catalogue web** n'envoie pas encore de position, donc ses cartes ne se grisent pas. La carte sait le faire, il manque la transmission de l'adresse. Le refus, lui, fonctionne au moment de payer.
-- Un restaurant **sans commune et sans coordonnées** échappe à la limite. L'alternative — le rendre invisible — retirerait du catalogue des restaurants qui fonctionnent. Ça se corrige par la saisie, en 2.3.
+Ce travail ne couvre **que** la distance de livraison des repas. Ne cherchez pas :
+
+- le cloisonnement des gérants par enseigne et par ville — Al-Dar Kinshasa et Al-Dar Lubumbashi partagent encore leurs commandes (lot 2) ;
+- la ville d'origine des véhicules et les types de course A, B, C (lot 3).
+
+Les deux sont écrits dans le dossier de conception et auront leur propre livraison.
+
+Une limite assumée : un restaurant **sans commune et sans coordonnées** échappe à la limite. L'autre choix aurait été de le retirer du catalogue alors qu'il fonctionne. Ça se corrige par la saisie, en 1.2.
