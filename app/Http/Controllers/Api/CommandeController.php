@@ -27,6 +27,7 @@ use App\Wrappers\LibPhoneNumber;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -174,15 +175,40 @@ class CommandeController extends Controller
             return null;
         }
 
+        return $this->refuserSiHorsPortee(
+            Product::query()
+                ->with('restaurant.town.city')
+                ->whereIn('id', $ids)
+                ->get()
+                ->pluck('restaurant')
+                ->filter()
+                ->unique('id'),
+            $town,
+            $lat,
+            $lng,
+        );
+    }
+
+    /**
+     * Le coeur du refus, a partir de restaurants deja charges.
+     *
+     * Separe de `refuserSiRestaurantTropLoin` parce que tous les appelants ne
+     * partent pas d'une liste de produits chiffres : changer l'adresse d'une
+     * commande part de la commande elle-meme. Un second garde recopie aurait
+     * diverge du premier — c'est le motif que ce lot ferme, pas celui qu'il
+     * ouvre.
+     *
+     * @param  Collection<int, Restaurant>  $restaurants
+     */
+    private function refuserSiHorsPortee(
+        $restaurants,
+        ?Town $town,
+        ?float $lat = null,
+        ?float $lng = null,
+    ): ?JsonResponse {
         $portees = app(PorteeLivraison::class);
 
-        $refus = Product::query()
-            ->with('restaurant.town.city')
-            ->whereIn('id', $ids)
-            ->get()
-            ->pluck('restaurant')
-            ->filter()
-            ->unique('id')
+        $refus = $restaurants
             ->map(fn (Restaurant $restaurant) => $portees->pour($restaurant, $town, $lat, $lng))
             ->first(fn (Portee $portee) => ! $portee->autorise);
 
@@ -426,7 +452,10 @@ class CommandeController extends Controller
             $uid = $request->input('uid');
 
             $commande = Commande::query()
-                ->with('product')
+                // `product.restaurant.town.city` : le garde de portee lit la
+                // ville du restaurant. Sans ce prechargement, chaque ligne du
+                // panier couterait trois requetes de plus.
+                ->with('product.product.restaurant.town.city')
                 ->where('user_id', $user?->id)
                 ->nonReglee()
                 ->when($uid, fn ($query) => $query->where('id', Cipher::Decrypt($uid)))
@@ -447,7 +476,26 @@ class CommandeController extends Controller
             $number_street = $request->input('number_street');
             $reference = $request->input('reference');
 
-            $commande->town_id = Town::query()->where('slug', $request->input('town'))->first()?->id;
+            $town = Town::query()->where('slug', $request->input('town'))->first();
+
+            /*
+             * La nouvelle adresse passe par le meme garde que la creation.
+             *
+             * Sans lui, un client commandait a la Gombe puis deplacait sa
+             * livraison a Lubumbashi : la commande n'etait refusee qu'au
+             * paiement, apres avoir rempli son panier. Le refus arrive ici,
+             * au moment ou il choisit.
+             */
+            if ($refus = $this->refuserSiHorsPortee(
+                $commande->product->pluck('product.restaurant')->filter()->unique('id'),
+                $town,
+                $request->filled('lat') ? (float) $request->input('lat') : null,
+                $request->filled('long') ? (float) $request->input('long') : null,
+            )) {
+                return $refus;
+            }
+
+            $commande->town_id = $town?->id;
             $commande->reference_adresse = $reference;
             $commande->adresse_delivery = $request->input('adresse')
                 ?: trim("{$street} {$number_street} {$reference}");
@@ -1068,7 +1116,8 @@ class CommandeController extends Controller
                 }
 
                 $observes = Product::query()
-                    ->with('currency')
+                    // `restaurant.town.city` : le devis lit la ville du restaurant.
+                    ->with(['currency', 'restaurant.town.city'])
                     ->whereIn('id', $ids)
                     ->get()
                     ->keyBy('id');

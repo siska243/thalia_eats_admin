@@ -3,6 +3,7 @@
 namespace Tests\Feature\Portee;
 
 use App\Models\Restaurant;
+use App\Models\Town;
 use App\Services\ProductSearchService;
 use App\Settings\FoodSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -74,6 +75,48 @@ class RecherchePlatsRayonTest extends TestCase
 
         $this->assertNotContains($loin->id, $resultat['ids']);
         $this->assertContains($proche->id, $resultat['ids']);
+    }
+
+    /**
+     * Un GPS qui n'a pas fixe ne doit pas vider le catalogue.
+     *
+     * `eligibleRestaurants()` calcule sa distance lui-meme au lieu de passer
+     * par `PorteeLivraison::pour()` : le garde du point zero ne s'y appliquait
+     * pas. Et comme le plafond serveur est desormais TOUJOURS actif, meme sans
+     * rayon envoye par le client, un (0, 0) excluait tous les restaurants
+     * geolocalises — la recherche rendait zero resultat.
+     */
+    public function test_une_position_a_zero_zero_ne_vide_pas_la_recherche(): void
+    {
+        $proche = Restaurant::factory()->located(...self::LIMETE)->create();
+        $loin = Restaurant::factory()->located(...self::LUBUMBASHI)->create();
+
+        $resultat = app(ProductSearchService::class)->eligibleRestaurants([
+            'lat' => 0.0,
+            'lng' => 0.0,
+        ]);
+
+        // Position inconnue : aucun filtrage, comme avant ce lot.
+        $this->assertContains($proche->id, $resultat['ids']);
+        $this->assertContains($loin->id, $resultat['ids']);
+    }
+
+    /** Un restaurant pose sur le point zero reste trouvable. */
+    public function test_un_restaurant_pose_sur_le_point_zero_reste_trouvable(): void
+    {
+        $town = Town::factory()->create([
+            'latitude' => self::LIMETE[0], 'longitude' => self::LIMETE[1],
+        ]);
+        $restaurant = Restaurant::factory()
+            ->located(0.0, 0.0)
+            ->create(['town_id' => $town->id]);
+
+        $resultat = app(ProductSearchService::class)->eligibleRestaurants([
+            'lat' => self::GOMBE[0],
+            'lng' => self::GOMBE[1],
+        ]);
+
+        $this->assertContains($restaurant->id, $resultat['ids']);
     }
 
     public function test_sans_position_aucun_filtrage(): void

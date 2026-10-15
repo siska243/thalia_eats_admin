@@ -3,6 +3,7 @@
 namespace Tests\Feature\Portee;
 
 use App\Models\Commande;
+use App\Models\CommandeProduct;
 use App\Models\Currency;
 use App\Models\Product;
 use App\Models\Restaurant;
@@ -102,6 +103,37 @@ class CommandeHorsRayonTest extends TestCase
         ]);
     }
 
+    /**
+     * Un panier en attente, pose directement en base.
+     *
+     * On ne passe pas par `/commande/add-product` : cet endpoint n'enregistre
+     * pas la commande avant d'ecrire ses lignes, la premiere ligne d'un
+     * panier neuf part donc avec `commande_id` a null (defaut preexistant,
+     * signale au proprietaire). Le sujet de ce test est le CHANGEMENT
+     * d'adresse, pas la construction du panier : on lui donne un etat de
+     * depart correct.
+     */
+    private function panierEnAttente(Product $produit): Commande
+    {
+        $commande = new Commande;
+        $commande->user_id = $this->client->id;
+        $commande->refernce = 1000;
+        $commande->status_id = 1;
+        $commande->town_id = $this->livraison->id;
+        $commande->save();
+
+        $ligne = new CommandeProduct;
+        $ligne->commande_id = $commande->id;
+        $ligne->user_id = $this->client->id;
+        $ligne->product_id = $produit->id;
+        $ligne->price = $produit->price;
+        $ligne->quantity = 1;
+        $ligne->currency_id = $produit->currency_id;
+        $ligne->save();
+
+        return $commande;
+    }
+
     private function regler(Product $produit): TestResponse
     {
         return $this->postJson('/api/user/commande/valide', [
@@ -142,6 +174,49 @@ class CommandeHorsRayonTest extends TestCase
             0,
             Commande::query()->where('user_id', $this->client->id)->count(),
         );
+    }
+
+    /**
+     * Changer l'adresse d'une commande repasse par le garde.
+     *
+     * `update-address-delivery` est le seul autre ecrivain de `town_id`,
+     * `lat` et `long` sur une commande. L'argent reste protege — `valide()`
+     * rejoue le controle sur l'adresse qu'il persiste — mais le client
+     * decouvrait alors le refus au moment de payer, au lieu du moment ou il
+     * choisit son adresse. Et un garde par chemin plutot qu'au passage
+     * oblige est exactement ce qui a deja produit deux bugs sur ce depot.
+     */
+    public function test_changer_l_adresse_pour_une_commune_hors_rayon_est_refuse(): void
+    {
+        $this->panierEnAttente($this->produitDe(self::GOMBE));
+
+        $lubumbashi = Town::factory()->create([
+            'latitude' => self::LUBUMBASHI[0], 'longitude' => self::LUBUMBASHI[1],
+        ]);
+
+        $this->postJson('/api/user/commande/update-address-delivery', [
+            'town' => $lubumbashi->slug,
+            'adresse' => 'Avenue Lumumba',
+            'street' => 'Lumumba',
+            'number_street' => '5',
+        ])
+            ->assertStatus(400)
+            ->assertJsonPath('title', 'Hors zone de livraison');
+    }
+
+    /** Changer pour une adresse a portee reste possible. */
+    public function test_changer_l_adresse_dans_le_rayon_reste_possible(): void
+    {
+        $this->panierEnAttente($this->produitDe(self::GOMBE));
+
+        $reponse = $this->postJson('/api/user/commande/update-address-delivery', [
+            'town' => $this->livraison->slug,
+            'adresse' => 'Avenue du Commerce',
+            'street' => 'Commerce',
+            'number_street' => '14',
+        ]);
+
+        $this->assertNotSame('Hors zone de livraison', $reponse->json('title'));
     }
 
     /** Dans le rayon, le garde ne doit pas fermer la boutique. */

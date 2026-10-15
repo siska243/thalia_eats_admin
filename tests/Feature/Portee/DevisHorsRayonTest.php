@@ -97,17 +97,48 @@ class DevisHorsRayonTest extends TestCase
         $reponse->assertJsonPath('raison', null);
     }
 
+    /**
+     * La position envoyee affine le centroide, quand elle est credible.
+     *
+     * Ici l'adresse exacte est a une quarantaine de kilometres du centre de la
+     * commune de livraison : plausible dans une agglomeration etendue, et
+     * au-dela du rayon de 30 km. Le centroide seul aurait dit « sur place ».
+     */
     public function test_la_position_envoyee_prime_sur_le_centroide(): void
     {
         $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
 
-        // Le client est a Lubumbashi, la commune de livraison est a Gombe :
-        // c'est la position reelle qui compte.
+        // 0,36 degre de latitude, soit environ 40 km au sud de la Gombe.
+        $reponse = $this->appeler($this->produitDe($restaurant), [
+            'lat' => self::GOMBE[0] - 0.36, 'lng' => self::GOMBE[1],
+        ]);
+
+        $reponse->assertJsonPath('raison', QuotationService::RAISON_HORS_RAYON);
+    }
+
+    /**
+     * Une position qui contredit la commune declaree est ecartee.
+     *
+     * Sans ce garde-fou, la regle se contourne avec deux nombres : declarer
+     * une livraison a Lubumbashi, annoncer les coordonnees de la Gombe, et
+     * commander dans un restaurant de la Gombe. La commande serait partie,
+     * enregistree sur Lubumbashi et facturee a ses tarifs.
+     *
+     * Dans l'autre sens, c'est aussi ce qui permet a un client en voyage de
+     * faire livrer chez lui : sa position du moment ne doit pas refuser une
+     * livraison parfaitement valable.
+     */
+    public function test_une_position_contredisant_la_commune_est_ignoree(): void
+    {
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        // Le client annonce etre a Lubumbashi, mais fait livrer a la Gombe,
+        // ou se trouve le restaurant.
         $reponse = $this->appeler($this->produitDe($restaurant), [
             'lat' => self::LUBUMBASHI[0], 'lng' => self::LUBUMBASHI[1],
         ]);
 
-        $reponse->assertJsonPath('raison', QuotationService::RAISON_HORS_RAYON);
+        $reponse->assertJsonPath('disponible', true);
     }
 
     public function test_un_restaurant_sans_position_exploitable_reste_chiffre(): void

@@ -243,7 +243,8 @@ class PrecommandeController extends Controller
         }
 
         $trouves = Product::query()
-            ->with('currency')
+            // `restaurant.town.city` : le devis lit la ville du restaurant.
+            ->with(['currency', 'restaurant.town.city'])
             ->whereIn('id', array_values($ids))
             ->where('is_active', true)
             ->get()

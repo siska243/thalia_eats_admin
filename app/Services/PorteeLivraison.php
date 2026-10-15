@@ -23,6 +23,17 @@ use Spatie\LaravelSettings\Exceptions\MissingSettings;
  */
 class PorteeLivraison
 {
+    /**
+     * Ecart maximal admis entre la position annoncee par le client et le
+     * centre de la commune qu'il declare.
+     *
+     * Au-dela, la position n'est pas croyable pour cette commune et le
+     * centroide reprend la main. Cinquante kilometres sont genereux — aucune
+     * commune n'est aussi etendue — et c'est voulu : il s'agit d'ecarter une
+     * contradiction grossiere, pas d'arbitrer une adresse en peripherie.
+     */
+    private const ECART_MAX_AVEC_LA_COMMUNE_KM = 50.0;
+
     public function __construct(private readonly FoodSettings $settings) {}
 
     public function pour(
@@ -111,25 +122,74 @@ class PorteeLivraison
         }
     }
 
-    /** @return array{lat: float, lng: float}|null */
+    /**
+     * @return array{lat: float, lng: float}|null
+     */
     private function positionDuRestaurant(Restaurant $restaurant): ?array
     {
-        return RestaurantGeo::coordinates($restaurant->location)
-            ?? $this->centroide($restaurant->town);
+        $propre = RestaurantGeo::coordinates($restaurant->location);
+
+        /*
+         * Le point zero vaut ici aussi.
+         *
+         * Le formulaire d'administration expose deux champs numeriques, et les
+         * laisser a zero est la faute de saisie la plus probable. Prise au mot,
+         * elle placerait le restaurant a 5 300 km de tous ses clients : il
+         * disparaitrait de la recherche et refuserait toutes ses commandes,
+         * sans qu'aucun message ne previenne l'administrateur. On retombe donc
+         * sur sa commune, exactement comme s'il n'avait aucune position.
+         */
+        if ($propre !== null && ! $this->estLePointZero($propre)) {
+            return $propre;
+        }
+
+        return $this->centroide($restaurant->town);
     }
 
     /** @return array{lat: float, lng: float}|null */
     private function positionDeLivraison(?Town $town, ?float $lat, ?float $lng): ?array
     {
+        $centroide = $this->centroide($town);
+
         if ($lat !== null && $lng !== null) {
             $coords = RestaurantGeo::coordinates(['lat' => $lat, 'lng' => $lng]);
 
-            if ($coords !== null && ! $this->estLePointZero($coords)) {
+            if ($coords !== null
+                && ! $this->estLePointZero($coords)
+                && $this->concordeAvec($coords, $centroide)
+            ) {
                 return $coords;
             }
         }
 
-        return $this->centroide($town);
+        return $centroide;
+    }
+
+    /**
+     * La position annoncee est-elle croyable pour la commune declaree ?
+     *
+     * Sans ce controle la regle se contourne avec deux nombres dans le corps
+     * de la requete : declarer une livraison a Lubumbashi, annoncer les
+     * coordonnees de la Gombe, et commander dans un restaurant de la Gombe.
+     * La commande partirait, enregistree sur Lubumbashi et facturee aux tarifs
+     * de Lubumbashi. C'est le motif qui a deja produit une faille sur ce
+     * depot — « le prix vient du client » — transpose a la position.
+     *
+     * Le centroide de la commune n'est pas falsifiable : il arbitre. Sans
+     * centroide connu, rien a comparer, on fait confiance.
+     *
+     * @param  array{lat: float, lng: float}  $coords
+     * @param  array{lat: float, lng: float}|null  $centroide
+     */
+    private function concordeAvec(array $coords, ?array $centroide): bool
+    {
+        if ($centroide === null) {
+            return true;
+        }
+
+        return RestaurantGeo::distanceKm(
+            $coords['lat'], $coords['lng'], $centroide['lat'], $centroide['lng'],
+        ) <= self::ECART_MAX_AVEC_LA_COMMUNE_KM;
     }
 
     /**
@@ -146,10 +206,13 @@ class PorteeLivraison
             return null;
         }
 
-        return RestaurantGeo::coordinates([
+        $coords = RestaurantGeo::coordinates([
             'lat' => (float) $town->latitude,
             'lng' => (float) $town->longitude,
         ]);
+
+        // Zero est une saisie oubliee, pas une commune du golfe de Guinee.
+        return $coords !== null && ! $this->estLePointZero($coords) ? $coords : null;
     }
 
     /**

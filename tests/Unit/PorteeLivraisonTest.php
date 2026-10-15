@@ -116,6 +116,87 @@ class PorteeLivraisonTest extends TestCase
         $this->assertNull($portee->distance_km);
     }
 
+    /**
+     * Un restaurant pose sur (0, 0) retombe sur sa commune.
+     *
+     * Le formulaire d'administration expose deux champs numeriques : les
+     * laisser a zero est la faute de saisie la plus probable. Prise au mot,
+     * elle placerait le restaurant a 5 300 km de tous ses clients — il
+     * disparaitrait de la recherche et refuserait toutes ses commandes, sans
+     * qu'aucun message ne le signale a l'administrateur.
+     */
+    public function test_un_restaurant_pose_sur_le_point_zero_retombe_sur_sa_commune(): void
+    {
+        $town = Town::factory()->create([
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $restaurant = Restaurant::factory()
+            ->located(0.0, 0.0)
+            ->create(['town_id' => $town->id]);
+
+        $portee = $this->portee()->pour($restaurant, null, ...self::LIMETE);
+
+        $this->assertTrue($portee->autorise);
+        $this->assertLessThan(30.0, $portee->distance_km);
+    }
+
+    /** Une commune dont le centroide est reste a zero ne refuse rien. */
+    public function test_une_commune_dont_le_centroide_vaut_zero_est_ignoree(): void
+    {
+        $town = Town::factory()->create(['latitude' => 0.0, 'longitude' => 0.0]);
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $town->id, 'location' => null,
+        ]);
+
+        $portee = $this->portee()->pour($restaurant, null, ...self::GOMBE);
+
+        $this->assertTrue($portee->autorise);
+        $this->assertNull($portee->distance_km);
+    }
+
+    /**
+     * La position envoyee par le client ne peut pas contredire sa commune.
+     *
+     * Sinon la regle se contourne avec deux nombres dans le corps de la
+     * requete : declarer une livraison a Lubumbashi, envoyer les coordonnees
+     * de la Gombe, et commander dans un restaurant de la Gombe. La commande
+     * serait enregistree sur Lubumbashi, avec les frais de Lubumbashi.
+     *
+     * C'est le motif qui a deja produit une faille sur ce depot — « le prix
+     * vient du client ». Le centroide de la commune, lui, n'est pas
+     * falsifiable : il sert d'arbitre.
+     */
+    public function test_une_position_incoherente_avec_la_commune_declaree_est_ecartee(): void
+    {
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        $lubumbashi = Town::factory()->create([
+            'latitude' => self::LUBUMBASHI[0], 'longitude' => self::LUBUMBASHI[1],
+        ]);
+
+        // Le client declare livrer a Lubumbashi mais annonce etre a la Gombe,
+        // a zero metre du restaurant.
+        $portee = $this->portee()->pour($restaurant, $lubumbashi, ...self::GOMBE);
+
+        $this->assertFalse($portee->autorise);
+    }
+
+    /** Une position coherente avec sa commune reste prioritaire. */
+    public function test_une_position_coherente_prime_toujours_sur_le_centroide(): void
+    {
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        $gombe = Town::factory()->create([
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+
+        // Limete est a 9 km de la Gombe : plausible dans la meme agglomeration.
+        $portee = $this->portee()->pour($restaurant, $gombe, ...self::LIMETE);
+
+        $this->assertTrue($portee->autorise);
+        $this->assertGreaterThan(5.0, $portee->distance_km);
+    }
+
     public function test_sans_location_on_retombe_sur_le_centroide_de_la_commune(): void
     {
         $town = Town::factory()->create([
