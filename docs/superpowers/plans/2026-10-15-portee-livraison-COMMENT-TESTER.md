@@ -133,7 +133,16 @@ Ce sont ceux qui cassent ce genre de fonctionnalité.
 
 Ce travail ne couvre **que** la distance de livraison des repas. Ne cherchez pas :
 
-- le cloisonnement des gérants par enseigne et par ville — Al-Dar Kinshasa et Al-Dar Lubumbashi partagent encore leurs commandes (lot 2) ;
+- le cas d'un gérant qui possède **plusieurs** restaurants (lot 2).
+
+  > **Précision, parce que ce document disait le contraire et c'était faux.**
+  > Deux restaurants portés par **deux comptes gérants différents** sont déjà
+  > cloisonnés aujourd'hui : chaque écran filtre sur le restaurant du compte
+  > connecté. Al-Dar Kinshasa ne voit pas les commandes d'Al-Dar Lubumbashi, et
+  > réciproquement. Ce qui manque est autre chose : un gérant qui possède
+  > **plusieurs succursales sous un seul compte** n'en voit qu'une seule, et
+  > sans ordre défini — c'est ce que le lot 2 corrige.
+
 - la ville d'origine des véhicules et les types de course A, B, C (lot 3).
 
 Les deux sont écrits dans le dossier de conception et auront leur propre livraison.
