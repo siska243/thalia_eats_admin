@@ -24,11 +24,17 @@ class Quotation
         public readonly ?DelivreryPrice $bracket = null,
         public readonly array $warnings = [],
         public readonly ?string $raison = null,
+        /**
+         * La phrase à montrer, quand le refus dépend d'un réglage et ne peut
+         * donc pas être figée côté client. Même principe que
+         * `BookingRefusee::$messageClient`.
+         */
+        public readonly ?string $message = null,
     ) {}
 
-    public static function refus(string $raison): self
+    public static function refus(string $raison, ?string $message = null): self
     {
-        return new self(false, 0.0, 0.0, 0.0, 0.0, null, null, [], $raison);
+        return new self(false, 0.0, 0.0, 0.0, 0.0, null, null, [], $raison, $message);
     }
 
     /**
@@ -50,6 +56,7 @@ class Quotation
             'bracket_id' => $this->bracket?->id,
             'warnings' => $this->warnings,
             'raison' => $this->raison,
+            'message' => $this->message,
         ];
     }
 }

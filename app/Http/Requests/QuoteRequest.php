@@ -22,6 +22,10 @@ class QuoteRequest extends FormRequest
             'products' => ['required', 'array', 'min:1', 'max:100'],
             'products.*.uid' => ['required', 'string'],
             'products.*.quantity' => ['required', 'integer', 'min:1'],
+            // Optionnels : les applications déjà installées n'envoient pas de
+            // position, et le centroïde de la commune prend le relais.
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180'],
         ];
     }
 

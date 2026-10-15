@@ -51,7 +51,13 @@ class QuotationController extends Controller
             );
         }
 
-        $quotation = $this->quotations->quote($lines, $town, $expected_restaurant_id);
+        $quotation = $this->quotations->quote(
+            $lines,
+            $town,
+            $expected_restaurant_id,
+            $request->filled('lat') ? (float) $request->input('lat') : null,
+            $request->filled('lng') ? (float) $request->input('lng') : null,
+        );
 
         return ApiResponse::GET_DATA($this->present($quotation));
     }
@@ -104,6 +110,7 @@ class QuotationController extends Controller
                 'slug' => $quotation->currency->slug,
             ] : null,
             'raison' => $quotation->raison,
+            'message' => $quotation->message,
         ];
     }
 
@@ -128,7 +135,10 @@ class QuotationController extends Controller
         }
 
         $found = Product::query()
-            ->with('currency')
+            // `restaurant.town.city` : la règle de portée lit la ville du
+            // restaurant pour son rayon. Sans ce préchargement, chaque ligne
+            // du panier coûterait trois requêtes de plus.
+            ->with(['currency', 'restaurant.town.city'])
             ->whereIn('id', $ids)
             ->where('is_active', true)
             ->get()
