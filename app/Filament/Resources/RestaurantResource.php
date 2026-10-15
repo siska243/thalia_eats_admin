@@ -2,40 +2,45 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Resources\RestaurantResource\Pages\CreateRestaurant;
+use App\Filament\Resources\RestaurantResource\Pages\EditRestaurant;
+use App\Filament\Resources\RestaurantResource\Pages\ListRestaurants;
+use App\Filament\Resources\RestaurantResource\Pages\ManageProducts;
+use App\Models\Restaurant;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
 use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Pages\Page;
+use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use Filament\Pages\Page;
-use App\Filament\Resources\RestaurantResource\Pages\EditRestaurant;
-use App\Filament\Resources\RestaurantResource\Pages\ManageProducts;
-use App\Filament\Resources\RestaurantResource\Pages\ListRestaurants;
-use App\Filament\Resources\RestaurantResource\Pages\CreateRestaurant;
-use App\Filament\Resources\RestaurantResource\Pages;
-use App\Filament\Resources\RestaurantResource\RelationManagers;
-use App\Models\Restaurant;
-use Filament\Forms\Components\{DatePicker, FileUpload, KeyValue, TextInput, Textarea, MarkdownEditor, Repeater, RichEditor, Section, Select, TimePicker};
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class RestaurantResource extends Resource
 {
     protected static ?string $model = Restaurant::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-home-modern';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-home-modern';
 
-    protected static ?string $label = "Nos restaurants";
-    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
+    protected static ?string $label = 'Nos restaurants';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Thalia eats';
+
     protected static ?int $navigationSort = 2;
-    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -69,7 +74,28 @@ class RestaurantResource extends Resource
                     TextInput::make('email')
                         ->email()
                         ->maxLength(50),
-                        RichEditor::make('description')->columnSpanFull()
+                    /*
+                     * La position du restaurant.
+                     *
+                     * C'est elle qui decide si un client peut commander ici :
+                     * au-dela du rayon de sa ville, la commande est refusee.
+                     * Facultative — sans elle on retombe sur le centre de la
+                     * commune — mais une position precise evite de refuser un
+                     * client qui est a portee, ou d'en accepter un qui ne l'est
+                     * pas.
+                     */
+                    TextInput::make('location.lat')
+                        ->label('Latitude')
+                        ->helperText('Facultatif. Sans coordonnees, on utilise le centre de la commune.')
+                        ->numeric()
+                        ->minValue(-90)
+                        ->maxValue(90),
+                    TextInput::make('location.lng')
+                        ->label('Longitude')
+                        ->numeric()
+                        ->minValue(-180)
+                        ->maxValue(180),
+                    RichEditor::make('description')->columnSpanFull(),
                 ])->columns(2),
                 \Filament\Schemas\Components\Section::make('Information supplementaire')->schema([
                     Repeater::make('openHours')->schema([
@@ -79,17 +105,17 @@ class RestaurantResource extends Resource
                                 'mardi' => 'Mardi',
                                 'mercredi' => 'Mercredi',
                                 'jeudi' => 'Jeudi',
-                                'vendredi' => "Vendredi",
-                                "samedi" => "Samedi",
-                                'dimanche' => "Dimanche"
+                                'vendredi' => 'Vendredi',
+                                'samedi' => 'Samedi',
+                                'dimanche' => 'Dimanche',
                             ])->native(false)->required()->label('Le jour'),
                         TimePicker::make('startAt')->required()->label('Heure d\'ouverture'),
-                        TimePicker::make('endAt')->required()->label('Heure de fermeture')
+                        TimePicker::make('endAt')->required()->label('Heure de fermeture'),
                     ])->columns(3),
                     FileUpload::make('banniere')
                         ->disk('uploads_image')
                         ->acceptedFileTypes(['image/*'])->columnSpanFull(),
-                ])
+                ]),
             ]);
     }
 
@@ -127,7 +153,7 @@ class RestaurantResource extends Resource
                 ]),
             ])
             ->headerActions([
-                CreateAction::make()
+                CreateAction::make(),
             ])
             ->emptyStateActions([
                 CreateAction::make(),
@@ -139,10 +165,11 @@ class RestaurantResource extends Resource
         return $page->generateNavigationItems([
             // ...
             EditRestaurant::class,
-            ManageProducts::class
+            ManageProducts::class,
 
         ]);
     }
+
     public static function getRelations(): array
     {
         return [
@@ -160,7 +187,7 @@ class RestaurantResource extends Resource
         ];
     }
 
-    public static function toSlug($string): String
+    public static function toSlug($string): string
     {
         return Str::slug($string);
     }
