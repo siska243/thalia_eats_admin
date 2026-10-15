@@ -11,6 +11,7 @@ use App\Models\Precommande;
 use App\Models\Product;
 use App\Models\Town;
 use App\Services\PrecommandeService;
+use App\Services\QuotationService;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\LibPhoneNumber;
@@ -51,7 +52,7 @@ class PrecommandeController extends Controller
             return ApiResponse::BAD_REQUEST(
                 $e->raison,
                 'Oups',
-                $this->messageDeRefus($e->raison)
+                $e->messageClient ?: $this->messageDeRefus($e->raison)
             );
         }
 
@@ -207,6 +208,9 @@ class PrecommandeController extends Controller
     {
         return match ($raison) {
             PrecommandeRefusee::AUCUN_TARIF_LIVRAISON => 'Nous ne livrons pas encore dans cette zone.',
+            // Repli : la phrase precise vient normalement des reglages, portee
+            // par l'exception. Celle-ci sert le jour ou elle manquerait.
+            QuotationService::RAISON_HORS_RAYON => 'Ce restaurant est trop loin de votre adresse de livraison.',
             PrecommandeRefusee::PANIER_HORS_TRANCHE => 'Ce panier dépasse nos tranches de livraison. Réduisez la commande ou passez par l\'application.',
             PrecommandeRefusee::REFERENCE_INDISPONIBLE => 'Une erreur technique empêche la création de la pré-commande, réessayez.',
             PrecommandeRefusee::TROP_DE_PRECOMMANDES => 'Vous avez déjà '.config('precommande.plafond_actives').' commandes en attente de paiement. Payez-en une ou attendez qu\'elles expirent avant d\'en créer une autre.',
