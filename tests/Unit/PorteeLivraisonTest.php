@@ -27,6 +27,9 @@ class PorteeLivraisonTest extends TestCase
 
     private const LUBUMBASHI = [-11.6600, 27.4800];
 
+    /** Casablanca : plus de 5 000 km de Kinshasa. */
+    private const MAROC = [33.5731, -7.5898];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -34,6 +37,7 @@ class PorteeLivraisonTest extends TestCase
         FoodSettings::fake([
             'max_delivery_radius_km' => 30.0,
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => false,
         ], loadMissingValues: false);
     }
 
@@ -293,6 +297,132 @@ class PorteeLivraisonTest extends TestCase
         $portee = $this->portee()->pour($restaurant->fresh(), null, ...self::LIMETE);
 
         $this->assertFalse($portee->autorise);
+    }
+
+    // --- La position physique du client -------------------------------------
+
+    /** Allume l'option sans toucher aux autres reglages. */
+    private function avecPositionClient(bool $actif): void
+    {
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => $actif,
+        ], loadMissingValues: false);
+    }
+
+    /**
+     * Option eteinte : la position du client n'existe pas pour la regle.
+     *
+     * C'est le comportement d'aujourd'hui, et le defaut. Commander pour sa
+     * famille a Kinshasa depuis le Maroc doit rester possible.
+     */
+    public function test_option_eteinte_la_position_du_client_est_ignoree(): void
+    {
+        $this->avecPositionClient(false);
+
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        // Le client est au Maroc, la livraison se fait a Limete.
+        $portee = $this->portee()->pour(
+            $restaurant, null, self::LIMETE[0], self::LIMETE[1], self::MAROC,
+        );
+
+        $this->assertTrue($portee->autorise);
+    }
+
+    /**
+     * Option allumee, client trop loin : refuse, meme si la livraison est
+     * a cote du restaurant.
+     *
+     * « Je suis au Maroc, je dois voir que les restaurants proches. »
+     */
+    public function test_option_allumee_un_client_trop_loin_est_refuse(): void
+    {
+        $this->avecPositionClient(true);
+
+        $restaurant = Restaurant::factory()
+            ->located(...self::GOMBE)
+            ->create(['name' => 'Al-Dar']);
+
+        $portee = $this->portee()->pour(
+            $restaurant, null, self::LIMETE[0], self::LIMETE[1], self::MAROC,
+        );
+
+        $this->assertFalse($portee->autorise);
+        $this->assertStringContainsString('Al-Dar', $portee->message);
+    }
+
+    /** Option allumee, client et livraison a portee : autorise. */
+    public function test_option_allumee_un_client_proche_passe(): void
+    {
+        $this->avecPositionClient(true);
+
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        $portee = $this->portee()->pour(
+            $restaurant, null, self::LIMETE[0], self::LIMETE[1], self::LIMETE,
+        );
+
+        $this->assertTrue($portee->autorise);
+    }
+
+    /**
+     * Option allumee, client devant le restaurant mais livraison lointaine :
+     * refuse.
+     *
+     * Sans ce cas, allumer l'option ouvrirait un contournement de la regle
+     * d'adresse : il suffirait d'etre sur place pour faire livrer n'importe ou.
+     */
+    public function test_option_allumee_une_livraison_lointaine_reste_refusee(): void
+    {
+        $this->avecPositionClient(true);
+
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        $lubumbashi = Town::factory()->create([
+            'latitude' => self::LUBUMBASHI[0], 'longitude' => self::LUBUMBASHI[1],
+        ]);
+
+        $portee = $this->portee()->pour(
+            $restaurant, $lubumbashi, null, null, self::GOMBE,
+        );
+
+        $this->assertFalse($portee->autorise);
+    }
+
+    /**
+     * Option allumee mais aucune position : on retombe sur l'adresse seule.
+     *
+     * Un client qui refuse la permission de localisation ne doit pas se
+     * retrouver devant un catalogue vide. C'est la doctrine de cette classe
+     * pour toute donnee manquante, et elle vaut ici aussi.
+     */
+    public function test_option_allumee_sans_position_rien_n_est_refuse_de_ce_fait(): void
+    {
+        $this->avecPositionClient(true);
+
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        $portee = $this->portee()->pour(
+            $restaurant, null, self::LIMETE[0], self::LIMETE[1], null,
+        );
+
+        $this->assertTrue($portee->autorise);
+    }
+
+    /** Le point zero vaut aussi pour la position du client. */
+    public function test_une_position_client_a_zero_zero_est_ignoree(): void
+    {
+        $this->avecPositionClient(true);
+
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        $portee = $this->portee()->pour(
+            $restaurant, null, self::LIMETE[0], self::LIMETE[1], [0.0, 0.0],
+        );
+
+        $this->assertTrue($portee->autorise);
     }
 
     public function test_une_ville_sans_surcharge_applique_le_rayon_global(): void

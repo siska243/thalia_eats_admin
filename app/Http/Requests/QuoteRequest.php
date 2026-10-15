@@ -26,6 +26,9 @@ class QuoteRequest extends FormRequest
             // position, et le centroïde de la commune prend le relais.
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'numeric', 'between:-180,180'],
+            // La position physique du client, distincte du lieu de livraison.
+            'client_lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'client_lng' => ['nullable', 'numeric', 'between:-180,180'],
         ];
     }
 

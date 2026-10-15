@@ -164,6 +164,8 @@ class CommandeController extends Controller
         ?float $lat = null,
         ?float $lng = null,
         string $cle = 'uid',
+        /** @var array{0: float, 1: float}|null Ou se trouve physiquement le client. */
+        ?array $positionClient = null,
     ): ?JsonResponse {
         $ids = collect($products ?? [])
             ->map(fn ($ligne) => Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null))
@@ -186,7 +188,24 @@ class CommandeController extends Controller
             $town,
             $lat,
             $lng,
+            $positionClient,
         );
+    }
+
+    /**
+     * Ou se trouve physiquement le client, quand il l'envoie.
+     *
+     * Distinct du lieu de LIVRAISON : les deux different des qu'on commande
+     * pour quelqu'un d'autre. Le serveur ne s'en sert que si l'administration
+     * a allume l'option.
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    private function positionClientDe(Request $request): ?array
+    {
+        return $request->filled('client_lat') && $request->filled('client_lng')
+            ? [(float) $request->input('client_lat'), (float) $request->input('client_lng')]
+            : null;
     }
 
     /**
@@ -205,11 +224,13 @@ class CommandeController extends Controller
         ?Town $town,
         ?float $lat = null,
         ?float $lng = null,
+        /** @var array{0: float, 1: float}|null */
+        ?array $positionClient = null,
     ): ?JsonResponse {
         $portees = app(PorteeLivraison::class);
 
         $refus = $restaurants
-            ->map(fn (Restaurant $restaurant) => $portees->pour($restaurant, $town, $lat, $lng))
+            ->map(fn (Restaurant $restaurant) => $portees->pour($restaurant, $town, $lat, $lng, $positionClient))
             ->first(fn (Portee $portee) => ! $portee->autorise);
 
         if (! $refus) {
@@ -266,6 +287,8 @@ class CommandeController extends Controller
                 $town,
                 isset($adresse['lat']) ? (float) $adresse['lat'] : null,
                 isset($adresse['long']) ? (float) $adresse['long'] : null,
+                'uid',
+                $this->positionClientDe($request),
             )) {
                 return $refus;
             }
@@ -491,6 +514,10 @@ class CommandeController extends Controller
                 $town,
                 $request->filled('lat') ? (float) $request->input('lat') : null,
                 $request->filled('long') ? (float) $request->input('long') : null,
+                // Cinquieme argument : la position du client, pas une cle de
+                // produit — `refuserSiHorsPortee` part de restaurants deja
+                // charges et n'a pas de liste de produits a decoder.
+                $this->positionClientDe($request),
             )) {
                 return $refus;
             }
@@ -1052,6 +1079,8 @@ class CommandeController extends Controller
                 $town,
                 isset($adresse['lat']) ? (float) $adresse['lat'] : null,
                 isset($adresse['long']) ? (float) $adresse['long'] : null,
+                'uid',
+                $this->positionClientDe($request),
             )) {
                 return $refus;
             }

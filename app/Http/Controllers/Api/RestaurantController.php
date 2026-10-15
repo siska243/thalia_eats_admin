@@ -62,10 +62,21 @@ class RestaurantController extends Controller
         $lat = $request->filled('lat') ? (float) $request->input('lat') : null;
         $lng = $request->filled('lng') ? (float) $request->input('lng') : null;
 
+        /*
+         * Ou se trouve physiquement le client, quand il l'envoie.
+         *
+         * Distinct de `lat`/`lng`, qui designent le lieu de LIVRAISON : les
+         * deux different des qu'on commande pour quelqu'un d'autre. Le serveur
+         * ne s'en sert que si l'administration a allume l'option.
+         */
+        $positionClient = $request->filled('client_lat') && $request->filled('client_lng')
+            ? [(float) $request->input('client_lat'), (float) $request->input('client_lng')]
+            : null;
+
         $portees = app(PorteeLivraison::class);
 
         $restaurant->each(fn (Restaurant $item) => $item->setAttribute(
-            'portee', $portees->pour($item, $livraison, $lat, $lng),
+            'portee', $portees->pour($item, $livraison, $lat, $lng, $positionClient),
         ));
 
         return RestaurantResource::collection($restaurant);

@@ -33,6 +33,7 @@ class RecherchePlatsRayonTest extends TestCase
         FoodSettings::fake([
             'max_delivery_radius_km' => 30.0,
             'out_of_radius_message' => 'Trop loin.',
+            'use_client_position' => false,
         ], loadMissingValues: false);
     }
 

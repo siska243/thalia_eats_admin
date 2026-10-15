@@ -57,6 +57,9 @@ class QuotationController extends Controller
             $expected_restaurant_id,
             $request->filled('lat') ? (float) $request->input('lat') : null,
             $request->filled('lng') ? (float) $request->input('lng') : null,
+            $request->filled('client_lat') && $request->filled('client_lng')
+                ? [(float) $request->input('client_lat'), (float) $request->input('client_lng')]
+                : null,
         );
 
         return ApiResponse::GET_DATA($this->present($quotation));

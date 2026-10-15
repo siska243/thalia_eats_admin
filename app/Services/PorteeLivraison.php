@@ -36,24 +36,53 @@ class PorteeLivraison
 
     public function __construct(private readonly FoodSettings $settings) {}
 
+    /**
+     * @param  array{0: float, 1: float}|null  $positionClient  Ou se trouve
+     *                                                          physiquement le client, quand l'option d'administration le demande.
+     */
     public function pour(
         Restaurant $restaurant,
         ?Town $livraison = null,
         ?float $lat = null,
         ?float $lng = null,
+        ?array $positionClient = null,
     ): Portee {
         $depuis = $this->positionDuRestaurant($restaurant);
+
+        if ($depuis === null) {
+            return Portee::sansControle();
+        }
+
+        $rayon = $this->rayonPour($restaurant);
+
+        /*
+         * Le client doit-il aussi etre a portee ?
+         *
+         * Option d'administration, eteinte par defaut. Allumee, se trouver
+         * loin suffit a refuser : « je suis au Maroc, je dois voir que les
+         * restaurants proches ». Le controle de LIVRAISON reste applique
+         * par-dessus — sinon allumer l'option ouvrirait un contournement, il
+         * suffirait d'etre sur place pour faire livrer n'importe ou.
+         *
+         * Position inconnue, permission refusee : on ne refuse rien de ce
+         * fait. Un catalogue vide pour une permission declinee serait pire que
+         * la regle qu'on cherche a tenir.
+         */
+        $refusClient = $this->refuserSurLaPositionDuClient($restaurant, $depuis, $rayon, $positionClient);
+
+        if ($refusClient !== null) {
+            return $refusClient;
+        }
+
         $vers = $this->positionDeLivraison($livraison, $lat, $lng);
 
-        if ($depuis === null || $vers === null) {
+        if ($vers === null) {
             return Portee::sansControle();
         }
 
         $distance = RestaurantGeo::distanceKm(
             $depuis['lat'], $depuis['lng'], $vers['lat'], $vers['lng'],
         );
-
-        $rayon = $this->rayonPour($restaurant);
 
         /*
          * Rayon inconnu : la distance est calculee et montree, mais rien n'est
@@ -74,6 +103,66 @@ class PorteeLivraison
             'distance' => $distance,
             'rayon' => $rayon,
         ]));
+    }
+
+    /**
+     * Le client est-il trop loin du restaurant ?
+     *
+     * Rend un refus, ou `null` quand il n'y a rien a opposer : option eteinte,
+     * position inconnue, point zero d'un GPS qui n'a pas fixe, ou rayon
+     * inconnu faute de reglages.
+     *
+     * @param  array{lat: float, lng: float}  $restaurantCoords
+     * @param  array{0: float, 1: float}|null  $positionClient
+     */
+    private function refuserSurLaPositionDuClient(
+        Restaurant $restaurant,
+        array $restaurantCoords,
+        float $rayon,
+        ?array $positionClient,
+    ): ?Portee {
+        if ($positionClient === null || is_infinite($rayon) || ! $this->positionClientActive()) {
+            return null;
+        }
+
+        $client = RestaurantGeo::coordinates([
+            'lat' => $positionClient[0] ?? null,
+            'lng' => $positionClient[1] ?? null,
+        ]);
+
+        if ($client === null || $this->estLePointZero($client)) {
+            return null;
+        }
+
+        $distance = RestaurantGeo::distanceKm(
+            $restaurantCoords['lat'], $restaurantCoords['lng'], $client['lat'], $client['lng'],
+        );
+
+        if ($distance <= $rayon) {
+            return null;
+        }
+
+        return new Portee(false, $distance, $rayon, __($this->message(), [
+            'restaurant' => $restaurant->name,
+            'distance' => $distance,
+            'rayon' => $rayon,
+        ]));
+    }
+
+    /**
+     * L'option est-elle allumee ?
+     *
+     * Meme precaution que `rayonGlobal()` : des reglages absents — migrations
+     * pas encore jouees — ne doivent pas faire tomber le catalogue. Dans le
+     * doute, on n'applique pas la regle.
+     */
+    private function positionClientActive(): bool
+    {
+        try {
+            return $this->settings->use_client_position;
+        } catch (MissingSettings) {
+            return false;
+        }
     }
 
     /**

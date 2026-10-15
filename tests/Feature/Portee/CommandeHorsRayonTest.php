@@ -48,6 +48,7 @@ class CommandeHorsRayonTest extends TestCase
         FoodSettings::fake([
             'max_delivery_radius_km' => 30.0,
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => false,
         ], loadMissingValues: false);
 
         foreach ([[1, 'En attente', 'en-attente'], [5, 'En attente paiement', 'en-attente-paiement']] as [$id, $titre, $slug]) {

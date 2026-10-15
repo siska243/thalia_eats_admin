@@ -30,6 +30,19 @@ class FoodSettings extends Settings
      */
     public string $out_of_radius_message;
 
+    /**
+     * La position physique du client compte-t-elle, en plus de son adresse ?
+     *
+     * Eteinte, seule l'adresse de livraison decide : on peut commander pour
+     * sa famille a Kinshasa depuis n'importe ou. Allumee, il faut aussi se
+     * trouver a portee du restaurant — « je suis au Maroc, je dois voir que
+     * les restaurants proches ».
+     *
+     * Les deux usages sont legitimes et s'excluent : c'est a
+     * l'administration de trancher, pas au code.
+     */
+    public bool $use_client_position;
+
     public static function group(): string
     {
         return 'food';

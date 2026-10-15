@@ -52,6 +52,8 @@ class QuotationService
         ?int $expected_restaurant_id = null,
         ?float $lat = null,
         ?float $lng = null,
+        /** @var array{0: float, 1: float}|null Ou se trouve physiquement le client. */
+        ?array $positionClient = null,
     ): Quotation {
         if ($lines === []) {
             return Quotation::refus(self::RAISON_PANIER_VIDE);
@@ -109,7 +111,7 @@ class QuotationService
         $restaurant = $lines[array_key_first($lines)]['product']->restaurant;
 
         if ($restaurant !== null) {
-            $portee = $this->portee->pour($restaurant, $town, $lat, $lng);
+            $portee = $this->portee->pour($restaurant, $town, $lat, $lng, $positionClient);
 
             if (! $portee->autorise) {
                 return Quotation::refus(self::RAISON_HORS_RAYON, $portee->message);
