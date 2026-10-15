@@ -8,6 +8,7 @@ use App\Models\Town;
 use App\Services\PorteeLivraison;
 use App\Settings\FoodSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -39,6 +40,20 @@ class PorteeLivraisonTest extends TestCase
     private function portee(): PorteeLivraison
     {
         return app(PorteeLivraison::class);
+    }
+
+    /**
+     * Efface les reglages ET l'instance truquee du conteneur.
+     *
+     * Supprimer les lignes ne suffit pas : `FoodSettings::fake()` a deja
+     * enregistre un objet charge dans le conteneur, et il continuerait de
+     * repondre. C'est l'etat reel d'un serveur dont les migrations n'ont pas
+     * tourne qu'on veut reproduire.
+     */
+    private function sansAucunReglage(): void
+    {
+        DB::table('settings')->where('group', 'food')->delete();
+        app()->forgetInstance(FoodSettings::class);
     }
 
     public function test_un_restaurant_dans_le_rayon_est_autorise(): void
@@ -156,6 +171,46 @@ class PorteeLivraisonTest extends TestCase
 
         // 9 km entre Gombe et Limete, rayon 5 : refuse.
         $portee = $this->portee()->pour($restaurant->fresh(), null, ...self::LIMETE);
+        $this->assertFalse($portee->autorise);
+    }
+
+    /**
+     * Les reglages absents ne cassent pas le catalogue.
+     *
+     * `settings` peut etre vide : migrations pas encore jouees apres un
+     * deploiement — c'est deja arrive en production (T76, 500 avec 23
+     * migrations en attente). La portee est alors inconnue, et une portee
+     * inconnue n'interdit rien. Le contraire ferait tomber la page la plus
+     * consultee de l'application pour un reglage manquant.
+     */
+    public function test_des_reglages_absents_n_empechent_pas_de_commander(): void
+    {
+        $this->sansAucunReglage();
+
+        $restaurant = Restaurant::factory()->located(...self::LUBUMBASHI)->create();
+
+        $portee = $this->portee()->pour($restaurant, null, ...self::GOMBE);
+
+        $this->assertTrue($portee->autorise);
+        $this->assertNull($portee->rayon_km);
+        $this->assertNull($portee->message);
+    }
+
+    /** Une ville qui a son rayon n'a pas besoin du reglage global. */
+    public function test_le_rayon_d_une_ville_s_applique_meme_sans_reglage_global(): void
+    {
+        $this->sansAucunReglage();
+
+        $city = City::factory()->create([
+            'title' => 'Kinshasa', 'is_active' => true, 'max_delivery_radius_km' => 5.0,
+        ]);
+        $town = Town::factory()->create(['city_id' => $city->id]);
+        $restaurant = Restaurant::factory()
+            ->located(...self::GOMBE)
+            ->create(['town_id' => $town->id]);
+
+        $portee = $this->portee()->pour($restaurant->fresh(), null, ...self::LIMETE);
+
         $this->assertFalse($portee->autorise);
     }
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Restaurant;
 use App\Models\Town;
 use App\Settings\FoodSettings;
+use Spatie\LaravelSettings\Exceptions\MissingSettings;
 
 /**
  * Ce restaurant peut-il livrer a cet endroit ?
@@ -43,12 +44,21 @@ class PorteeLivraison
 
         $rayon = $this->rayonPour($restaurant);
 
+        /*
+         * Rayon inconnu : la distance est calculee et montree, mais rien n'est
+         * refuse. Cf. `rayonGlobal()` — un reglage manquant ne ferme pas la
+         * boutique.
+         */
+        if (is_infinite($rayon)) {
+            return new Portee(true, $distance);
+        }
+
         // Borne inclusive : un restaurant pile sur la limite livre.
         if ($distance <= $rayon) {
             return new Portee(true, $distance, $rayon);
         }
 
-        return new Portee(false, $distance, $rayon, __($this->settings->out_of_radius_message, [
+        return new Portee(false, $distance, $rayon, __($this->message(), [
             'restaurant' => $restaurant->name,
             'distance' => $distance,
             'rayon' => $rayon,
@@ -66,7 +76,39 @@ class PorteeLivraison
     public function rayonPour(Restaurant $restaurant): float
     {
         return $restaurant->town?->city?->max_delivery_radius_km
-            ?? $this->settings->max_delivery_radius_km;
+            ?? $this->rayonGlobal();
+    }
+
+    /**
+     * Le rayon par defaut, ou l'infini quand il n'est pas reglable.
+     *
+     * `settings` peut etre vide : migrations pas encore jouees apres un
+     * deploiement. C'est deja arrive en production, et la page la plus
+     * consultee de l'application ne doit pas tomber en 500 pour autant.
+     *
+     * L'infini dit « aucune borne connue » sans obliger chaque appelant a
+     * traiter un null : `min($radius, INF)` rend le rayon du client, et
+     * `$distance <= INF` laisse passer. Une portee inconnue n'interdit rien,
+     * comme une position inconnue.
+     */
+    private function rayonGlobal(): float
+    {
+        try {
+            return $this->settings->max_delivery_radius_km;
+        } catch (MissingSettings) {
+            return INF;
+        }
+    }
+
+    /** La phrase de refus, avec un repli si le reglage manque. */
+    private function message(): string
+    {
+        try {
+            return $this->settings->out_of_radius_message;
+        } catch (MissingSettings) {
+            return ':restaurant est à :distance km de votre adresse de livraison, '
+                .'au-delà de notre rayon de livraison de :rayon km.';
+        }
     }
 
     /** @return array{lat: float, lng: float}|null */
