@@ -14,6 +14,8 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\StatusPayement;
 use App\Models\Town;
+use App\Services\Portee;
+use App\Services\PorteeLivraison;
 use App\Services\Quotation;
 use App\Services\QuotationService;
 use App\Services\Suivi\SuiviPositions;
@@ -138,6 +140,64 @@ class CommandeController extends Controller
     }
 
     /**
+     * Refuse une commande dont le restaurant est trop loin de la livraison.
+     *
+     * Jumelle de `refuserSiRestaurantFerme`, et pour la meme raison : une
+     * regle qui ne vit que dans les ecrans ne protege rien. Le proprietaire,
+     * le 15 octobre : « une personne a Kinshasa ne peut pas commander dans un
+     * restaurant au bas-Congo ».
+     *
+     * La regle elle-meme vit sur `PorteeLivraison`, une seule fois, et c'est
+     * elle qui decide quoi faire d'une position manquante — jamais ce
+     * controleur.
+     *
+     * Elle n'est appelee que la ou une adresse de livraison existe :
+     * `store()` et `valide()`. Le panier (`addProduct`) n'en a pas, et une
+     * distance ne se calcule pas sans destination.
+     *
+     * @param  array<int, array<string, mixed>>|null  $products
+     */
+    private function refuserSiRestaurantTropLoin(
+        ?array $products,
+        ?Town $town,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $cle = 'uid',
+    ): ?JsonResponse {
+        $ids = collect($products ?? [])
+            ->map(fn ($ligne) => Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null))
+            ->filter(fn ($id) => $id !== false && $id !== '' && ctype_digit((string) $id))
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (! $ids) {
+            return null;
+        }
+
+        $portees = app(PorteeLivraison::class);
+
+        $refus = Product::query()
+            ->with('restaurant.town.city')
+            ->whereIn('id', $ids)
+            ->get()
+            ->pluck('restaurant')
+            ->filter()
+            ->unique('id')
+            ->map(fn (Restaurant $restaurant) => $portees->pour($restaurant, $town, $lat, $lng))
+            ->first(fn (Portee $portee) => ! $portee->autorise);
+
+        if (! $refus) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            ['distance_km' => $refus->distance_km, 'rayon_km' => $refus->rayon_km],
+            __('Hors zone de livraison'),
+            $refus->message,
+        );
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(CommandeRequest $request)
@@ -172,6 +232,17 @@ class CommandeController extends Controller
             }
 
             $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
+
+            // Avant toute ecriture : une commande posee puis refusee laisserait
+            // une ligne orpheline, et le client la verrait dans sa liste.
+            if ($refus = $this->refuserSiRestaurantTropLoin(
+                $products,
+                $town,
+                isset($adresse['lat']) ? (float) $adresse['lat'] : null,
+                isset($adresse['long']) ? (float) $adresse['long'] : null,
+            )) {
+                return $refus;
+            }
 
             if (! $commande) {
 
@@ -925,6 +996,18 @@ class CommandeController extends Controller
 
             $town = Town::query()->where('slug', ! empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
 
+            // Avant tout appel a la passerelle, comme le refus de restaurant
+            // ferme juste au-dessus : un debit lance pour une livraison
+            // impossible est pire qu'un refus.
+            if ($refus = $this->refuserSiRestaurantTropLoin(
+                $products,
+                $town,
+                isset($adresse['lat']) ? (float) $adresse['lat'] : null,
+                isset($adresse['long']) ? (float) $adresse['long'] : null,
+            )) {
+                return $refus;
+            }
+
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
 
             $getExistOrder = Commande::query()->nonReglee()->where('user_id', $user?->id)->first();
@@ -1392,7 +1475,7 @@ class CommandeController extends Controller
     {
         try {
             event(new PayementEvent($orderNumber));
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             logger()->warning('Diffusion paiement Pusher echouee : '.$e->getMessage());
         }
     }
