@@ -57,6 +57,7 @@ class BookingPricing
         string $mode = self::MODE_HOURLY,
         ?CourseType $courseType = null,
         bool $parking = false,
+        ?float $tarifFige = null,
     ): BookingQuote {
         if ($endsAt->lessThanOrEqualTo($startsAt)) {
             throw new InvalidArgumentException('La fin doit suivre le debut.');
@@ -70,9 +71,18 @@ class BookingPricing
             throw new InvalidArgumentException("Ce vehicule n'est pas propose a la journee.");
         }
 
-        // Le tarif du type s'il existe, celui du vehicule sinon. La lecture
-        // vit sur le modele, une seule fois.
-        $unitPrice = $vehicle->tarifPour($courseType, $mode)
+        /*
+         * Le tarif FIGE l'emporte sur tout.
+         *
+         * Une reservation deja prise garde le prix convenu : changer le tarif
+         * du vehicule ne doit pas reprendre une course en cours, ni une course
+         * dont le client a deja paye l'acompte. L'appelant le fournit quand il
+         * rechiffre une reservation existante sans en changer l'offre.
+         *
+         * Sinon : le tarif du type s'il existe, celui du vehicule par defaut.
+         * La lecture vit sur le modele, une seule fois.
+         */
+        $unitPrice = $tarifFige ?? $vehicle->tarifPour($courseType, $mode)
             ?? ($mode === self::MODE_DAILY
                 ? (float) $vehicle->daily_rate
                 : (float) $vehicle->hourly_rate);
@@ -93,11 +103,11 @@ class BookingPricing
          * la propose pas ne facture rien, meme si l'appelant la demande.
          */
         $parkingFee = $parking
-            ? round(($courseType?->tarifParking() ?? 0.0) * $this->billableHours($startsAt, $endsAt), 2)
+            ? round($vehicle->tarifParkingPour($courseType) * $this->billableHours($startsAt, $endsAt), 2)
             : 0.0;
 
         $total = round($base + $parkingFee, 2);
-        $deposit = round($total * $this->settings->deposit_percentage / 100, 2);
+        $deposit = round($total * $this->pourcentageAcompte($vehicle) / 100, 2);
 
         return new BookingQuote(
             mode: $mode,
@@ -120,10 +130,41 @@ class BookingPricing
         );
     }
 
-    /** Un vehicule sans tarif journalier n'est propose qu'a l'heure. */
+    /**
+     * La journee est-elle proposee ?
+     *
+     * Elle se COCHE en administration, et ne se deduit plus de la presence
+     * d'un tarif : un vehicule qu'on ne veut plus louer a la journee n'avait
+     * aucun moyen de le dire, sinon effacer son tarif — qui sert encore a
+     * l'affichage.
+     *
+     * La case ET le tarif : cocher sans prix ne propose rien, parce que le
+     * client ne pourrait pas savoir ce qu'il paie.
+     */
     public function estProposeALaJournee(Vehicle $vehicle): bool
     {
-        return $vehicle->daily_rate !== null && (float) $vehicle->daily_rate > 0;
+        return (bool) $vehicle->allows_daily
+            && $vehicle->daily_rate !== null
+            && (float) $vehicle->daily_rate > 0;
+    }
+
+    /** Jumelle de la precedente, pour l'heure. */
+    public function estProposeALHeure(Vehicle $vehicle): bool
+    {
+        return (bool) $vehicle->allows_hourly && (float) $vehicle->hourly_rate > 0;
+    }
+
+    /**
+     * L'acompte applique : celui du vehicule, celui des reglages sinon.
+     *
+     * **La lecture vit ici, une seule fois.** Le devis et l'affichage posent
+     * la meme question, et deux lectures finiraient par diverger.
+     */
+    public function pourcentageAcompte(Vehicle $vehicle): float
+    {
+        return $vehicle->deposit_percentage !== null
+            ? (float) $vehicle->deposit_percentage
+            : (float) $this->settings->deposit_percentage;
     }
 
     /**

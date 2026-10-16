@@ -6,6 +6,7 @@ use App\Helpers\ImageUrl;
 use App\Models\CourseType;
 use App\Models\Town;
 use App\Models\Vehicle;
+use App\Services\Rental\BookingPricing;
 use App\Wrappers\Cipher;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -39,6 +40,27 @@ class VehicleResource extends JsonResource
                 ? (float) $this->resource->daily_rate
                 : null,
             'currency' => $this->resource->currency,
+
+            /*
+             * Ce que ce vehicule propose, et ce qu'il impose.
+             *
+             * « Toute les informations relatives a la location doivent
+             * apparaitre. » L'ecran ne devine plus rien : il affiche les modes
+             * coches, la duree minimale et l'acompte reellement appliques.
+             *
+             * `minimum_hours` reste NUL quand le vehicule n'impose rien : les
+             * bornes generales et le type de course s'appliquent alors, et
+             * l'ecran ne doit pas annoncer une contrainte qui n'existe pas.
+             *
+             * `deposit_percentage`, lui, est TOUJOURS rempli : c'est celui qui
+             * sera preleve, qu'il vienne du vehicule ou des reglages. Le
+             * client doit savoir ce qu'il paie en ligne, pas d'ou vient le
+             * chiffre.
+             */
+            'allows_hourly' => $this->pricing()->estProposeALHeure($this->resource),
+            'allows_daily' => $this->pricing()->estProposeALaJournee($this->resource),
+            'minimum_hours' => $this->resource->minimum_hours,
+            'deposit_percentage' => $this->pricing()->pourcentageAcompte($this->resource),
 
             /*
              * Le tarif qui S'APPLIQUE a la course demandee.
@@ -141,6 +163,12 @@ class VehicleResource extends JsonResource
      * Le type est resolu UNE FOIS par requete et non par vehicule : quinze
      * lignes de catalogue feraient autrement quinze lectures identiques.
      */
+    /** Le service de tarification, resolu une fois par requete. */
+    private function pricing(): BookingPricing
+    {
+        return once(fn () => app(BookingPricing::class));
+    }
+
     private function tarifApplique(string $mode, Request $request): ?float
     {
         $defaut = $mode === 'daily'

@@ -23,11 +23,26 @@ class Vehicle extends Model
         'hourly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
         'is_active' => 'boolean',
+        'allows_hourly' => 'boolean',
+        'allows_daily' => 'boolean',
+        'minimum_hours' => 'integer',
+        'deposit_percentage' => 'decimal:2',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (self $vehicle) {
+            /*
+             * La journee suit le tarif, SAUF decision contraire.
+             *
+             * C'est le comportement d'avant : un vehicule etait propose a la
+             * journee des qu'il avait un tarif journalier. L'administration
+             * peut desormais le decocher, mais ne rien dire doit continuer de
+             * vouloir dire ce que ça voulait dire.
+             */
+            $vehicle->allows_daily ??= $vehicle->daily_rate !== null && (float) $vehicle->daily_rate > 0;
+            $vehicle->allows_hourly ??= true;
+
             $vehicle->slug ??= Str::slug("{$vehicle->brand} {$vehicle->model} {$vehicle->plate_number}");
             $vehicle->reference ??= 'V-'.Str::upper(Str::random(8));
         });
@@ -90,6 +105,32 @@ class Vehicle extends Model
     public function coursePrices(): HasMany
     {
         return $this->hasMany(VehicleCoursePrice::class);
+    }
+
+    /**
+     * Le tarif du parking pour ce type, sur ce vehicule.
+     *
+     * Celui du vehicule s'il est saisi, celui du type sinon. ZERO est une
+     * valeur a part entiere — « le parking est offert » — et c'est pourquoi la
+     * colonne est nullable plutot que defaut zero : un tarif absent laisse le
+     * type decider, un zero saisi dit que le client ne paie pas.
+     *
+     * C'est le TYPE qui decide si l'option existe : un type sans option ne
+     * facture rien, quel que soit le tarif saisi sur le vehicule.
+     */
+    public function tarifParkingPour(?CourseType $type): float
+    {
+        if (! $type?->parking_option) {
+            return 0.0;
+        }
+
+        $ligne = $this->relationLoaded('coursePrices')
+            ? $this->coursePrices->firstWhere('course_type_id', $type->id)
+            : $this->coursePrices()->where('course_type_id', $type->id)->first();
+
+        return $ligne?->parking_hourly_fee !== null
+            ? (float) $ligne->parking_hourly_fee
+            : $type->tarifParking();
     }
 
     /**
