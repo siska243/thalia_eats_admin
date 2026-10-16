@@ -90,6 +90,16 @@ class ConversionPrecommande
             $precommande->paied_at = now();
             $precommande->save();
 
+            /*
+             * Le stock part au paiement, ici aussi.
+             *
+             * Une pre-commande convertie est une commande payee comme une
+             * autre : l'oublier laisserait un chemin par lequel on vend sans
+             * jamais decompter. APRES l'ecriture des lignes, puisque c'est
+             * d'elles que le retrait se deduit.
+             */
+            $commande->decrementerLesStocks();
+
             return $commande;
         });
     }

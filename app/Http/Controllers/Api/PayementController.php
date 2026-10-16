@@ -274,6 +274,12 @@ class PayementController extends Controller
                     $order->paied_at = now()->format('Y-m-d H:i:s');
                     $order->save();
 
+                    // Le stock part au paiement, et une seule fois. Ce chemin
+                    // ecrit `paied_at` SANS CONDITION : un webhook rejoue
+                    // repasserait ici, et c'est `stock_decremente_at` qui
+                    // l'empeche de retirer deux fois.
+                    $order->decrementerLesStocks();
+
                     $user = CurrentHelpers::getUserByOrder($order);
 
                     if ($user) {

@@ -32,6 +32,21 @@ class ProductResource extends JsonResource
             'picture' => ImageUrl::make($request, $this->picture),
             'is_promotional' => $this->is_promotional,
             'is_in_forward' => $this->is_in_forward,
+            /*
+             * Le stock, tel que les applications doivent le lire.
+             *
+             * `stock_disponible` a null veut dire « non suivi » — ni compteur
+             * a afficher, ni limite a opposer. C'est l'etat de tout le
+             * catalogue d'aujourd'hui, et l'ecran doit alors se comporter
+             * exactement comme avant.
+             *
+             * `epuise` est calcule ICI et non dans les applications : la regle
+             * vit sur `Product::estEpuise()`, une seule fois. Deux clients qui
+             * la recopient finissent par dire le contraire l'un de l'autre, et
+             * c'est deja arrive sur les horaires d'ouverture.
+             */
+            'stock_disponible' => $this->stock_quantity,
+            'epuise' => $this->resource->estEpuise(),
             'restaurant' => new RestaurantResource($this->resource->restaurant),
         ];
     }

@@ -141,6 +141,63 @@ class CommandeController extends Controller
     }
 
     /**
+     * Refuse une commande qui demande plus que le stock restant.
+     *
+     * Jumelle de `refuserSiRestaurantFerme`, et pour la meme raison : une
+     * regle qui ne vit que dans les ecrans ne protege rien. Le refus est
+     * oppose a l'ajout au panier ET au reglement — un panier rempli pendant
+     * qu'il restait du stock survit a la rupture, exactement comme il survit
+     * a la fermeture du restaurant.
+     *
+     * La regle elle-meme vit sur `Product::estEpuise()`, une seule fois.
+     *
+     * Un plat dont le stock n'est PAS suivi n'est jamais refuse : c'est ce qui
+     * garantit que le catalogue d'aujourd'hui, entierement non suivi, continue
+     * de se commander comme avant.
+     *
+     * @param  array<int, array<string, mixed>>|null  $products  Les lignes recues, portant un uid chiffre.
+     */
+    private function refuserSiProduitEpuise(?array $products, string $cle = 'product_id'): ?JsonResponse
+    {
+        $demande = [];
+
+        foreach ($products ?? [] as $ligne) {
+            $id = Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null);
+
+            if ($id === false || $id === '' || ! ctype_digit((string) $id)) {
+                continue;
+            }
+
+            // Un meme plat peut arriver sur plusieurs lignes : c'est le total
+            // demande qui doit tenir dans le stock, pas chaque ligne prise a
+            // part.
+            $demande[(int) $id] = ($demande[(int) $id] ?? 0) + max(1, (int) ($ligne['quantity'] ?? 1));
+        }
+
+        if (! $demande) {
+            return null;
+        }
+
+        $manquant = Product::query()
+            ->whereIn('id', array_keys($demande))
+            ->whereNotNull('stock_quantity')
+            ->get()
+            ->first(fn (Product $produit) => $produit->stock_quantity < $demande[$produit->id]);
+
+        if (! $manquant) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            ['product' => $manquant->title, 'stock_disponible' => (int) $manquant->stock_quantity],
+            __('Plat épuisé'),
+            $manquant->estEpuise()
+                ? __(':plat n\'est plus disponible pour le moment.', ['plat' => $manquant->title])
+                : __('Il ne reste que :reste :plat.', ['reste' => (int) $manquant->stock_quantity, 'plat' => $manquant->title]),
+        );
+    }
+
+    /**
      * Refuse une commande dont le restaurant est trop loin de la livraison.
      *
      * Jumelle de `refuserSiRestaurantFerme`, et pour la meme raison : une
@@ -378,6 +435,10 @@ class CommandeController extends Controller
             }
 
             if ($refus = $this->refuserSiRestaurantFerme($products)) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiProduitEpuise($products)) {
                 return $refus;
             }
 
@@ -925,6 +986,10 @@ class CommandeController extends Controller
 
                     $order->save();
 
+                    // Le stock part au paiement, et une seule fois : la regle
+                    // et sa garantie d'unicite vivent sur la commande.
+                    $order->decrementerLesStocks();
+
                 }
 
                 return ApiResponse::GET_DATA($status_paiement);
@@ -1064,6 +1129,10 @@ class CommandeController extends Controller
             // refus plus tard laisserait une commande posee, ou pire, un
             // debit lance pour un repas que personne ne prepare.
             if ($refus = $this->refuserSiRestaurantFerme($products, 'uid')) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiProduitEpuise($products, 'uid')) {
                 return $refus;
             }
 
