@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Settings\FoodSettings;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -60,7 +61,9 @@ class Product extends Model
      */
     public function estEpuise(): bool
     {
-        return $this->suitLeStock() && $this->stock_quantity <= 0;
+        return $this->suitLeStock()
+            && $this->stock_quantity <= 0
+            && FoodSettings::stockActif();
     }
 
     public function restaurant(): BelongsTo

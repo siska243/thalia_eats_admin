@@ -23,6 +23,7 @@ class ReglagesPorteeTest extends TestCase
             'out_of_radius_message' => 'Trop loin.',
             'use_client_position' => false,
             'city_first' => false,
+            'stock_actif' => true,
         ], loadMissingValues: false);
 
         $settings = app(FoodSettings::class);

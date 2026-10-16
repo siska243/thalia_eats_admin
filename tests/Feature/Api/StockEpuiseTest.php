@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Status;
 use App\Models\User;
+use App\Settings\FoodSettings;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -157,6 +158,50 @@ class StockEpuiseTest extends TestCase
                 ->where('status_id', Commande::STATUT_ATTENTE_PAIEMENT)
                 ->count(),
         );
+    }
+
+    // --- L'interrupteur general ----------------------------------------------
+
+    /**
+     * Eteint, plus aucun refus.
+     *
+     * Il existe pour couper la fonctionnalite d'un coup si elle se comporte
+     * mal en production, sans repasser sur chaque plat. C'est la seule chose
+     * qu'il fait : le decompte continue, sinon les quantites deriveraient
+     * pendant l'extinction et seraient fausses au rallumage.
+     */
+    public function test_l_interrupteur_eteint_laisse_tout_passer(): void
+    {
+        $this->reglerInterrupteur(false);
+
+        $this->ajouter($this->plat(0))->assertSuccessful();
+    }
+
+    /** Allume — l'etat normal — le refus reprend. */
+    public function test_l_interrupteur_allume_refuse_a_nouveau(): void
+    {
+        $this->reglerInterrupteur(true);
+
+        $this->ajouter($this->plat(0))->assertStatus(400);
+    }
+
+    /**
+     * Tous les reglages sont poses, et `loadMissingValues: false`.
+     *
+     * Une autre suite VIDE la table des reglages : un test qui ecrirait la
+     * seule ligne qui l'interesse passerait seul et echouerait en suite
+     * complete, sur l'une des autres proprietes devenue introuvable. C'est
+     * arrive a ce test-ci avant que je le reecrive.
+     */
+    private function reglerInterrupteur(bool $actif): void
+    {
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => false,
+            'city_first' => false,
+            'stock_actif' => $actif,
+        ], loadMissingValues: false);
     }
 
     // --- Ce que les applications recoivent -----------------------------------

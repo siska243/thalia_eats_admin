@@ -3,6 +3,7 @@
 namespace App\Settings;
 
 use Spatie\LaravelSettings\Settings;
+use Throwable;
 
 /**
  * Les reglages de la restauration.
@@ -54,8 +55,42 @@ class FoodSettings extends Settings
      */
     public bool $city_first;
 
+    /**
+     * Le suivi de stock est-il actif ?
+     *
+     * Le suivi se decide plat par plat, et c'est cette decision qui commande.
+     * Celui-ci ne sert qu'a tout eteindre d'un coup si la fonctionnalite se
+     * comporte mal en production, sans repasser sur chaque plat.
+     *
+     * Allume par defaut, contrairement aux autres reglages de ce groupe :
+     * eteint, il annulerait la decision que l'administration vient de prendre.
+     */
+    public bool $stock_actif;
+
     public static function group(): string
     {
         return 'food';
+    }
+
+    /**
+     * Le suivi de stock est-il actif ? Lu une seule fois pour tout le code.
+     *
+     * Repli sur VRAI quand la table des reglages ne repond pas — deploiement
+     * en cours, migration pas encore passee. Meme raisonnement que
+     * `ExpirationSettings::delai()`, et meme lecon que `/api/default` qui
+     * tombait en 500 des que `settings` etait vide : un reglage absent ne doit
+     * pas casser un chemin de commande.
+     *
+     * VRAI et non faux, parce que c'est l'etat normal : l'interrupteur ne sert
+     * qu'a eteindre en cas de probleme. Et repondre vrai n'elargit rien,
+     * aucun plat n'etant suivi tant qu'on ne l'a pas dit.
+     */
+    public static function stockActif(): bool
+    {
+        try {
+            return app(self::class)->stock_actif;
+        } catch (Throwable) {
+            return true;
+        }
     }
 }

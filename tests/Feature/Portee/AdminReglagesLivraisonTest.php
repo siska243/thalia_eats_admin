@@ -45,6 +45,7 @@ class AdminReglagesLivraisonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km.',
             'use_client_position' => false,
             'city_first' => false,
+            'stock_actif' => true,
         ],
         'rental' => [
             'deposit_percentage' => 10.0,

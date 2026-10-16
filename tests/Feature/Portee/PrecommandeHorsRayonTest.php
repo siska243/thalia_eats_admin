@@ -47,6 +47,7 @@ class PrecommandeHorsRayonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => false,
             'city_first' => false,
+            'stock_actif' => true,
         ], loadMissingValues: false);
 
         $this->currency = Currency::factory()->create();

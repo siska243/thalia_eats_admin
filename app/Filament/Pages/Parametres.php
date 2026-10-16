@@ -167,6 +167,14 @@ class Parametres extends SettingsPage
                                         ->helperText("Activé, deux adresses d'une même ville se livrent quelle que soit la distance. Le rayon ci-dessus ne sert plus que de repli : quand les deux villes diffèrent, ou quand l'une des deux n'est pas renseignée."),
                                 ]),
 
+                            Section::make('Stock des plats')
+                                ->description("Le suivi se decide PLAT PAR PLAT, depuis la fiche du plat. Cet interrupteur ne sert qu'a tout eteindre d'un coup.")
+                                ->schema([
+                                    Toggle::make('stock_actif')
+                                        ->label('Tenir compte du stock')
+                                        ->helperText("Eteint, plus aucun plat n'est annonce epuise et aucune commande n'est refusee pour cause de rupture, y compris ceux dont le stock est suivi. Le decompte, lui, continue : les quantites restent justes le jour ou vous rallumez. A n'eteindre qu'en cas de probleme."),
+                                ]),
+
                             Section::make('Position du client')
                                 ->description("Par defaut, seule l'adresse de livraison compte : on peut commander pour sa famille a Kinshasa depuis n'importe ou.")
                                 ->schema([

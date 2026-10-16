@@ -39,6 +39,7 @@ class PorteeLivraisonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => false,
             'city_first' => false,
+            'stock_actif' => true,
         ], loadMissingValues: false);
     }
 
@@ -310,6 +311,7 @@ class PorteeLivraisonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => $actif,
             'city_first' => false,
+            'stock_actif' => true,
         ], loadMissingValues: false);
     }
 
@@ -437,6 +439,7 @@ class PorteeLivraisonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => false,
             'city_first' => $actif,
+            'stock_actif' => true,
         ], loadMissingValues: false);
     }
 
@@ -592,6 +595,7 @@ class PorteeLivraisonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => true,
             'city_first' => true,
+            'stock_actif' => true,
         ], loadMissingValues: false);
 
         $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
@@ -625,6 +629,7 @@ class PorteeLivraisonTest extends TestCase
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => true,
             'city_first' => true,
+            'stock_actif' => true,
         ], loadMissingValues: false);
 
         $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);

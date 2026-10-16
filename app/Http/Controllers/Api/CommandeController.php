@@ -19,6 +19,7 @@ use App\Services\PorteeLivraison;
 use App\Services\Quotation;
 use App\Services\QuotationService;
 use App\Services\Suivi\SuiviPositions;
+use App\Settings\FoodSettings;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\FirebasePushNotification;
@@ -184,7 +185,17 @@ class CommandeController extends Controller
             ->get()
             ->first(fn (Product $produit) => $produit->stock_quantity < $demande[$produit->id]);
 
-        if (! $manquant) {
+        /*
+         * L'interrupteur general, eteint : on ne refuse plus rien.
+         *
+         * Lu ICI et non en entree : la quasi-totalite des commandes ne porte
+         * aucun plat suivi, et il serait absurde d'interroger les reglages a
+         * chaque panier pour une fonctionnalite que personne n'a activee.
+         *
+         * Le decompte, lui, CONTINUE pendant l'extinction : sinon les
+         * quantites deriveraient et seraient fausses au rallumage.
+         */
+        if (! $manquant || ! FoodSettings::stockActif()) {
             return null;
         }
 
