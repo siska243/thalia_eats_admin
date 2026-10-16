@@ -2,13 +2,18 @@
 
 namespace Tests\Feature\Rental;
 
+use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
 use App\Models\CourseType;
 use App\Models\Currency;
+use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
 use App\Settings\RentalSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -66,6 +71,16 @@ class VehiculeConfigurableTest extends TestCase
      * serveur verra. En production la question ne se pose pas : le vehicule
      * vient toujours d'une lecture.
      */
+    private function admin(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        Gate::before(fn () => true);
+        // Le garde est nomme : sans cela le panneau Filament ne reconnait pas
+        // l'administrateur et la page ne se monte pas.
+        $this->actingAs($admin, 'web');
+    }
+
     private function vehicule(array $attributs = []): Vehicle
     {
         return Vehicle::query()->create(array_merge([
@@ -221,6 +236,58 @@ class VehiculeConfigurableTest extends TestCase
         );
 
         $this->assertSame(0.0, $devis->parkingFee);
+    }
+
+    // --- L'ecran d'administration --------------------------------------------
+
+    /**
+     * Cocher un mode EXIGE son tarif.
+     *
+     * « Quand on coche propose a la location il faut mettre le prix et donner
+     * au client la possibilite de louer. » Cocher sans prix ne proposerait
+     * rien, et le client ne saurait pas ce qu'il paie.
+     */
+    public function test_cocher_la_journee_exige_son_tarif(): void
+    {
+        $this->admin();
+
+        Livewire::test(EditVehicle::class, ['record' => $this->vehicule()->getRouteKey()])
+            ->fillForm(['allows_daily' => true, 'daily_rate' => null])
+            ->call('save')
+            ->assertHasFormErrors(['daily_rate']);
+    }
+
+    /** Decocher la journee efface son tarif, au lieu de le laisser trainer. */
+    public function test_decocher_la_journee_efface_son_tarif(): void
+    {
+        $this->admin();
+
+        $vehicule = $this->vehicule();
+
+        Livewire::test(EditVehicle::class, ['record' => $vehicule->getRouteKey()])
+            ->fillForm(['allows_daily' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertNull($vehicule->fresh()->daily_rate);
+    }
+
+    /** Les modalites se saisissent sur la fiche. */
+    public function test_l_admin_saisit_la_duree_minimale_et_l_acompte(): void
+    {
+        $this->admin();
+
+        $vehicule = $this->vehicule();
+
+        Livewire::test(EditVehicle::class, ['record' => $vehicule->getRouteKey()])
+            ->fillForm(['minimum_hours' => 48, 'deposit_percentage' => 30])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $relu = $vehicule->fresh();
+
+        $this->assertSame(48, $relu->minimum_hours);
+        $this->assertSame(30.0, (float) $relu->deposit_percentage);
     }
 
     // --- Ce que le client recoit ---------------------------------------------

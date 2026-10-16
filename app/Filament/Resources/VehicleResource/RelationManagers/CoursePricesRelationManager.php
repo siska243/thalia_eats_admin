@@ -66,7 +66,23 @@ class CoursePricesRelationManager extends RelationManager
                 ->numeric()
                 ->minValue(0)
                 ->helperText('Laissé vide, le tarif journalier habituel s’applique.'),
-        ])->columns(3);
+
+            /*
+             * Le parking pour ce vehicule et ce type.
+             *
+             * ZERO veut dire OFFERT, et ce n'est pas la meme chose que vide :
+             * un tarif absent laisse le type decider, un zero saisi dit que le
+             * client ne paie pas. Sans cette distinction, offrir le parking
+             * serait impossible.
+             */
+            TextInput::make('parking_hourly_fee')
+                ->label('Parking')
+                ->prefix('$')
+                ->suffix('par heure')
+                ->numeric()
+                ->minValue(0)
+                ->helperText('Laissé vide : le tarif du type s’applique. Zéro : le parking est offert.'),
+        ])->columns(2);
     }
 
     public function table(Table $table): Table
@@ -88,6 +104,14 @@ class CoursePricesRelationManager extends RelationManager
                 TextColumn::make('daily_rate')
                     ->label('À la journée')
                     ->placeholder('tarif habituel')
+                    ->money(fn ($record) => $record->vehicle?->currency?->code ?? 'USD'),
+
+                TextColumn::make('parking_hourly_fee')
+                    ->label('Parking')
+                    // « Tarif du type » et « offert » ne se confondent pas :
+                    // l'un delegue, l'autre decide.
+                    ->placeholder('tarif du type')
+                    ->formatStateUsing(fn ($state) => (float) $state === 0.0 ? 'offert' : null)
                     ->money(fn ($record) => $record->vehicle?->currency?->code ?? 'USD'),
             ])
             ->headerActions([

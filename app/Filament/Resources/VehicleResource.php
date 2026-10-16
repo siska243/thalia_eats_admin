@@ -144,27 +144,76 @@ class VehicleResource extends Resource
                 ]),
 
             Section::make('Tarif')
-                ->description('Le prix est calculé par le serveur à partir de ce tarif : il ne vient jamais du client.')
+                ->description('Le prix est calculé par le serveur à partir de ce tarif : il ne vient jamais du client. Un tarif modifié ici ne touche pas les réservations déjà prises, qui gardent le prix convenu.')
                 ->columns(2)
                 ->schema([
+                    /*
+                     * La case ET le prix vont ensemble.
+                     *
+                     * Le proprietaire, le 16 octobre : « quand on coche
+                     * propose a la location il faut mettre le prix et donner
+                     * au client la possibilite de louer ». Cocher sans tarif
+                     * ne proposerait rien, et le client ne saurait pas ce
+                     * qu'il paie : le tarif devient donc obligatoire des que
+                     * le mode est coche, et grise sinon.
+                     */
+                    Toggle::make('allows_hourly')
+                        ->label("Location à l'heure")
+                        ->default(true)
+                        ->live()
+                        ->helperText('Le client peut réserver pour quelques heures.'),
+
+                    Toggle::make('allows_daily')
+                        ->label('Location à la journée')
+                        ->live()
+                        ->helperText('Le client peut réserver pour une ou plusieurs journées.'),
+
                     TextInput::make('hourly_rate')
                         ->label('Tarif horaire')
+                        ->prefix('$')
+                        ->suffix('par heure')
                         ->numeric()
                         ->minValue(0.01)
                         ->step(0.01)
-                        ->required(),
+                        ->required(fn (Get $get) => (bool) $get('allows_hourly'))
+                        ->disabled(fn (Get $get) => ! $get('allows_hourly'))
+                        ->dehydrated(),
 
-                    /*
-                     * Laisse vide, le vehicule n'est propose qu'a l'heure : le
-                     * mode journee ne s'affiche alors pas pour lui cote
-                     * client, plutot qu'un prix a zero.
-                     */
                     TextInput::make('daily_rate')
                         ->label('Tarif journalier')
-                        ->helperText('Laissez vide si ce véhicule ne se loue pas à la journée.')
+                        ->prefix('$')
+                        ->suffix('par jour')
                         ->numeric()
                         ->minValue(0.01)
-                        ->step(0.01),
+                        ->step(0.01)
+                        ->required(fn (Get $get) => (bool) $get('allows_daily'))
+                        ->disabled(fn (Get $get) => ! $get('allows_daily'))
+                        ->dehydrated()
+                        // Grise et non cache : Filament ne derive pas l'etat
+                        // d'un champ cache, et l'ancien tarif resterait en
+                        // base apres qu'on a decoche le mode.
+                        ->dehydrateStateUsing(fn ($state, Get $get) => $get('allows_daily') ? $state : null),
+
+                    /*
+                     * Les deux modalites propres au vehicule : la duree
+                     * minimale et l'acompte. Laissees vides, ce sont les
+                     * reglages generaux qui s'appliquent — et le parc existant
+                     * n'a rien a saisir.
+                     */
+                    TextInput::make('minimum_hours')
+                        ->label('Durée minimale')
+                        ->suffix('heures')
+                        ->numeric()
+                        ->minValue(1)
+                        ->helperText('Laissé vide, seules les durées générales s’appliquent. 24 h impose une journée pleine.'),
+
+                    TextInput::make('deposit_percentage')
+                        ->label('Acompte à la réservation')
+                        ->suffix('%')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(100)
+                        ->helperText('Laissé vide, c’est le pourcentage général des réglages. Le solde est réglé au chauffeur.'),
 
                     Select::make('currency_id')
                         ->label('Devise')
