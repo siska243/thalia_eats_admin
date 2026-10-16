@@ -10,6 +10,7 @@ use App\Models\DelivreryPrice;
 use App\Models\Product;
 use App\Models\Town;
 use App\Settings\FoodSettings;
+use Spatie\LaravelSettings\Exceptions\MissingSettings;
 
 class DefaultDataController extends Controller
 {
@@ -33,9 +34,29 @@ class DefaultDataController extends Controller
            * fonctionner a l'identique.
            */
             'reglages' => [
-                'position_client' => app(FoodSettings::class)->use_client_position,
+                'position_client' => self::positionClientActive(),
             ],
         ];
+    }
+
+    /**
+     * L'option de position, et faux si les reglages manquent.
+     *
+     * Cet endpoint est appele par TOUTES les applications au demarrage. Sans
+     * cette precaution il repondait 500 des que la table `settings` etait
+     * vide — migrations pas encore jouees apres un deploiement, ce qui est
+     * deja arrive en production — et plus aucune application ne demarrait.
+     *
+     * Faux dans le doute : on ne demande pas sa position a quelqu'un sur la
+     * foi d'un reglage qu'on n'a pas pu lire.
+     */
+    private static function positionClientActive(): bool
+    {
+        try {
+            return app(FoodSettings::class)->use_client_position;
+        } catch (MissingSettings) {
+            return false;
+        }
     }
 
     public function preview()
