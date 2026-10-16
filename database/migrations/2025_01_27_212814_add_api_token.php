@@ -14,12 +14,12 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             //
             $table->text('api_token')
-            ->after('email')
-            ->nullable();
+                ->after('email')
+                ->nullable();
 
             $table->text('creation_token')
-            ->after('api_token')
-            ->nullable();
+                ->after('api_token')
+                ->nullable();
         });
     }
 

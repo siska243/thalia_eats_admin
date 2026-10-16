@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use App\Wrappers\ApiResponse;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Hash;
@@ -26,36 +26,38 @@ class PasswordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'current_password'=>'min:4|required',
-            'password'=>'required|min:4',
-            'confirm_password'=>'same:password',
+            'current_password' => 'min:4|required',
+            'password' => 'required|min:4',
+            'confirm_password' => 'same:password',
         ];
     }
 
-    public function failedValidation(Validator $validator){
+    public function failedValidation(Validator $validator)
+    {
 
-        return ApiResponse::BAD_REQUEST($validator->errors(),'Oups','Veuillez reverifier les informations envoyées');
+        return ApiResponse::BAD_REQUEST($validator->errors(), 'Oups', 'Veuillez reverifier les informations envoyées');
     }
 
     public function withValidator($validator)
-{
-    // checks user current password
-    // before making changes
-    $validator->after(function ($validator) {
-        if ( !Hash::check($this->current_password, $this->user()->password) ) {
-            $validator->errors()->add('current_password', 'Your current password is incorrect.');
-        }
-    });
-    return;
- }
+    {
+        // checks user current password
+        // before making changes
+        $validator->after(function ($validator) {
+            if (! Hash::check($this->current_password, $this->user()->password)) {
+                $validator->errors()->add('current_password', 'Your current password is incorrect.');
+            }
+        });
+
+    }
+
     public function messages()
     {
         return [
-            'current_password.required' => "Le mot de passe est obligatoire",
-            'password.required' => "Le mot de passe est obligatoire",
-            'current_password.min' => "Le mot de passe doit contenir au moins 3 lettre",
-            'password.min' => "Le mot de passe doit contenir au moins 4 caracteres",
-            'confirm_password.same' => "Les mots de passe ne correspondent pas"
+            'current_password.required' => 'Le mot de passe est obligatoire',
+            'password.required' => 'Le mot de passe est obligatoire',
+            'current_password.min' => 'Le mot de passe doit contenir au moins 3 lettre',
+            'password.min' => 'Le mot de passe doit contenir au moins 4 caracteres',
+            'confirm_password.same' => 'Les mots de passe ne correspondent pas',
         ];
     }
 }

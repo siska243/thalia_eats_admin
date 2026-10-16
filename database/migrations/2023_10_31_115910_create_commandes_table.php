@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\CommandeProduct;
 use App\Models\DelivreryDriver;
 use App\Models\Status;
 use Illuminate\Database\Migrations\Migration;
@@ -16,11 +15,11 @@ return new class extends Migration
     {
         Schema::create('commandes', function (Blueprint $table) {
             $table->id();
-            $table->foreignIdFor(Status::class,'status_id')->nullable();
+            $table->foreignIdFor(Status::class, 'status_id')->nullable();
             $table->string('refernce')->unique();
             $table->float('global_price')->nullable();
             $table->float('price_delivery')->nullable();
-            $table->foreignIdFor(DelivreryDriver::class,'delivrery_driver_id')->nullable();
+            $table->foreignIdFor(DelivreryDriver::class, 'delivrery_driver_id')->nullable();
             $table->timestamp('cancel_at')->nullable();
             $table->timestamp('delivery_at')->nullable();
             $table->timestamp('paied_at')->nullable();

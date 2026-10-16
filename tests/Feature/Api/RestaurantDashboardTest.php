@@ -3,8 +3,8 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Commande;
-use App\Models\Currency;
 use App\Models\CommandeProduct;
+use App\Models\Currency;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\Status;

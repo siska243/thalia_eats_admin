@@ -20,31 +20,31 @@ class Product extends Model
 
         static::creating(function (Model $model) {
 
-            $value=Str::slug($model->title);
-            $md=uniqid();
-            $model->slug="{$value}-{$md}";
+            $value = Str::slug($model->title);
+            $md = uniqid();
+            $model->slug = "{$value}-{$md}";
         });
 
         static::updating(function (Model $model) {
-            $value=Str::slug($model->title);
-            $md=uniqid();
-            $model->slug="{$value}-{$md}";
+            $value = Str::slug($model->title);
+            $md = uniqid();
+            $model->slug = "{$value}-{$md}";
         });
     }
 
-    public function restaurant():BelongsTo
+    public function restaurant(): BelongsTo
     {
-        return $this->belongsTo(Restaurant::class,'restaurant_id');
+        return $this->belongsTo(Restaurant::class, 'restaurant_id');
     }
 
-    public function currency():BelongsTo
+    public function currency(): BelongsTo
     {
-        return $this->belongsTo(Currency::class,'currency_id');
+        return $this->belongsTo(Currency::class, 'currency_id');
     }
 
     public function sub_category_product(): BelongsTo
     {
-      return $this->belongsTo(SubCategoryProduct::class,'sub_category_product_id');
+        return $this->belongsTo(SubCategoryProduct::class, 'sub_category_product_id');
     }
 
     public function commande_product(): HasMany

@@ -2,17 +2,16 @@
 
 namespace App\Filament\Resources\BookingResource\RelationManagers;
 
-use Filament\Schemas\Schema;
-use Filament\Actions\CreateAction;
-use Filament\Actions\Action;
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
 use App\Models\BookingPayment;
+use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Tables;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -125,7 +124,7 @@ class PaymentsRelationManager extends RelationManager
 
                 TextColumn::make('amount')
                     ->label('Montant')
-                    ->formatStateUsing(fn ($state, BookingPayment $record) => number_format((float) $state, 2, ',', ' ') . ' ' . $record->currency?->code),
+                    ->formatStateUsing(fn ($state, BookingPayment $record) => number_format((float) $state, 2, ',', ' ').' '.$record->currency?->code),
 
                 TextColumn::make('paimentMethod.title')
                     ->label('Moyen')

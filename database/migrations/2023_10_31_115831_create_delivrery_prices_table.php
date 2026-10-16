@@ -15,10 +15,10 @@ return new class extends Migration
     {
         Schema::create('delivrery_prices', function (Blueprint $table) {
             $table->id();
-            $table->foreignIdFor(Town::class,'town_id');
+            $table->foreignIdFor(Town::class, 'town_id');
             $table->integer('interval_pricing');
             $table->float('frais');
-            $table->foreignIdFor(Currency::class,'currency_id');
+            $table->foreignIdFor(Currency::class, 'currency_id');
             $table->timestamps();
         });
     }

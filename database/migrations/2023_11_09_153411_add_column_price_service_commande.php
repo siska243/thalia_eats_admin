@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('adresse_delivery')->nullable();
             $table->string('reference_adresse')->nullable();
             $table->float('price_service')->nullable();
-            $table->foreignIdFor(Town::class,'town_id')->nullable();
+            $table->foreignIdFor(Town::class, 'town_id')->nullable();
             $table->boolean('reception')->default(false);
         });
     }

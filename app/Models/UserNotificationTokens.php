@@ -10,5 +10,4 @@ class UserNotificationTokens extends Model
 {
     /** @use HasFactory<UserNotificationTokensFactory> */
     use HasFactory;
-
 }

@@ -2,33 +2,27 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Fieldset;
-use Filament\Forms\Components\Toggle;
-use Filament\Schemas\Components\Utilities\Get;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\TagsColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use App\Filament\Resources\UserResource\Pages\ListUsers;
-use App\Filament\Resources\UserResource\Pages\CreateUser;
-use App\Filament\Resources\UserResource\Pages\EditUser;
 use App\Enums\Device;
 use App\Enums\MobilePermissions;
-use App\Filament\Resources\UserResource\Pages;
-use App\Filament\Resources\UserResource\RelationManagers;
+use App\Filament\Resources\UserResource\Pages\CreateUser;
+use App\Filament\Resources\UserResource\Pages\EditUser;
+use App\Filament\Resources\UserResource\Pages\ListUsers;
 use App\Models\User;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TagsColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Facades\Hash;
 use Rawilk\FilamentPasswordInput\Password;
 
@@ -38,9 +32,11 @@ class UserResource extends Resource
 
     protected static ?string $model = User::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user-group';
-    protected static ?string $label = "Nos utilisateurs";
-    protected static string | \UnitEnum | null $navigationGroup = 'Clients et partenaires';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+
+    protected static ?string $label = 'Nos utilisateurs';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Clients et partenaires';
 
     public static function form(Schema $schema): Schema
     {
@@ -64,14 +60,14 @@ class UserResource extends Resource
                             ->password()
                             ->required()
                             ->maxLength(255)
-                            ->hidden(fn($operation) => $operation == "edit"),
+                            ->hidden(fn ($operation) => $operation == 'edit'),
                         Select::make('type_user')->label('Type de compte')
                             ->options([
                                 'drivers' => 'Livreur',
                                 'restaurant' => 'Restaurant',
-                                'interne' => "Interne"
+                                'interne' => 'Interne',
                             ])
-                            ->required(fn($operation) => $operation == "create"),
+                            ->required(fn ($operation) => $operation == 'create'),
 
                         TextInput::make('phone')
                             ->tel()
@@ -89,8 +85,7 @@ class UserResource extends Resource
                                     ->multiple()
                                     ->preload()
                                     ->extraAttributes(['class' => 'text-primary-600'])
-                                    ->options(Device::getOptions())
-                                ,
+                                    ->options(Device::getOptions()),
 
                                 Select::make('mobile_permissions')
                                     ->multiple()
@@ -108,25 +103,23 @@ class UserResource extends Resource
                                 Password::make('password')
                                     ->label(__('Password'))
                                     ->password()
-                                    //->regex('/^(?=.*[A-Z])(?=.*[!@#$&*])(?=.*[0-9])(?=.*[a-z]).{8}/m')
+                                    // ->regex('/^(?=.*[A-Z])(?=.*[!@#$&*])(?=.*[0-9])(?=.*[a-z]).{8}/m')
                                     ->confirmed()
                                     ->autocomplete('password')
-                                    ->required(fn(Get $get): bool => $get('changePassword'))
+                                    ->required(fn (Get $get): bool => $get('changePassword'))
                                     ->dehydrateStateUsing(function ($state) {
                                         return Hash::make($state);
                                     })
-                                    //->validationAttribute(__('password must contain at least 8 characters, have at least 1 uppercase, 1 lowercase, 1 number, 1 special character.'))
-                                    ->hidden(fn(Get $get) => !$get('changePassword')),
+                                    // ->validationAttribute(__('password must contain at least 8 characters, have at least 1 uppercase, 1 lowercase, 1 number, 1 special character.'))
+                                    ->hidden(fn (Get $get) => ! $get('changePassword')),
                                 Password::make('password_confirmation')
                                     ->label(__('Confirm Password'))
                                     ->password()
-                                    ->hidden(fn(Get $get) => !$get('changePassword'))
-
+                                    ->hidden(fn (Get $get) => ! $get('changePassword')),
 
                             ])->columns(3),
 
-
-                    ])
+                    ]),
             ]);
 
     }
@@ -153,13 +146,11 @@ class UserResource extends Resource
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true)
-                ,
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 //

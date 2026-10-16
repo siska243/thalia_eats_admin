@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\StatusResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\StatusResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditStatus extends EditRecord

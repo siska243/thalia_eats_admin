@@ -2,25 +2,20 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
+use App\Filament\Resources\CurrencyResource\Pages;
+use App\Filament\Resources\CurrencyResource\Pages\ListCurrencies;
+use App\Models\Currency;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use App\Filament\Resources\CurrencyResource\Pages\ListCurrencies;
-use App\Filament\Resources\CurrencyResource\Pages;
-use App\Filament\Resources\CurrencyResource\RelationManagers;
-use App\Models\Currency;
-use Filament\Forms;
-use Filament\Resources\Resource;
-use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CurrencyResource extends Resource
 {
@@ -28,11 +23,11 @@ class CurrencyResource extends Resource
 
     protected static ?string $model = Currency::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-currency-dollar';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-currency-dollar';
 
-    protected static ?string $label = "Devises";
+    protected static ?string $label = 'Devises';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Configuration';
+    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
 
     public static function form(Schema $schema): Schema
     {
@@ -42,16 +37,16 @@ class CurrencyResource extends Resource
                     ->columns(2)
                     ->schema([
 
-                    TextInput::make('title')
-                        ->required()
-                        ->maxLength(255),
-                    TextInput::make('code')
-                        ->required()
-                        ->maxLength(255),
-                    TextInput::make('icon')
-                        ->maxLength(255),
+                        TextInput::make('title')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('code')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('icon')
+                            ->maxLength(255),
 
-                ])
+                    ]),
 
             ]);
     }
@@ -67,9 +62,7 @@ class CurrencyResource extends Resource
                 TextColumn::make('icon')
                     ->searchable(),
 
-                ToggleColumn::make('is_active')
-
-                ,
+                ToggleColumn::make('is_active'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

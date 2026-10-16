@@ -28,7 +28,7 @@ class Vehicle extends Model
     {
         static::creating(function (self $vehicle) {
             $vehicle->slug ??= Str::slug("{$vehicle->brand} {$vehicle->model} {$vehicle->plate_number}");
-            $vehicle->reference ??= 'V-' . Str::upper(Str::random(8));
+            $vehicle->reference ??= 'V-'.Str::upper(Str::random(8));
         });
     }
 

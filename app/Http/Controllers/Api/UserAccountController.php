@@ -10,7 +10,6 @@ use App\Models\FcmToken;
 use App\Models\Town;
 use App\Models\User;
 use App\Wrappers\ApiResponse;
-use App\Wrappers\Cipher;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -18,7 +17,6 @@ use Illuminate\Support\Facades\Validator;
 
 class UserAccountController extends Controller
 {
-
     /**
      * Display a listing of the resource.
      */
@@ -26,9 +24,10 @@ class UserAccountController extends Controller
     {
         $user = auth()->user();
         $roles = $user->getRoleNames();
+
         return ApiResponse::GET_DATA([
             'user' => new UserResource($user),
-            'roles' => $roles
+            'roles' => $roles,
         ]);
     }
 
@@ -37,13 +36,12 @@ class UserAccountController extends Controller
         $user = auth()->user();
         $messages = [
             'expo_token.required' => 'Expo token est requis.',
-            //'champ1.max' => 'Expo token ne doit pas dépasser :max caractères.',
+            // 'champ1.max' => 'Expo token ne doit pas dépasser :max caractères.',
 
         ];
         $validator = Validator::make($request->all(), [
             'expo_token' => 'required|max:255',
         ], $messages);
-
 
         if ($validator->fails()) {
             return ApiResponse::BAD_REQUEST($validator->errors(), 'Oups', 'Une erreur s est produite');
@@ -54,7 +52,7 @@ class UserAccountController extends Controller
 
         FcmToken::query()->updateOrCreate([
             'token' => $request->input('expo_token'),
-            'user_id' => $user->id
+            'user_id' => $user->id,
         ],
             [
                 'token' => $request->input('expo_token'),
@@ -62,7 +60,6 @@ class UserAccountController extends Controller
                 'is_current' => true,
             ]
         );
-
 
         return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Updated', 'token updated');
     }
@@ -75,19 +72,21 @@ class UserAccountController extends Controller
         //
         $password = auth()->user()->password;
 
-
-        if (!Hash::check($request->current_password, $password)) {
-            return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Votre mot de passe actuel est incorrect");
+        if (! Hash::check($request->current_password, $password)) {
+            return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Votre mot de passe actuel est incorrect');
         }
 
         // return [$request->password,$request->confirm_password];
-        if ($request->password !== $request->confirm_password) return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Les deux mots de passe ne sont pas identiques");
+        if ($request->password !== $request->confirm_password) {
+            return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Les deux mots de passe ne sont pas identiques');
+        }
 
         $user = auth()->user();
         $user->password = Hash::make($request->password);
 
         $user->save();
-        return ApiResponse::SUCCESS_DATA(new UserResource($user), "Mot de passe modifié", "Votre mot de passe a été mis à jour.");
+
+        return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Mot de passe modifié', 'Votre mot de passe a été mis à jour.');
 
     }
 
@@ -103,21 +102,27 @@ class UserAccountController extends Controller
             $number_street = $request->input('number_street');
             $town = $request->input('town');
 
-            if (!$principal_adress) return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir votre adresse");
-            if (!$town) return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez choisir votre commune");
+            if (! $principal_adress) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez saisir votre adresse');
+            }
+            if (! $town) {
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez choisir votre commune');
+            }
 
             $user = auth()->user();
             $user->principal_adresse = $principal_adress;
             $user->street = $street;
             $user->number_street = $number_street;
 
-            $town_id = Town::query()->where("slug", $town)->first();
+            $town_id = Town::query()->where('slug', $town)->first();
 
-            if ($town) $user->town_id = $town_id->id;
+            if ($town) {
+                $user->town_id = $town_id->id;
+            }
 
             $user->save();
 
-            return ApiResponse::SUCCESS_DATA(new UserResource($user), "Adresse mise à jour", "Votre adresse a été enregistrée.");
+            return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Adresse mise à jour', 'Votre adresse a été enregistrée.');
         } catch (Exception $e) {
 
             return ApiResponse::SERVER_ERROR($e);
@@ -138,7 +143,7 @@ class UserAccountController extends Controller
 
             $user->save();
 
-            return ApiResponse::SUCCESS_DATA(new UserResource($user), "Profil mis à jour", "Vos informations ont été enregistrées.");
+            return ApiResponse::SUCCESS_DATA(new UserResource($user), 'Profil mis à jour', 'Vos informations ont été enregistrées.');
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }

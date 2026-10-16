@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\CurrencyResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\CurrencyResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Str;
 
@@ -14,7 +13,8 @@ class EditCurrency extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $data['slug']=Str::slug($data['title']);
+        $data['slug'] = Str::slug($data['title']);
+
         return $data;
     }
 

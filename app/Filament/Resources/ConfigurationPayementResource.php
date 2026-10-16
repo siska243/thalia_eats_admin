@@ -2,27 +2,22 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Select;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ToggleColumn;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use App\Filament\Resources\ConfigurationPayementResource\Pages\ListConfigurationPayements;
 use App\Filament\Resources\ConfigurationPayementResource\Pages\CreateConfigurationPayement;
 use App\Filament\Resources\ConfigurationPayementResource\Pages\EditConfigurationPayement;
-use App\Filament\Resources\ConfigurationPayementResource\Pages;
-use App\Filament\Resources\ConfigurationPayementResource\RelationManagers;
+use App\Filament\Resources\ConfigurationPayementResource\Pages\ListConfigurationPayements;
 use App\Models\ConfigurationPayement;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ConfigurationPayementResource extends Resource
 {
@@ -32,7 +27,7 @@ class ConfigurationPayementResource extends Resource
 
     protected static ?string $model = ConfigurationPayement::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
     public static function getNavigationGroup(): ?string
     {
@@ -72,8 +67,7 @@ class ConfigurationPayementResource extends Resource
                 TextColumn::make('url')
                     ->label('Title')
                     ->searchable(),
-                ToggleColumn::make('active')
-                   ,
+                ToggleColumn::make('active'),
                 TextColumn::make('environment')
                     ->searchable(),
 
@@ -97,7 +91,7 @@ class ConfigurationPayementResource extends Resource
                 //
             ])
             ->recordActions([
-                //Tables\Actions\EditAction::make(),
+                // Tables\Actions\EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

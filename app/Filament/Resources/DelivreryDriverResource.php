@@ -2,34 +2,27 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ToggleColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use App\Filament\Resources\DelivreryDriverResource\Pages\EditDelivreryDriver;
-use App\Filament\Resources\DelivreryDriverResource\Pages\ManageCommandeProducts;
-use App\Filament\Resources\DelivreryDriverResource\Pages\ListDelivreryDrivers;
 use App\Filament\Resources\DelivreryDriverResource\Pages\CreateDelivreryDriver;
-use App\Filament\Resources\DelivreryDriverResource\Pages;
-use App\Filament\Resources\DelivreryDriverResource\RelationManagers;
+use App\Filament\Resources\DelivreryDriverResource\Pages\EditDelivreryDriver;
+use App\Filament\Resources\DelivreryDriverResource\Pages\ListDelivreryDrivers;
+use App\Filament\Resources\DelivreryDriverResource\Pages\ManageCommandeProducts;
 use App\Models\DelivreryDriver;
-use App\Models\User;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Pages\Page;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DelivreryDriverResource extends Resource
 {
@@ -37,9 +30,11 @@ class DelivreryDriverResource extends Resource
 
     protected static ?string $model = DelivreryDriver::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user';
-    protected static string | \UnitEnum | null $navigationGroup = 'Livraison';
-    protected static ?string $navigationLabel = "Livreur";
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Livraison';
+
+    protected static ?string $navigationLabel = 'Livreur';
 
     public static function form(Schema $schema): Schema
     {
@@ -62,7 +57,7 @@ class DelivreryDriverResource extends Resource
                             Toggle::make('is_active')
                                 ->required(),
                         ]
-                    )
+                    ),
 
             ]);
     }
@@ -78,8 +73,7 @@ class DelivreryDriverResource extends Resource
                     ->sortable(),
                 TextColumn::make('id_card')->label('Numéro pièce d\'identité')
                     ->searchable(),
-                ToggleColumn::make('is_active')
-                ,
+                ToggleColumn::make('is_active'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -117,7 +111,7 @@ class DelivreryDriverResource extends Resource
         return $page->generateNavigationItems([
 
             EditDelivreryDriver::class,
-            ManageCommandeProducts::class
+            ManageCommandeProducts::class,
         ]);
     }
 

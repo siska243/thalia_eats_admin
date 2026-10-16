@@ -2,11 +2,10 @@
 
 namespace App\Mail;
 
-use Illuminate\Mail\Mailables\Attachment;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -42,9 +41,9 @@ class AuthOtpMail extends Mailable
         return new Content(
             view: 'emails.welcome_opt_auth',
             with: [
-                'otp'=>$this->data['otp'],
-                'full_name'=>$this->data['full_name'],
-                'valide_at'=>Carbon::parse($this->data['password_less_valide_at'])->format('Y-m-d H:i:s'),
+                'otp' => $this->data['otp'],
+                'full_name' => $this->data['full_name'],
+                'valide_at' => Carbon::parse($this->data['password_less_valide_at'])->format('Y-m-d H:i:s'),
             ]
         );
     }

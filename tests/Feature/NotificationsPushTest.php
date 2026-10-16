@@ -34,7 +34,7 @@ class NotificationsPushTest extends TestCase
 
         $this->app->instance('firebase.messaging', $messaging);
 
-        (new FirebasePushNotification())->sendPushNotification(
+        (new FirebasePushNotification)->sendPushNotification(
             'jeton-appareil',
             'Nouvelle course',
             'Une commande vous attend',
@@ -58,7 +58,7 @@ class NotificationsPushTest extends TestCase
 
         $this->app->instance('firebase.messaging', $messaging);
 
-        (new FirebasePushNotification())->sendPushNotificationMultiUser(
+        (new FirebasePushNotification)->sendPushNotificationMultiUser(
             ['jeton-a', 'jeton-b'],
             'Commande acceptée',
             'Votre repas est en préparation',
@@ -77,7 +77,7 @@ class NotificationsPushTest extends TestCase
 
         $this->app->instance('firebase.messaging', $messaging);
 
-        (new FirebasePushNotification())->sendPushNotificationMultiUser(
+        (new FirebasePushNotification)->sendPushNotificationMultiUser(
             ['mort'],
             'Titre',
             'Corps',

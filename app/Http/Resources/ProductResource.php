@@ -2,12 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\ImageUrl;
 use App\Models\Product;
 use App\Wrappers\Cipher;
-use App\Helpers\ImageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-
 
 /**
  * @property Product $resource
@@ -23,17 +22,17 @@ class ProductResource extends JsonResource
     {
         // return parent::toArray($request);
         return [
-            'uid'=>Cipher::Encrypt($this->id),
-            'title'=>$this->title,
-            'description'=>$this->description,
-            'price'=>$this->price,
-            'currency'=>$this->currency,
-            'promotionnalPrice'=>$this->promotionnalPrice,
-            'slug'=>$this->slug,
-            'picture'=>ImageUrl::make($request, $this->picture),
-            "is_promotional"=>$this->is_promotional,
-            "is_in_forward"=>$this->is_in_forward,
-            'restaurant'=>new RestaurantResource($this->resource->restaurant),
+            'uid' => Cipher::Encrypt($this->id),
+            'title' => $this->title,
+            'description' => $this->description,
+            'price' => $this->price,
+            'currency' => $this->currency,
+            'promotionnalPrice' => $this->promotionnalPrice,
+            'slug' => $this->slug,
+            'picture' => ImageUrl::make($request, $this->picture),
+            'is_promotional' => $this->is_promotional,
+            'is_in_forward' => $this->is_in_forward,
+            'restaurant' => new RestaurantResource($this->resource->restaurant),
         ];
     }
 }

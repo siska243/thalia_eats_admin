@@ -12,7 +12,7 @@ class HealthCheckResults extends Page
 
     protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-text';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
     protected string $view = 'filament.pages.health-check-results';
 
@@ -26,14 +26,12 @@ class HealthCheckResults extends Page
      */
     protected static bool $shouldRegisterNavigation = true;
 
-    public $record=null;
+    public $record = null;
+
     public static function getNavigationGroup(): ?string
     {
         return 'System Tools';
     }
 
-    public function mount(): void
-    {
-
-    }
+    public function mount(): void {}
 }

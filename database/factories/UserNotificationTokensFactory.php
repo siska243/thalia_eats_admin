@@ -2,10 +2,11 @@
 
 namespace Database\Factories;
 
+use App\Models\UserNotificationTokens;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\UserNotificationTokens>
+ * @extends Factory<UserNotificationTokens>
  */
 class UserNotificationTokensFactory extends Factory
 {

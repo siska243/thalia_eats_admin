@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::table('commande_products', function (Blueprint $table) {
             //
-            $table->foreignIdFor(Commande::class,'commande_id')->nullable();
+            $table->foreignIdFor(Commande::class, 'commande_id')->nullable();
         });
     }
 

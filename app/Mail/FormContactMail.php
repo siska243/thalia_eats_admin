@@ -2,14 +2,13 @@
 
 namespace App\Mail;
 
-use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Mail\Mailables\Address;
 
 class FormContactMail extends Mailable
 {
@@ -32,7 +31,7 @@ class FormContactMail extends Mailable
         return new Envelope(
             subject: 'Confirmation de réception de votre message',
             cc: [
-                new Address('contact@sims-opportunity.com', "Connect RDC")
+                new Address('contact@sims-opportunity.com', 'Connect RDC'),
             ]
         );
     }
@@ -47,8 +46,8 @@ class FormContactMail extends Mailable
             with: [
                 'email' => $this->data['email'],
                 'name' => $this->data['name'],
-                "subject" => $this->data['subject'],
-                "content" => $this->data['message'],
+                'subject' => $this->data['subject'],
+                'content' => $this->data['message'],
             ]
         );
     }

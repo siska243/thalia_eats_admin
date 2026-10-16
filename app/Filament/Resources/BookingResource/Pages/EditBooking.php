@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\BookingResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\BookingResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditBooking extends EditRecord

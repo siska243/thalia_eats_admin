@@ -11,16 +11,18 @@ class SubCategoryProduct extends Model
 {
     use HasFactory;
 
-    public function category_product():BelongsTo
+    public function category_product(): BelongsTo
     {
         return $this->belongsTo(CategoryProduct::class, 'category_product_id');
     }
 
-    public function product():HasMany
+    public function product(): HasMany
     {
         return $this->hasMany(Product::class);
     }
-    public function restaurant():HasMany{
-     return $this->hasMany(Restaurant::class);
+
+    public function restaurant(): HasMany
+    {
+        return $this->hasMany(Restaurant::class);
     }
 }

@@ -2,27 +2,21 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use App\Filament\Resources\DelivreryPriceResource\Pages\ListDelivreryPrices;
 use App\Filament\Resources\DelivreryPriceResource\Pages\CreateDelivreryPrice;
 use App\Filament\Resources\DelivreryPriceResource\Pages\EditDelivreryPrice;
-use App\Filament\Resources\DelivreryPriceResource\Pages;
-use App\Filament\Resources\DelivreryPriceResource\RelationManagers;
+use App\Filament\Resources\DelivreryPriceResource\Pages\ListDelivreryPrices;
 use App\Models\DelivreryPrice;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DelivreryPriceResource extends Resource
 {
@@ -30,8 +24,9 @@ class DelivreryPriceResource extends Resource
 
     protected static ?string $model = DelivreryPrice::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-banknotes';
-    protected static string | \UnitEnum | null $navigationGroup = 'Livraison';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Livraison';
 
     public static function form(Schema $schema): Schema
     {

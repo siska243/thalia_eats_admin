@@ -22,10 +22,10 @@ class CategorieResource extends JsonResource
         // return parent::toArray($request);
 
         return [
-            'uid'=>Cipher::Encrypt($this->resource->id),
-            'title'=>$this->resource->title,
-            'slug'=> $this->resource->slug,
-            'sub_category_product'=>SubCategoryProductResource::collection($this->whenLoaded('sub_category_product'))
+            'uid' => Cipher::Encrypt($this->resource->id),
+            'title' => $this->resource->title,
+            'slug' => $this->resource->slug,
+            'sub_category_product' => SubCategoryProductResource::collection($this->whenLoaded('sub_category_product')),
         ];
     }
 }
