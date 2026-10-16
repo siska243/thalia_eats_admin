@@ -114,6 +114,48 @@ class TypeCourseTest extends TestCase
         );
     }
 
+    /**
+     * Les trois types arrivent par la MIGRATION, pas par le seeder.
+     *
+     * `RefreshDatabase` ne joue que les migrations — exactement comme le
+     * deploiement, qui ne lance QUE `migrate --force` et jamais `db:seed`.
+     * Ce test est donc la garantie que le referentiel ne sera pas vide en
+     * production : sans lui, tout le choix de type de course y serait
+     * invisible alors que le code est livre.
+     */
+    public function test_les_types_arrivent_par_la_migration(): void
+    {
+        /*
+         * La MIGRATION est rejouee ici, sur une table vidée.
+         *
+         * Elle n'est pas observee a travers l'etat partage de la base :
+         * plusieurs suites appellent `truncateTablesForAllConnections()`, dont
+         * les ecritures sont COMMITEES et survivent au rollback. Un test qui
+         * constaterait seulement « la table est peuplee » passerait seul et
+         * echouerait en suite complete, sans qu'aucun defaut n'existe.
+         *
+         * Ce qui est verifie : CETTE migration peuple le referentiel. Et rien
+         * de plus — les codes sont DYNAMIQUES, l'administration renomme,
+         * desactive ou supprime ce qu'elle veut, c'est tout l'objet d'un
+         * referentiel. Epingler « A, B, C » figerait dans un test ce que
+         * l'ecran a le droit de changer.
+         *
+         * Le risque de production est celui-la et aucun autre : un referentiel
+         * vide, parce que le deploiement ne lance QUE `migrate --force` et
+         * jamais `db:seed`. Les applications n'auraient alors aucun type a
+         * proposer, alors que le code est livre et teste.
+         */
+        CourseType::query()->delete();
+
+        $migration = require base_path('database/migrations/2026_10_16_220000_seed_course_types.php');
+        $migration->up();
+
+        $this->assertNotEmpty(
+            CourseType::query()->actifs()->get(),
+            'La migration doit peupler le referentiel : le deploiement ne seme pas.',
+        );
+    }
+
     /** Le type B impose la journee et 24 h minimum, et c'est lui qui le dit. */
     public function test_le_type_b_porte_ses_propres_regles(): void
     {
@@ -144,10 +186,11 @@ class TypeCourseTest extends TestCase
     /** Sans prix saisi, le prix par defaut du vehicule s'applique. */
     public function test_sans_prix_saisi_le_vehicule_garde_son_tarif(): void
     {
-        $b = CourseType::query()->create([
-            'code' => 'B', 'title' => 'Hors agglomeration',
-            'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
-        ]);
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration',
+                'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
+            ]);
 
         $devis = $this->prix()->quote(
             $this->vehicle,
@@ -164,10 +207,11 @@ class TypeCourseTest extends TestCase
     /** Un prix saisi pour le type remplace le tarif par defaut. */
     public function test_le_prix_du_type_remplace_le_tarif_par_defaut(): void
     {
-        $b = CourseType::query()->create([
-            'code' => 'B', 'title' => 'Hors agglomeration',
-            'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
-        ]);
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration',
+                'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
+            ]);
 
         // 225 $ la journee : l'exemple du proprietaire, saisi et non calcule.
         $this->vehicle->coursePrices()->create(['course_type_id' => $b->id, 'hourly_rate' => 30, 'daily_rate' => 225]);
@@ -187,7 +231,7 @@ class TypeCourseTest extends TestCase
     /** Le tarif horaire du type sert quand la course se compte en heures. */
     public function test_le_prix_horaire_du_type_s_applique_a_l_heure(): void
     {
-        $c = CourseType::query()->create(['code' => 'C', 'title' => 'Aeroport']);
+        $c = CourseType::query()->updateOrCreate(['code' => 'C'], ['title' => 'Aeroport']);
 
         $this->vehicle->coursePrices()->create(['course_type_id' => $c->id, 'hourly_rate' => 35, 'daily_rate' => null]);
 
@@ -223,10 +267,11 @@ class TypeCourseTest extends TestCase
     /** Cochee, elle ajoute son tarif horaire sur les heures facturees. */
     public function test_le_parking_aeroport_s_ajoute_au_total(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport',
-            'parking_option' => true, 'parking_hourly_fee' => 10,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
 
         $devis = $this->prix()->quote(
             $this->vehicle,
@@ -245,10 +290,11 @@ class TypeCourseTest extends TestCase
     /** Non cochee, le chauffeur attend dehors et rien ne s'ajoute. */
     public function test_sans_le_parking_rien_ne_s_ajoute(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport',
-            'parking_option' => true, 'parking_hourly_fee' => 10,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
 
         $devis = $this->prix()->quote(
             $this->vehicle,
@@ -266,7 +312,7 @@ class TypeCourseTest extends TestCase
     /** Un type sans option parking ne facture rien, meme si on la demande. */
     public function test_un_type_sans_option_parking_ne_facture_rien(): void
     {
-        $a = CourseType::query()->create(['code' => 'A', 'title' => 'Urbaine']);
+        $a = CourseType::query()->updateOrCreate(['code' => 'A'], ['title' => 'Urbaine']);
 
         $devis = $this->prix()->quote(
             $this->vehicle,
@@ -331,10 +377,11 @@ class TypeCourseTest extends TestCase
      */
     public function test_un_type_qui_impose_la_journee_refuse_l_heure(): void
     {
-        $b = CourseType::query()->create([
-            'code' => 'B', 'title' => 'Hors agglomeration',
-            'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
-        ]);
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration',
+                'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
+            ]);
 
         $this->reserve([
             'course_type_id' => $b->id,
@@ -348,9 +395,12 @@ class TypeCourseTest extends TestCase
     /** La duree minimale du type est opposee au creneau demande. */
     public function test_la_duree_minimale_du_type_est_opposee(): void
     {
-        $b = CourseType::query()->create([
-            'code' => 'B', 'title' => 'Hors agglomeration', 'minimum_hours' => 24,
-        ]);
+        // `forced_mode` explicitement nul : le type seme l'impose, et c'est
+        // ce refus-la qui repondrait au lieu de la duree qu'on veut prouver.
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration', 'minimum_hours' => 24, 'forced_mode' => null],
+        );
 
         $this->reserve([
             'course_type_id' => $b->id,
@@ -364,9 +414,10 @@ class TypeCourseTest extends TestCase
     /** Le commentaire exige par le type est exige a la saisie. */
     public function test_un_type_qui_exige_un_commentaire_le_reclame(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport', 'note_required' => true,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport', 'note_required' => true,
+            ]);
 
         $this->reserve(['course_type_id' => $c->id])
             ->assertStatus(422)
@@ -376,9 +427,10 @@ class TypeCourseTest extends TestCase
     /** Commentaire fourni, la reservation passe. */
     public function test_le_commentaire_fourni_laisse_passer(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport', 'note_required' => true,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport', 'note_required' => true,
+            ]);
 
         $this->reserve([
             'course_type_id' => $c->id,
@@ -389,7 +441,7 @@ class TypeCourseTest extends TestCase
     /** Un type sans exigence ne reclame rien. */
     public function test_un_type_sans_exigence_ne_reclame_aucun_commentaire(): void
     {
-        $a = CourseType::query()->create(['code' => 'A', 'title' => 'Urbaine']);
+        $a = CourseType::query()->updateOrCreate(['code' => 'A'], ['title' => 'Urbaine']);
 
         $this->reserve(['course_type_id' => $a->id])->assertSuccessful();
     }
@@ -408,10 +460,11 @@ class TypeCourseTest extends TestCase
     /** Le type, le commentaire et l'option parking sont conserves. */
     public function test_la_reservation_conserve_le_type_et_le_commentaire(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport',
-            'note_required' => true, 'parking_option' => true, 'parking_hourly_fee' => 10,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'note_required' => true, 'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
 
         $this->reserve([
             'course_type_id' => $c->id,
@@ -469,10 +522,11 @@ class TypeCourseTest extends TestCase
      */
     public function test_le_catalogue_chiffre_selon_le_type_demande(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport',
-            'parking_option' => true, 'parking_hourly_fee' => 10,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
 
         $this->vehicle->coursePrices()->create([
             'course_type_id' => $c->id, 'hourly_rate' => 35,
@@ -510,7 +564,7 @@ class TypeCourseTest extends TestCase
     {
         $this->admin();
 
-        $b = CourseType::query()->create(['code' => 'B', 'title' => 'Hors agglomeration']);
+        $b = CourseType::query()->updateOrCreate(['code' => 'B'], ['title' => 'Hors agglomeration']);
 
         Livewire::test(CoursePricesRelationManager::class, [
             'ownerRecord' => $this->vehicle,
@@ -537,7 +591,7 @@ class TypeCourseTest extends TestCase
     {
         $this->admin();
 
-        $b = CourseType::query()->create(['code' => 'B', 'title' => 'Hors agglomeration']);
+        $b = CourseType::query()->updateOrCreate(['code' => 'B'], ['title' => 'Hors agglomeration']);
 
         Livewire::test(CoursePricesRelationManager::class, [
             'ownerRecord' => $this->vehicle,
@@ -562,10 +616,11 @@ class TypeCourseTest extends TestCase
      */
     public function test_le_devis_detaille_la_base_et_le_parking(): void
     {
-        $c = CourseType::query()->create([
-            'code' => 'C', 'title' => 'Aeroport',
-            'parking_option' => true, 'parking_hourly_fee' => 10,
-        ]);
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
 
         $devis = $this->prix()->quote(
             $this->vehicle,
