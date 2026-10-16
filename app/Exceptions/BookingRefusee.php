@@ -35,6 +35,18 @@ class BookingRefusee extends Exception
      */
     public const HORS_VILLE = 'hors_ville';
 
+    /**
+     * Le type de course impose un mode de tarification, et ce n'est pas celui
+     * qui a ete demande.
+     *
+     * On REFUSE plutot que de basculer en silence : le client a choisi un
+     * mode et un prix, et un autre prix n'est pas le sien.
+     */
+    public const MODE_IMPOSE = 'mode_impose';
+
+    /** Le creneau est plus court que la duree minimale propre a ce type. */
+    public const DUREE_MINIMALE_TYPE = 'duree_minimale_type';
+
     /** La duree demandee sort des bornes du mode de tarification. */
     public const DUREE_HORS_BORNES = 'duree_hors_bornes';
 

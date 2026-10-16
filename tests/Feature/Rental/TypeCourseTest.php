@@ -4,16 +4,20 @@ namespace Tests\Feature\Rental;
 
 use App\Filament\Resources\CourseTypeResource\Pages\CreateCourseType;
 use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
+use App\Models\Booking;
 use App\Models\CourseType;
 use App\Models\Currency;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
 use App\Settings\RentalSettings;
+use App\Wrappers\Cipher;
 use Database\Seeders\CourseTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Testing\TestResponse;
+use Laravel\Sanctum\Sanctum;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -301,6 +305,128 @@ class TypeCourseTest extends TestCase
         $this->assertTrue($type->note_required);
         // L'option parking eteinte : aucun tarif ne doit rester en base.
         $this->assertNull($type->parking_hourly_fee);
+    }
+
+    // --- Les regles opposees a la reservation --------------------------------
+
+    /** @param array<string, mixed> $extra */
+    private function reserve(array $extra = []): TestResponse
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+
+        return $this->postJson('/api/rental/bookings', array_merge([
+            'vehicle' => Cipher::Encrypt($this->vehicle->id),
+            'starts_at' => Carbon::parse('+2 days 10:00')->toDateTimeString(),
+            'ends_at' => Carbon::parse('+2 days 15:00')->toDateTimeString(),
+            'pickup_location' => 'Gombe',
+        ], $extra));
+    }
+
+    /**
+     * Le mode impose est REFUSE, pas bascule en silence.
+     *
+     * « Le client a choisi un mode et un prix, et un autre prix n'est pas le
+     * sien » — la doctrine deja ecrite dans BookingCreator.
+     */
+    public function test_un_type_qui_impose_la_journee_refuse_l_heure(): void
+    {
+        $b = CourseType::query()->create([
+            'code' => 'B', 'title' => 'Hors agglomeration',
+            'forced_mode' => BookingPricing::MODE_DAILY, 'minimum_hours' => 24,
+        ]);
+
+        $this->reserve([
+            'course_type_id' => $b->id,
+            'pricing_mode' => BookingPricing::MODE_HOURLY,
+            'course_note' => 'Depart pour Kisantu',
+        ])
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'mode_impose');
+    }
+
+    /** La duree minimale du type est opposee au creneau demande. */
+    public function test_la_duree_minimale_du_type_est_opposee(): void
+    {
+        $b = CourseType::query()->create([
+            'code' => 'B', 'title' => 'Hors agglomeration', 'minimum_hours' => 24,
+        ]);
+
+        $this->reserve([
+            'course_type_id' => $b->id,
+            'course_note' => 'Depart pour Kisantu',
+        ])
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'duree_minimale_type')
+            ->assertJsonPath('message', fn (string $m) => str_contains($m, '24'));
+    }
+
+    /** Le commentaire exige par le type est exige a la saisie. */
+    public function test_un_type_qui_exige_un_commentaire_le_reclame(): void
+    {
+        $c = CourseType::query()->create([
+            'code' => 'C', 'title' => 'Aeroport', 'note_required' => true,
+        ]);
+
+        $this->reserve(['course_type_id' => $c->id])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('course_note');
+    }
+
+    /** Commentaire fourni, la reservation passe. */
+    public function test_le_commentaire_fourni_laisse_passer(): void
+    {
+        $c = CourseType::query()->create([
+            'code' => 'C', 'title' => 'Aeroport', 'note_required' => true,
+        ]);
+
+        $this->reserve([
+            'course_type_id' => $c->id,
+            'course_note' => 'Arrivee vol AF 123, terminal 1',
+        ])->assertSuccessful();
+    }
+
+    /** Un type sans exigence ne reclame rien. */
+    public function test_un_type_sans_exigence_ne_reclame_aucun_commentaire(): void
+    {
+        $a = CourseType::query()->create(['code' => 'A', 'title' => 'Urbaine']);
+
+        $this->reserve(['course_type_id' => $a->id])->assertSuccessful();
+    }
+
+    /**
+     * SANS type de course, rien ne change.
+     *
+     * C'est le cas des applications deja installees, et la garantie de
+     * non-regression de tout ce lot.
+     */
+    public function test_sans_type_la_reservation_passe_comme_avant(): void
+    {
+        $this->reserve()->assertSuccessful();
+    }
+
+    /** Le type, le commentaire et l'option parking sont conserves. */
+    public function test_la_reservation_conserve_le_type_et_le_commentaire(): void
+    {
+        $c = CourseType::query()->create([
+            'code' => 'C', 'title' => 'Aeroport',
+            'note_required' => true, 'parking_option' => true, 'parking_hourly_fee' => 10,
+        ]);
+
+        $this->reserve([
+            'course_type_id' => $c->id,
+            'course_note' => 'Arrivee vol AF 123',
+            'parking' => true,
+        ])->assertSuccessful();
+
+        $booking = Booking::query()->latest('id')->first();
+
+        $this->assertSame($c->id, $booking->course_type_id);
+        $this->assertSame('Arrivee vol AF 123', $booking->course_note);
+        $this->assertTrue((bool) $booking->parking);
+        // 5 heures a 20 $, plus 5 heures de parking a 10 $.
+        $this->assertSame(100.0, (float) $booking->base_price);
+        $this->assertSame(50.0, (float) $booking->parking_fee);
+        $this->assertSame(150.0, (float) $booking->total);
     }
 
     // --- Le detail du total --------------------------------------------------

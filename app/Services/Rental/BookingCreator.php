@@ -4,6 +4,7 @@ namespace App\Services\Rental;
 
 use App\Exceptions\BookingRefusee;
 use App\Models\Booking;
+use App\Models\CourseType;
 use App\Models\Town;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -117,6 +118,42 @@ class BookingCreator
         }
 
         /*
+         * Les regles du type de course.
+         *
+         * Elles sont lues SUR LA LIGNE du referentiel, jamais deduites d'un
+         * code : « le type c'est un referentiel », et un `if ($code === 'B')`
+         * ici rendrait impossible d'ajouter un quatrieme type sans livraison.
+         *
+         * Sans type transmis, aucune regle ne s'applique : les applications
+         * deja installees n'en envoient pas, et leurs reservations sont des
+         * courses urbaines ordinaires.
+         */
+        $courseType = ($details['course_type_id'] ?? null)
+            ? CourseType::query()->find($details['course_type_id'])
+            : null;
+
+        if ($courseType?->forced_mode && $courseType->forced_mode !== $mode) {
+            /*
+             * On REFUSE plutot que de basculer en silence : le client a choisi
+             * un mode et un prix, et un autre prix n'est pas le sien.
+             */
+            $libelle = $courseType->forced_mode === BookingPricing::MODE_DAILY ? 'à la journée' : "à l'heure";
+
+            throw new BookingRefusee(
+                BookingRefusee::MODE_IMPOSE,
+                "Une course « {$courseType->title} » se réserve {$libelle}.",
+            );
+        }
+
+        if ($courseType?->minimum_hours
+            && $this->pricing->billableHours($startsAt, $endsAt) < $courseType->minimum_hours) {
+            throw new BookingRefusee(
+                BookingRefusee::DUREE_MINIMALE_TYPE,
+                "Une course « {$courseType->title} » se réserve pour {$courseType->minimum_hours} heures au minimum.",
+            );
+        }
+
+        /*
          * La disponibilite est verifiee des la creation, meme si elle sera
          * revue au paiement. Laisser reserver un creneau visiblement pris
          * ferait payer un client pour rien, et la deception arriverait apres
@@ -176,7 +213,14 @@ class BookingCreator
                 );
             }
 
-            $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
+            $quote = $this->pricing->quote(
+                $vehicle,
+                $startsAt,
+                $endsAt,
+                $mode,
+                $courseType,
+                (bool) ($details['parking'] ?? false),
+            );
         } catch (InvalidArgumentException) {
             throw new BookingRefusee(BookingRefusee::CRENEAU_INVALIDE);
         }
