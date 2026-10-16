@@ -66,7 +66,7 @@ class VehicleController extends Controller
 
         $this->appliquerRecherche($requete, $search);
 
-        $page = $requete->with('currency')->paginate(self::PAR_PAGE);
+        $page = $requete->with(['currency', 'city', 'coursePrices.courseType'])->paginate(self::PAR_PAGE);
 
         // Un seul appel pour toute la page : demander vehicule par vehicule
         // s'il est libre ferait une requete par ligne affichee.
@@ -182,7 +182,7 @@ class VehicleController extends Controller
     {
         $vehicle = Vehicle::query()
             ->rentable()
-            ->with('currency')
+            ->with(['currency', 'city', 'coursePrices.courseType'])
             ->where('slug', $slug)
             ->first();
 

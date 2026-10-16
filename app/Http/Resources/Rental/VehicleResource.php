@@ -58,6 +58,37 @@ class VehicleResource extends JsonResource
              * fois : le devis, le catalogue et cet affichage la lisent, ils ne
              * la recalculent pas.
              */
+            /*
+             * Les types de course que CE vehicule propose.
+             *
+             * Ceux dont le tarif a ete saisi sur sa fiche, et eux seuls :
+             * configurer un tarif pour un type, c'est rendre ce type
+             * disponible sur ce vehicule. Le referentiel complet ne vaut que
+             * pour l'administration — un vehicule sans aucun tarif ne doit
+             * proposer aucun type, et l'ecran n'affiche alors rien de plus
+             * qu'avant.
+             *
+             * Les regles voyagent avec chaque ligne : l'ecran impose le mode,
+             * reclame le commentaire et propose le parking sans rien savoir
+             * des codes. Un quatrieme type reste donc gerable sans livraison.
+             */
+            'course_types' => $this->resource->coursePrices
+                ->map(fn ($ligne) => $ligne->courseType)
+                ->filter(fn (?CourseType $type) => $type?->is_active)
+                ->sortBy('position')
+                ->values()
+                ->map(fn (CourseType $type) => [
+                    'id' => $type->id,
+                    'code' => $type->code,
+                    'title' => $type->title,
+                    'description' => $type->description,
+                    'minimum_hours' => $type->minimum_hours,
+                    'forced_mode' => $type->forced_mode,
+                    'note_required' => $type->note_required,
+                    'parking_option' => $type->parking_option,
+                    'parking_hourly_fee' => $type->tarifParking(),
+                ]),
+
             'applied_rates' => [
                 'hourly' => $this->tarifApplique('hourly', $request),
                 'daily' => $this->tarifApplique('daily', $request),
