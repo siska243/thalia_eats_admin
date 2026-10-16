@@ -118,6 +118,23 @@ class BookingCreator
         }
 
         /*
+         * Les communes d'ou ce vehicule sort.
+         *
+         * Vide, il accepte toute sa ville : « aucune commune selectionnee, on
+         * prend toutes les communes ». APRES le controle de ville, qui prime —
+         * une commune cochee d'une autre ville ne rouvre rien, et ce cas
+         * arrive des qu'on change la ville sans revoir les communes.
+         */
+        if ($townId && ! $vehicle->dessertLaCommune((int) $townId)) {
+            $servies = $vehicle->towns()->orderBy('title')->pluck('title')->implode(', ');
+
+            throw new BookingRefusee(
+                BookingRefusee::HORS_COMMUNE,
+                "Ce véhicule prend ses courses uniquement à : {$servies}.",
+            );
+        }
+
+        /*
          * Les regles du type de course.
          *
          * Elles sont lues SUR LA LIGNE du referentiel, jamais deduites d'un

@@ -42,6 +42,17 @@ class BookingRefusee extends Exception
      * On REFUSE plutot que de basculer en silence : le client a choisi un
      * mode et un prix, et un autre prix n'est pas le sien.
      */
+    /**
+     * Le vehicule n'accepte pas de course au depart de cette commune.
+     *
+     * Encore un refus distinct : « cette commune n'est pas desservie du tout »
+     * (HORS_ZONE), « ce vehicule n'est pas de cette ville » (HORS_VILLE) et
+     * « ce vehicule ne sort pas de ces communes-la » n'appellent pas la meme
+     * suite. Le dernier se resout en choisissant une autre voiture de la meme
+     * ville, et le message nomme donc les communes servies.
+     */
+    public const HORS_COMMUNE = 'hors_commune';
+
     public const MODE_IMPOSE = 'mode_impose';
 
     /** Le creneau est plus court que la duree minimale propre a ce type. */

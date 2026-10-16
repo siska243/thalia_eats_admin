@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Rental;
 
+use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
 use App\Models\City;
 use App\Models\Currency;
 use App\Models\Town;
@@ -11,8 +12,11 @@ use App\Settings\RentalSettings;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -81,12 +85,22 @@ class VehiculeVilleTest extends TestCase
         ]);
     }
 
-    private function reserve(Vehicle $vehicle, Town $depart): TestResponse
+    /**
+     * `$jours` decale le creneau.
+     *
+     * Deux reservations du MEME vehicule sur le MEME creneau se refusent pour
+     * conflit d'agenda, et c'est ce refus-la qui repondrait au lieu de la
+     * regle qu'on veut prouver. Le client change aussi : une reservation non
+     * reglee bloque la suivante.
+     */
+    private function reserve(Vehicle $vehicle, Town $depart, int $jours = 2): TestResponse
     {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+
         return $this->postJson('/api/rental/bookings', [
             'vehicle' => Cipher::Encrypt($vehicle->id),
-            'starts_at' => Carbon::parse('+2 days 10:00')->toDateTimeString(),
-            'ends_at' => Carbon::parse('+2 days 15:00')->toDateTimeString(),
+            'starts_at' => Carbon::parse("+{$jours} days 10:00")->toDateTimeString(),
+            'ends_at' => Carbon::parse("+{$jours} days 15:00")->toDateTimeString(),
             'pickup_location' => 'Gombe',
             'pickup_town_id' => $depart->id,
         ]);
@@ -142,6 +156,112 @@ class VehiculeVilleTest extends TestCase
         $this->reserve($this->vehicule($ville), $commune)
             ->assertStatus(400)
             ->assertJsonPath('error', 'hors_zone');
+    }
+
+    // --- Les communes du vehicule --------------------------------------------
+
+    /**
+     * Aucune commune cochee : toutes celles de la ville sont acceptees.
+     *
+     * Le proprietaire, le 16 octobre : « aucune commune selectionnee, on prend
+     * toutes les communes ». C'est le defaut, et c'est ce qui permet de ne
+     * rien saisir tant qu'on n'a pas besoin de restreindre.
+     */
+    public function test_sans_commune_cochee_toute_la_ville_est_acceptee(): void
+    {
+        $ville = City::factory()->create(['title' => 'Kinshasa']);
+        $gombe = Town::factory()->create(['city_id' => $ville->id, 'rental_available' => true]);
+        $limete = Town::factory()->create(['city_id' => $ville->id, 'rental_available' => true]);
+
+        $vehicule = $this->vehicule($ville);
+
+        $this->reserve($vehicule, $gombe)->assertSuccessful();
+        $this->reserve($vehicule, $limete, jours: 5)->assertSuccessful();
+    }
+
+    /** Des communes cochees, le vehicule ne sort que de celles-la. */
+    public function test_avec_des_communes_cochees_les_autres_sont_refusees(): void
+    {
+        $ville = City::factory()->create(['title' => 'Kinshasa']);
+        $gombe = Town::factory()->create(['city_id' => $ville->id, 'title' => 'Gombe', 'rental_available' => true]);
+        $limete = Town::factory()->create(['city_id' => $ville->id, 'title' => 'Limete', 'rental_available' => true]);
+
+        $vehicule = $this->vehicule($ville);
+        $vehicule->towns()->sync([$gombe->id]);
+
+        $this->reserve($vehicule, $gombe)->assertSuccessful();
+
+        $this->reserve($vehicule, $limete, jours: 5)
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'hors_commune')
+            ->assertJsonPath('message', fn (string $m) => str_contains($m, 'Gombe'));
+    }
+
+    /**
+     * La ville prime : une commune cochee d'une AUTRE ville ne la rouvre pas.
+     *
+     * Le cas vient d'une saisie en administration ou l'on change la ville sans
+     * revoir les communes. Le refus de ville doit rester celui qu'on montre.
+     */
+    public function test_la_ville_prime_sur_les_communes_cochees(): void
+    {
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa']);
+        $lubumbashi = City::factory()->create(['title' => 'Lubumbashi']);
+        $kinoise = Town::factory()->create(['city_id' => $kinshasa->id, 'rental_available' => true]);
+
+        $vehicule = $this->vehicule($lubumbashi);
+        $vehicule->towns()->sync([$kinoise->id]);
+
+        $this->reserve($vehicule, $kinoise)
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'hors_ville');
+    }
+
+    /** Le catalogue grise aussi le vehicule dont la commune n'est pas desservie. */
+    public function test_le_catalogue_tient_compte_des_communes_du_vehicule(): void
+    {
+        $ville = City::factory()->create(['title' => 'Kinshasa']);
+        $gombe = Town::factory()->create(['city_id' => $ville->id, 'rental_available' => true]);
+        $limete = Town::factory()->create(['city_id' => $ville->id, 'rental_available' => true]);
+
+        $vehicule = $this->vehicule($ville);
+        $vehicule->towns()->sync([$gombe->id]);
+
+        $this->getJson('/api/rental/vehicles?pickup_town_id='.$limete->id)
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.reservable', false);
+
+        $this->getJson('/api/rental/vehicles?pickup_town_id='.$gombe->id)
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.reservable', true);
+    }
+
+    /** L'administration coche les communes depuis la fiche du vehicule. */
+    public function test_l_admin_coche_les_communes_du_vehicule(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        Gate::before(fn () => true);
+        /*
+         * Sur le garde `web`, explicitement : `setUp` a deja ouvert une
+         * session Sanctum pour le client, et sans nommer le garde, le panneau
+         * Filament ne reconnait pas l'administrateur — la page ne se monte
+         * alors pas, et l'echec ne dit rien de l'autorisation.
+         */
+        $this->actingAs($admin, 'web');
+
+        $ville = City::factory()->create(['title' => 'Kinshasa']);
+        $gombe = Town::factory()->create(['city_id' => $ville->id, 'title' => 'Gombe']);
+        Town::factory()->create(['city_id' => $ville->id, 'title' => 'Limete']);
+
+        $vehicule = $this->vehicule($ville);
+
+        Livewire::test(EditVehicle::class, ['record' => $vehicule->getRouteKey()])
+            ->fillForm(['towns' => [$gombe->id]])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([$gombe->id], $vehicule->fresh()->towns->pluck('id')->all());
     }
 
     // --- Le catalogue reste mondial -----------------------------------------

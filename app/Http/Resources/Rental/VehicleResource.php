@@ -81,7 +81,17 @@ class VehicleResource extends JsonResource
     {
         $townId = $request->integer('pickup_town_id');
 
-        if (! $townId || ! $this->resource->city_id) {
+        if (! $townId) {
+            return true;
+        }
+
+        // Les communes d'abord : la regle vit sur le modele, et le catalogue
+        // doit dire exactement ce que la reservation refusera.
+        if (! $this->resource->dessertLaCommune($townId)) {
+            return false;
+        }
+
+        if (! $this->resource->city_id) {
             return true;
         }
 

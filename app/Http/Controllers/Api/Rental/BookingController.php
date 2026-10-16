@@ -240,6 +240,7 @@ class BookingController extends Controller
              * sert que si un appelant leve le refus sans message.
              */
             BookingRefusee::HORS_VILLE => "Ce véhicule n'effectue pas de course au départ de cette ville.",
+            BookingRefusee::HORS_COMMUNE => "Ce véhicule n'effectue pas de course au départ de cette commune.",
             BookingRefusee::MODE_IMPOSE => 'Ce type de course impose un mode de réservation.',
             BookingRefusee::DUREE_MINIMALE_TYPE => 'Ce type de course demande une durée minimale.',
             // Le service compose le message : il nomme la réservation qui

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -51,6 +52,41 @@ class Vehicle extends Model
      * ensuite tu ajoutes le prix en fonction du type ». Le parc existant
      * fonctionne donc sans aucune saisie.
      */
+    /**
+     * Les communes d'ou ce vehicule accepte une course.
+     *
+     * VIDE veut dire « toutes celles de sa ville » : « aucune commune
+     * selectionnee, on prend toutes les communes ». Une liste vide ne ferme
+     * donc rien, exactement comme une ville nulle.
+     */
+    public function towns(): BelongsToMany
+    {
+        return $this->belongsToMany(Town::class, 'vehicle_town')->withTimestamps();
+    }
+
+    /**
+     * Ce vehicule accepte-t-il une course au depart de cette commune ?
+     *
+     * **La regle vit ici, une seule fois.** La reservation et le catalogue
+     * posent la meme question, et deux lectures finiraient par diverger —
+     * c'est deja arrive sur les horaires et sur la portee.
+     *
+     * Elle ne juge QUE les communes : la ville est tranchee avant, et son
+     * refus prime. Une commune cochee d'une autre ville ne rouvre donc rien.
+     */
+    public function dessertLaCommune(?int $townId): bool
+    {
+        if (! $townId) {
+            return true;
+        }
+
+        $communes = $this->relationLoaded('towns')
+            ? $this->towns->pluck('id')
+            : $this->towns()->pluck('towns.id');
+
+        return $communes->isEmpty() || $communes->contains($townId);
+    }
+
     public function coursePrices(): HasMany
     {
         return $this->hasMany(VehicleCoursePrice::class);

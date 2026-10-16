@@ -18,6 +18,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -81,7 +82,35 @@ class VehicleResource extends Resource
                         ->searchable()
                         ->preload()
                         ->native(false)
-                        ->helperText('Laissée vide, le véhicule accepte les courses de toutes les villes.'),
+                        ->helperText('Laissée vide, le véhicule accepte les courses de toutes les villes.')
+                        ->live(),
+
+                    /*
+                     * Les communes d'ou ce vehicule sort.
+                     *
+                     * « Aucune commune selectionnee, on prend toutes les
+                     * communes. » Vide ne ferme donc rien — meme doctrine que
+                     * la ville laissee vide.
+                     *
+                     * Les communes proposees sont celles de la ville choisie :
+                     * en cocher une d'ailleurs ne servirait a rien, la ville
+                     * etant tranchee avant.
+                     */
+                    Select::make('towns')
+                        ->label('Communes desservies')
+                        ->relationship(
+                            'towns',
+                            'title',
+                            fn (Builder $query, Get $get) => $get('city_id')
+                                ? $query->where('city_id', $get('city_id'))->orderBy('title')
+                                : $query->orderBy('title'),
+                        )
+                        ->multiple()
+                        ->preload()
+                        ->searchable()
+                        ->native(false)
+                        ->helperText('Aucune commune cochée : toutes celles de la ville sont acceptées.')
+                        ->columnSpanFull(),
 
                     TextInput::make('seats')
                         ->label('Nombre de places')
