@@ -52,6 +52,33 @@ class BookingResource extends JsonResource
                 : null,
 
             'hourly_rate' => (float) $this->resource->hourly_rate,
+
+            /*
+             * Le type de course, son commentaire, et le detail du total.
+             *
+             * `base_price` et `parking_fee` disent d'ou vient le montant :
+             * sans eux, une course aeroport afficherait 90 $ la ou le
+             * catalogue annonce 60, et le client croirait qu'on a change le
+             * prix derriere son dos.
+             *
+             * Tous nuls sur les reservations d'avant : une application
+             * installee n'envoyait pas de type, et son ecran n'affiche donc
+             * rien de nouveau.
+             */
+            'course_type' => $this->resource->courseType
+                ? [
+                    'id' => $this->resource->courseType->id,
+                    'code' => $this->resource->courseType->code,
+                    'title' => $this->resource->courseType->title,
+                ]
+                : null,
+            'course_note' => $this->resource->course_note,
+            'parking' => (bool) $this->resource->parking,
+            'base_price' => $this->resource->base_price !== null
+                ? (float) $this->resource->base_price
+                : null,
+            'parking_fee' => (float) $this->resource->parking_fee,
+
             'total' => (float) $this->resource->total,
             'deposit' => (float) $this->resource->deposit,
             'balance' => (float) $this->resource->balance,

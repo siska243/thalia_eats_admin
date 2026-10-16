@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Rental;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseType;
 use App\Models\Town;
 use App\Settings\RentalSettings;
 use App\Wrappers\ApiResponse;
@@ -57,6 +58,32 @@ class RentalConfigController extends Controller
                  * publiques — il n'y a rien a cacher dans leur numero.
                  */
                 'towns' => $towns,
+
+                /*
+                 * Les types de course, avec leurs regles.
+                 *
+                 * L'ecran doit pouvoir imposer le mode, reclamer le
+                 * commentaire et proposer le parking SANS rien savoir des
+                 * codes A, B ou C : « le type c'est un referentiel », et un
+                 * quatrieme type doit apparaitre dans l'application sans
+                 * qu'on la relivre. Chaque ligne porte donc ce qu'il faut
+                 * pour dessiner et valider l'ecran.
+                 *
+                 * Le serveur refuse de toute facon : ces regles servent a
+                 * eviter au client de composer une demande vouee au refus,
+                 * pas a le proteger.
+                 */
+                'course_types' => CourseType::query()->actifs()->get()->map(fn (CourseType $type) => [
+                    'id' => $type->id,
+                    'code' => $type->code,
+                    'title' => $type->title,
+                    'description' => $type->description,
+                    'minimum_hours' => $type->minimum_hours,
+                    'forced_mode' => $type->forced_mode,
+                    'note_required' => $type->note_required,
+                    'parking_option' => $type->parking_option,
+                    'parking_hourly_fee' => $type->tarifParking(),
+                ]),
             ],
         ]);
     }

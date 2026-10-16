@@ -429,6 +429,36 @@ class TypeCourseTest extends TestCase
         $this->assertSame(150.0, (float) $booking->total);
     }
 
+    // --- Ce que les applications recoivent -----------------------------------
+
+    /**
+     * La configuration porte les types ET leurs regles.
+     *
+     * L'ecran doit pouvoir imposer le mode et reclamer le commentaire sans
+     * rien savoir des codes : un quatrieme type doit apparaitre dans
+     * l'application sans qu'on la relivre.
+     */
+    public function test_la_configuration_expose_les_types_et_leurs_regles(): void
+    {
+        (new CourseTypeSeeder)->run();
+        CourseType::query()->where('code', 'A')->update(['is_active' => false]);
+
+        $reponse = $this->getJson('/api/rental/config')->assertSuccessful();
+
+        // Le type eteint ne sort pas : la liste sert a proposer, pas a lister.
+        $reponse->assertJsonCount(2, 'data.course_types')
+            ->assertJsonPath('data.course_types.0.code', 'B')
+            ->assertJsonPath('data.course_types.0.minimum_hours', 24)
+            ->assertJsonPath('data.course_types.0.forced_mode', BookingPricing::MODE_DAILY)
+            ->assertJsonPath('data.course_types.0.note_required', true)
+            ->assertJsonPath('data.course_types.1.code', 'C')
+            ->assertJsonPath('data.course_types.1.parking_option', true)
+            ->assertJsonPath(
+                'data.course_types.1.parking_hourly_fee',
+                fn ($tarif) => (float) $tarif === 10.0,
+            );
+    }
+
     // --- Le detail du total --------------------------------------------------
 
     // --- L'ecran d'administration --------------------------------------------
