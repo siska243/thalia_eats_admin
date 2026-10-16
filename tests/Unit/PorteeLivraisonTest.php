@@ -575,15 +575,17 @@ class PorteeLivraisonTest extends TestCase
     }
 
     /**
-     * La ville l'emporte sur la position du client.
+     * La position l'emporte sur la ville.
      *
-     * Arbitrage du proprietaire, le 16 octobre. Les deux options allumees se
-     * contredisent des qu'on voyage : depuis le Maroc, le controle de
-     * position refusait tout, y compris une livraison a Gombe depuis un
-     * restaurant de Gombe. On peut commander pour sa famille de la ou l'on
-     * est ; la position ne tranche plus que les cas ou la ville ne dit rien.
+     * « Je suis au Maroc mais je vois MOOD qui est a Gombe ? c'est pas
+     * normal. » Quand l'option de position est allumee, etre loin suffit a
+     * refuser, meme si la livraison se fait dans la ville du restaurant.
+     *
+     * C'est la contrepartie assumee : tant que l'option est allumee, on ne
+     * commande plus pour sa famille depuis l'etranger. L'option est eteinte
+     * par defaut, et c'est precisement ce qu'elle sert a decider.
      */
-    public function test_la_ville_l_emporte_sur_la_position_du_client(): void
+    public function test_la_position_l_emporte_sur_la_ville(): void
     {
         FoodSettings::fake([
             'max_delivery_radius_km' => 30.0,
@@ -603,11 +605,11 @@ class PorteeLivraisonTest extends TestCase
             'town_id' => $gombe->id, 'location' => null,
         ]);
 
-        // Le client est au Maroc, mais il fait livrer a Gombe, ou se trouve
-        // le restaurant.
+        // Le client est au Maroc, et il fait livrer a Gombe, ou se trouve le
+        // restaurant. La ville concorde, mais lui est a 5 000 km.
         $portee = $this->portee()->pour($restaurant->fresh(), $gombe, null, null, self::MAROC);
 
-        $this->assertTrue($portee->autorise);
+        $this->assertFalse($portee->autorise);
     }
 
     /**
