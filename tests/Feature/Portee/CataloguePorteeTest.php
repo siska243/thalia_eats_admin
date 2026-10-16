@@ -72,6 +72,64 @@ class CataloguePorteeTest extends TestCase
         $reponse->assertJsonPath('data.0.distance_km', null);
     }
 
+    /**
+     * La FICHE d'un restaurant doit savoir qu'elle est hors zone.
+     *
+     * `show()` renvoyait la ressource brute, sans portee : `livrable`
+     * retombait sur sa valeur par defaut, vrai. L'ecran de detail ne pouvait
+     * donc pas savoir, et laissait remplir un panier que le paiement allait
+     * refuser — une promesse tenue trop tard.
+     */
+    public function test_la_fiche_d_un_restaurant_hors_rayon_le_dit(): void
+    {
+        $restaurant = Restaurant::factory()
+            ->located(...self::LUBUMBASHI)
+            ->create(['name' => 'Al-Dar']);
+
+        $reponse = $this->getJson(
+            '/api/list-restaurant/'.$restaurant->slug
+            .'?lat='.self::GOMBE[0].'&lng='.self::GOMBE[1]
+        );
+
+        $reponse->assertOk();
+        $reponse->assertJsonPath('data.livrable', false);
+        $this->assertGreaterThan(1000.0, $reponse->json('data.distance_km'));
+        $this->assertStringContainsString('Al-Dar', $reponse->json('data.portee_message'));
+    }
+
+    /** La position du client vaut pour la fiche comme pour la liste. */
+    public function test_la_fiche_tient_compte_de_la_position_du_client(): void
+    {
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => true,
+            'city_first' => false,
+        ], loadMissingValues: false);
+
+        $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();
+
+        // Le client est au Maroc, la livraison se ferait pourtant a Gombe.
+        $reponse = $this->getJson(
+            '/api/list-restaurant/'.$restaurant->slug
+            .'?lat='.self::GOMBE[0].'&lng='.self::GOMBE[1]
+            .'&client_lat=33.5731&client_lng=-7.5898'
+        );
+
+        $reponse->assertJsonPath('data.livrable', false);
+    }
+
+    /** Sans position, la fiche repond comme avant ce lot. */
+    public function test_la_fiche_sans_position_reste_livrable(): void
+    {
+        $restaurant = Restaurant::factory()->located(...self::LUBUMBASHI)->create();
+
+        $reponse = $this->getJson('/api/list-restaurant/'.$restaurant->slug);
+
+        $reponse->assertJsonPath('data.livrable', true);
+        $reponse->assertJsonPath('data.distance_km', null);
+    }
+
     public function test_la_commune_de_livraison_suffit_quand_la_position_manque(): void
     {
         $livraison = Town::factory()->create([

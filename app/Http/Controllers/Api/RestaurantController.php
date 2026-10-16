@@ -26,12 +26,62 @@ use Exception;
 use Flowframe\Trend\Trend;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class RestaurantController extends Controller
 {
-    //
+    /**
+     * Attache a chaque restaurant sa portee de livraison.
+     *
+     * Partagee par la liste, la fiche et le detail d'un plat : les trois
+     * repondent a la meme question — ce restaurant peut-il livrer la — et
+     * trois lectures de la position auraient fini par diverger. C'est
+     * exactement le motif que ce chantier ferme.
+     *
+     * La ressource ne calcule rien d'elle-meme : une ressource est serialisee
+     * une fois par ligne, et y loger une regle metier la rendrait impossible
+     * a tester sans passer par HTTP.
+     *
+     * Aucun restaurant n'est retire de la liste. Le proprietaire veut voir
+     * « Hunga Busta de Brazzaville flou », pas le voir disparaitre.
+     *
+     * @param  Restaurant|Collection<int, Restaurant>|null  $restaurants
+     */
+    private function attacherLaPortee($restaurants, Request $request): void
+    {
+        if ($restaurants === null) {
+            return;
+        }
+
+        $livraison = $request->filled('town')
+            ? Town::query()->where('slug', $request->input('town'))->first()
+            : null;
+
+        $lat = $request->filled('lat') ? (float) $request->input('lat') : null;
+        $lng = $request->filled('lng') ? (float) $request->input('lng') : null;
+
+        /*
+         * Ou se trouve physiquement le client, quand il l'envoie.
+         *
+         * Distinct de `lat`/`lng`, qui designent le lieu de LIVRAISON : les
+         * deux different des qu'on commande pour quelqu'un d'autre. Le serveur
+         * ne s'en sert que si l'administration a allume l'option.
+         */
+        $positionClient = $request->filled('client_lat') && $request->filled('client_lng')
+            ? [(float) $request->input('client_lat'), (float) $request->input('client_lng')]
+            : null;
+
+        $portees = app(PorteeLivraison::class);
+
+        collect($restaurants instanceof Restaurant ? [$restaurants] : $restaurants)
+            ->filter()
+            ->each(fn (Restaurant $item) => $item->setAttribute(
+                'portee', $portees->pour($item, $livraison, $lat, $lng, $positionClient),
+            ));
+    }
+
     public function index(Request $request)
     {
         $search = $request->input('search');
@@ -55,38 +105,25 @@ class RestaurantController extends Controller
          * Aucun restaurant n'est retire de la liste. Le proprietaire veut voir
          * « Hunga Busta de Brazzaville flou », pas le voir disparaitre.
          */
-        $livraison = $request->filled('town')
-            ? Town::query()->where('slug', $request->input('town'))->first()
-            : null;
-
-        $lat = $request->filled('lat') ? (float) $request->input('lat') : null;
-        $lng = $request->filled('lng') ? (float) $request->input('lng') : null;
-
-        /*
-         * Ou se trouve physiquement le client, quand il l'envoie.
-         *
-         * Distinct de `lat`/`lng`, qui designent le lieu de LIVRAISON : les
-         * deux different des qu'on commande pour quelqu'un d'autre. Le serveur
-         * ne s'en sert que si l'administration a allume l'option.
-         */
-        $positionClient = $request->filled('client_lat') && $request->filled('client_lng')
-            ? [(float) $request->input('client_lat'), (float) $request->input('client_lng')]
-            : null;
-
-        $portees = app(PorteeLivraison::class);
-
-        $restaurant->each(fn (Restaurant $item) => $item->setAttribute(
-            'portee', $portees->pour($item, $livraison, $lat, $lng, $positionClient),
-        ));
+        $this->attacherLaPortee($restaurant, $request);
 
         return RestaurantResource::collection($restaurant);
     }
 
-    public function product(string $slug)
+    public function product(string $slug, Request $request)
     {
         try {
-            $product = Product::with(['restaurant', 'currency', 'sub_category_product'])
+            $product = Product::with(['restaurant.town.city', 'currency', 'sub_category_product'])
                 ->where('slug', $slug)->first();
+
+            /*
+             * Le restaurant est imbrique dans le plat.
+             *
+             * Sans sa portee, l'ecran de detail d'un produit laissait ajouter
+             * au panier un plat qu'on ne pouvait pas se faire livrer : il
+             * n'avait aucun moyen de le savoir.
+             */
+            $this->attacherLaPortee($product?->restaurant, $request);
 
             return new ProductResource($product);
         } catch (Exception $e) {
@@ -94,8 +131,18 @@ class RestaurantController extends Controller
         }
     }
 
-    public function show(Restaurant $restaurant)
+    /**
+     * La fiche d'un restaurant.
+     *
+     * Elle attache sa portee comme la liste le fait : sans cela l'ecran de
+     * detail ne savait pas qu'il etait hors zone, et laissait remplir un
+     * panier que le paiement allait refuser. Une promesse tenue trop tard.
+     */
+    public function show(Restaurant $restaurant, Request $request)
     {
+        $restaurant->loadMissing('town.city');
+
+        $this->attacherLaPortee($restaurant, $request);
 
         return new RestaurantResource($restaurant);
     }
