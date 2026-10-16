@@ -550,6 +550,63 @@ class TypeCourseTest extends TestCase
             ->assertJsonPath('data.0.quote.total', fn ($v) => (float) $v === 135.0);
     }
 
+    /**
+     * Le catalogue annonce le TARIF APPLIQUE, pas celui du vehicule.
+     *
+     * Le proprietaire, le 16 octobre : « il y a un probleme avec le calcul,
+     * ça tire la confusion chez l'utilisateur. On affiche le prix en fonction
+     * du type, et s'il n'y a pas de type on affiche la valeur par defaut ».
+     *
+     * La bascule heure/journee lisait `hourly_rate` et `daily_rate`, les
+     * tarifs du vehicule, pendant que le total appliquait ceux du type : le
+     * segment annonçait 20 $ et le total en facturait 35. Le serveur dit
+     * desormais les deux, et l'ecran lit celui qui s'applique.
+     */
+    public function test_le_catalogue_annonce_le_tarif_applique_au_type(): void
+    {
+        $c = CourseType::query()->updateOrCreate(['code' => 'C'], ['title' => 'Aeroport']);
+
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $c->id, 'hourly_rate' => 35, 'daily_rate' => 300,
+        ]);
+
+        $url = '/api/rental/vehicles?'.http_build_query(['course_type_id' => $c->id]);
+
+        $this->getJson($url)
+            ->assertSuccessful()
+            // Les tarifs du vehicule restent dits : c'est son prix habituel.
+            ->assertJsonPath('data.0.hourly_rate', fn ($v) => (float) $v === 20.0)
+            ->assertJsonPath('data.0.daily_rate', fn ($v) => (float) $v === 150.0)
+            // Et ceux qui s'appliquent a CETTE course.
+            ->assertJsonPath('data.0.applied_rates.hourly', fn ($v) => (float) $v === 35.0)
+            ->assertJsonPath('data.0.applied_rates.daily', fn ($v) => (float) $v === 300.0);
+    }
+
+    /** Sans type demande, le tarif applique EST celui du vehicule. */
+    public function test_sans_type_le_tarif_applique_est_celui_du_vehicule(): void
+    {
+        $this->getJson('/api/rental/vehicles')
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.applied_rates.hourly', fn ($v) => (float) $v === 20.0)
+            ->assertJsonPath('data.0.applied_rates.daily', fn ($v) => (float) $v === 150.0);
+    }
+
+    /** Un type sans tarif propre retombe sur celui du vehicule, pas sur zero. */
+    public function test_un_type_sans_tarif_propre_retombe_sur_le_vehicule(): void
+    {
+        $b = CourseType::query()->updateOrCreate(['code' => 'B'], ['title' => 'Hors agglomeration']);
+
+        // Seul le journalier est saisi : l'horaire doit rester celui du vehicule.
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $b->id, 'daily_rate' => 225,
+        ]);
+
+        $this->getJson('/api/rental/vehicles?'.http_build_query(['course_type_id' => $b->id]))
+            ->assertSuccessful()
+            ->assertJsonPath('data.0.applied_rates.hourly', fn ($v) => (float) $v === 20.0)
+            ->assertJsonPath('data.0.applied_rates.daily', fn ($v) => (float) $v === 225.0);
+    }
+
     // --- Le detail du total --------------------------------------------------
 
     // --- L'ecran d'administration --------------------------------------------
