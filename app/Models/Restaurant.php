@@ -48,11 +48,26 @@ class Restaurant extends Model
         }
 
         $maintenant ??= now();
-        $jour = self::JOURS[$maintenant->dayOfWeek];
+        $minute = $maintenant->hour * 60 + $maintenant->minute;
 
-        $creneau = collect($creneaux)->first(
-            fn ($c) => strtolower((string) ($c['day'] ?? $c['Jour'] ?? '')) === $jour
-        );
+        /*
+         * Le creneau de la VEILLE d'abord, quand il passe minuit.
+         *
+         * « 23h - 2h, c'est-a-dire le lendemain. » A une heure du matin un
+         * mardi, le creneau qui tient le restaurant ouvert est celui du lundi :
+         * ne regarder que le jour courant fermait un restaurant que son propre
+         * creneau tenait ouvert jusqu'a 2h.
+         */
+        $veille = $this->creneauDu($creneaux, self::JOURS[($maintenant->dayOfWeek + 6) % 7]);
+        $debutVeille = self::enMinutes($veille['startAt'] ?? null);
+        $finVeille = self::enMinutes($veille['endAt'] ?? null);
+
+        if ($debutVeille !== null && $finVeille !== null
+            && $finVeille < $debutVeille && $minute < $finVeille) {
+            return true;
+        }
+
+        $creneau = $this->creneauDu($creneaux, self::JOURS[$maintenant->dayOfWeek]);
 
         if (! $creneau) {
             return false;
@@ -65,12 +80,18 @@ class Restaurant extends Model
             return true;
         }
 
-        $minute = $maintenant->hour * 60 + $maintenant->minute;
-
         return $fin > $debut
             ? $minute >= $debut && $minute < $fin
             // Passe minuit : ouvert apres l'ouverture OU avant la fermeture.
             : $minute >= $debut || $minute < $fin;
+    }
+
+    /** Le creneau saisi pour ce jour, s'il y en a un. */
+    private function creneauDu(array $creneaux, string $jour): ?array
+    {
+        return collect($creneaux)->first(
+            fn ($c) => strtolower((string) ($c['day'] ?? $c['Jour'] ?? '')) === $jour
+        );
     }
 
     /** L'heure de reouverture du jour, quand il y en a une. */
@@ -83,11 +104,7 @@ class Restaurant extends Model
         }
 
         $maintenant ??= now();
-        $jour = self::JOURS[$maintenant->dayOfWeek];
-
-        $creneau = collect($creneaux)->first(
-            fn ($c) => strtolower((string) ($c['day'] ?? $c['Jour'] ?? '')) === $jour
-        );
+        $creneau = $this->creneauDu($creneaux, self::JOURS[$maintenant->dayOfWeek]);
 
         $debut = self::enMinutes($creneau['startAt'] ?? null);
 

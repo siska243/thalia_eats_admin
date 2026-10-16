@@ -20,6 +20,7 @@ use Filament\Forms\Components\TimePicker;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -47,7 +48,7 @@ class RestaurantResource extends Resource
     {
         return $schema
             ->components([
-                \Filament\Schemas\Components\Section::make('Information de base')->schema([
+                Section::make('Information de base')->schema([
                     Select::make('user_id')
                         ->relationship('user', 'name')
                         ->native(false)
@@ -99,21 +100,42 @@ class RestaurantResource extends Resource
                         ->maxValue(180),
                     RichEditor::make('description')->columnSpanFull(),
                 ])->columns(2),
-                \Filament\Schemas\Components\Section::make('Information supplementaire')->schema([
-                    Repeater::make('openHours')->schema([
-                        Select::make('day')
-                            ->options([
-                                'lundi' => 'Lundi',
-                                'mardi' => 'Mardi',
-                                'mercredi' => 'Mercredi',
-                                'jeudi' => 'Jeudi',
-                                'vendredi' => 'Vendredi',
-                                'samedi' => 'Samedi',
-                                'dimanche' => 'Dimanche',
-                            ])->native(false)->required()->label('Le jour'),
-                        TimePicker::make('startAt')->required()->label('Heure d\'ouverture'),
-                        TimePicker::make('endAt')->required()->label('Heure de fermeture'),
-                    ])->columns(3),
+                Section::make('Information supplementaire')->schema([
+                    /*
+                     * Les horaires d'ouverture.
+                     *
+                     * Aucun creneau par defaut : `Restaurant::estOuvert()` tient
+                     * « aucun horaire saisi » pour ouvert en permanence, et le
+                     * formulaire ouvrait pourtant un creneau vide ET obligatoire.
+                     * Le seul etat que le modele traite comme normal etait donc
+                     * celui qu'on ne pouvait pas enregistrer.
+                     *
+                     * Les trois champs restent obligatoires DANS un creneau
+                     * ajoute : un creneau a moitie rempli ferme le restaurant le
+                     * jour qu'il nomme sans dire quand il rouvre.
+                     */
+                    Repeater::make('openHours')
+                        ->label('Horaires d\'ouverture')
+                        ->helperText('Sans aucun creneau, le restaurant est ouvert en permanence.')
+                        ->addActionLabel('Ajouter un creneau')
+                        ->defaultItems(0)
+                        ->schema([
+                            Select::make('day')
+                                ->options([
+                                    'lundi' => 'Lundi',
+                                    'mardi' => 'Mardi',
+                                    'mercredi' => 'Mercredi',
+                                    'jeudi' => 'Jeudi',
+                                    'vendredi' => 'Vendredi',
+                                    'samedi' => 'Samedi',
+                                    'dimanche' => 'Dimanche',
+                                ])->native(false)->required()->label('Le jour'),
+                            TimePicker::make('startAt')->required()->label('Heure d\'ouverture'),
+                            TimePicker::make('endAt')
+                                ->required()
+                                ->label('Heure de fermeture')
+                                ->helperText('Avant l\'heure d\'ouverture, la fermeture est le lendemain : 23:00 - 02:00 ferme a 2h du matin.'),
+                        ])->columns(3)->columnSpanFull(),
                     FileUpload::make('banniere')
                         ->disk('uploads_image')
                         ->acceptedFileTypes(['image/*'])->columnSpanFull(),
