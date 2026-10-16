@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -37,25 +36,17 @@ return new class extends Migration
              */
             $table->decimal('deposit_percentage', 5, 2)->nullable()->after('minimum_hours');
 
-            /*
-             * Ce que ce vehicule propose : l'heure, la journee, ou les deux.
-             *
-             * C'etait DEDUIT de la presence d'un tarif journalier. Un vehicule
-             * qu'on ne veut plus louer a l'heure n'avait alors aucun moyen de
-             * le dire — sinon effacer son tarif horaire, qui sert encore a
-             * l'affichage.
-             */
-            $table->boolean('allows_hourly')->default(true)->after('deposit_percentage');
-            $table->boolean('allows_daily')->default(false)->after('allows_hourly');
         });
 
         /*
-         * Le parc existant garde son comportement : la journee etait proposee
-         * des qu'un tarif journalier existait, et c'est exactement ce que la
-         * colonne dit maintenant.
+         * PAS de colonne « propose a l'heure / a la journee ».
+         *
+         * Le proprietaire, le 16 octobre : « si le prix est defini et
+         * superieur a zero, la location a la journee ou a l'heure s'active ».
+         * Le TARIF est la decision : une case en plus serait un second etat a
+         * tenir coherent avec le premier, et un vehicule pourrait se retrouver
+         * coche sans prix, ou l'inverse.
          */
-        DB::table('vehicles')->whereNotNull('daily_rate')->where('daily_rate', '>', 0)
-            ->update(['allows_daily' => true]);
 
         Schema::table('vehicle_course_prices', function (Blueprint $table) {
             /*
@@ -72,7 +63,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('vehicles', function (Blueprint $table) {
-            $table->dropColumn(['minimum_hours', 'deposit_percentage', 'allows_hourly', 'allows_daily']);
+            $table->dropColumn(['minimum_hours', 'deposit_percentage']);
         });
 
         Schema::table('vehicle_course_prices', function (Blueprint $table) {

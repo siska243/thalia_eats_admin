@@ -23,8 +23,6 @@ class Vehicle extends Model
         'hourly_rate' => 'decimal:2',
         'daily_rate' => 'decimal:2',
         'is_active' => 'boolean',
-        'allows_hourly' => 'boolean',
-        'allows_daily' => 'boolean',
         'minimum_hours' => 'integer',
         'deposit_percentage' => 'decimal:2',
     ];
@@ -32,17 +30,6 @@ class Vehicle extends Model
     protected static function booted(): void
     {
         static::creating(function (self $vehicle) {
-            /*
-             * La journee suit le tarif, SAUF decision contraire.
-             *
-             * C'est le comportement d'avant : un vehicule etait propose a la
-             * journee des qu'il avait un tarif journalier. L'administration
-             * peut desormais le decocher, mais ne rien dire doit continuer de
-             * vouloir dire ce que ça voulait dire.
-             */
-            $vehicle->allows_daily ??= $vehicle->daily_rate !== null && (float) $vehicle->daily_rate > 0;
-            $vehicle->allows_hourly ??= true;
-
             $vehicle->slug ??= Str::slug("{$vehicle->brand} {$vehicle->model} {$vehicle->plate_number}");
             $vehicle->reference ??= 'V-'.Str::upper(Str::random(8));
         });

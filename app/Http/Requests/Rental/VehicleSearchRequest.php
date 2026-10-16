@@ -51,6 +51,21 @@ class VehicleSearchRequest extends FormRequest
              */
             'course_type_id' => ['nullable', 'integer', 'exists:course_types,id'],
             'parking' => ['nullable', 'boolean'],
+
+            /*
+             * Les filtres du catalogue. Tous facultatifs, et combinables :
+             * une application deja installee n'en envoie aucun, et son
+             * catalogue ne change pas.
+             */
+            'city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'town_ids' => ['nullable', 'array'],
+            'town_ids.*' => ['integer', 'exists:towns,id'],
+            /*
+             * Ce que le vehicule doit PROPOSER, et non comment le chiffrer :
+             * `pricing_mode` repond a l'autre question, et les confondre
+             * cacherait du catalogue un vehicule qu'on sait encore chiffrer.
+             */
+            'proposes' => ['nullable', Rule::in(BookingPricing::MODES)],
         ];
     }
 

@@ -148,26 +148,18 @@ class VehicleResource extends Resource
                 ->columns(2)
                 ->schema([
                     /*
-                     * La case ET le prix vont ensemble.
+                     * LE TARIF EST LA DECISION.
                      *
-                     * Le proprietaire, le 16 octobre : « quand on coche
-                     * propose a la location il faut mettre le prix et donner
-                     * au client la possibilite de louer ». Cocher sans tarif
-                     * ne proposerait rien, et le client ne saurait pas ce
-                     * qu'il paie : le tarif devient donc obligatoire des que
-                     * le mode est coche, et grise sinon.
+                     * Le proprietaire, le 16 octobre : « si le prix est defini
+                     * et superieur a zero, la location a la journee ou a
+                     * l'heure s'active ». Pas de case a cocher en plus : elle
+                     * serait un second etat a tenir coherent avec le prix, et
+                     * un vehicule pourrait se retrouver coche sans tarif, ou
+                     * l'inverse.
+                     *
+                     * Pour retirer un mode, on efface son tarif. C'est le meme
+                     * geste, et il ne peut pas se contredire.
                      */
-                    Toggle::make('allows_hourly')
-                        ->label("Location à l'heure")
-                        ->default(true)
-                        ->live()
-                        ->helperText('Le client peut réserver pour quelques heures.'),
-
-                    Toggle::make('allows_daily')
-                        ->label('Location à la journée')
-                        ->live()
-                        ->helperText('Le client peut réserver pour une ou plusieurs journées.'),
-
                     TextInput::make('hourly_rate')
                         ->label('Tarif horaire')
                         ->prefix('$')
@@ -175,9 +167,7 @@ class VehicleResource extends Resource
                         ->numeric()
                         ->minValue(0.01)
                         ->step(0.01)
-                        ->required(fn (Get $get) => (bool) $get('allows_hourly'))
-                        ->disabled(fn (Get $get) => ! $get('allows_hourly'))
-                        ->dehydrated(),
+                        ->helperText("Renseigné, le véhicule se loue à l'heure. Laissez vide pour ne pas le proposer."),
 
                     TextInput::make('daily_rate')
                         ->label('Tarif journalier')
@@ -186,13 +176,7 @@ class VehicleResource extends Resource
                         ->numeric()
                         ->minValue(0.01)
                         ->step(0.01)
-                        ->required(fn (Get $get) => (bool) $get('allows_daily'))
-                        ->disabled(fn (Get $get) => ! $get('allows_daily'))
-                        ->dehydrated()
-                        // Grise et non cache : Filament ne derive pas l'etat
-                        // d'un champ cache, et l'ancien tarif resterait en
-                        // base apres qu'on a decoche le mode.
-                        ->dehydrateStateUsing(fn ($state, Get $get) => $get('allows_daily') ? $state : null),
+                        ->helperText('Renseigné, le véhicule se loue à la journée. Laissez vide pour ne pas le proposer.'),
 
                     /*
                      * Les deux modalites propres au vehicule : la duree

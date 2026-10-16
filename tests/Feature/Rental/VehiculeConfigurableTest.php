@@ -66,10 +66,9 @@ class VehiculeConfigurableTest extends TestCase
 
     /**
      * `fresh()` : les valeurs par defaut des colonnes sont posees par la BASE,
-     * pas par le modele. Un vehicule tout juste cree ne porte donc pas
-     * `allows_hourly`, et le relire est le seul moyen de voir ce que le
-     * serveur verra. En production la question ne se pose pas : le vehicule
-     * vient toujours d'une lecture.
+     * pas par le modele. Relire est le seul moyen de voir ce que le serveur
+     * verra. En production la question ne se pose pas : le vehicule vient
+     * toujours d'une lecture.
      */
     private function admin(): void
     {
@@ -88,7 +87,6 @@ class VehiculeConfigurableTest extends TestCase
             'plate_number' => 'KIN-'.uniqid(),
             'hourly_rate' => 20, 'daily_rate' => 150,
             'currency_id' => $this->devise->id,
-            'allows_daily' => true,
         ], $attributs))->fresh();
     }
 
@@ -98,37 +96,6 @@ class VehiculeConfigurableTest extends TestCase
     }
 
     // --- Ce que le vehicule propose ------------------------------------------
-
-    /**
-     * La journee se COCHE, elle ne se deduit plus d'un tarif.
-     *
-     * Un vehicule qu'on ne veut plus louer a la journee n'avait aucun moyen de
-     * le dire, sinon effacer son tarif journalier — qui sert encore a
-     * l'affichage.
-     */
-    public function test_la_journee_se_coche_et_ne_se_deduit_plus(): void
-    {
-        $avecTarifMaisNonCoche = $this->vehicule(['allows_daily' => false]);
-
-        $this->assertFalse($this->prix()->estProposeALaJournee($avecTarifMaisNonCoche));
-        $this->assertTrue($this->prix()->estProposeALaJournee($this->vehicule()));
-    }
-
-    /** Cocher sans tarif ne propose rien : la case et le prix vont ensemble. */
-    public function test_cocher_la_journee_sans_tarif_ne_propose_rien(): void
-    {
-        $sansTarif = $this->vehicule(['allows_daily' => true, 'daily_rate' => null]);
-
-        $this->assertFalse($this->prix()->estProposeALaJournee($sansTarif));
-    }
-
-    public function test_l_heure_se_coche_aussi(): void
-    {
-        $this->assertTrue($this->prix()->estProposeALHeure($this->vehicule()));
-        $this->assertFalse(
-            $this->prix()->estProposeALHeure($this->vehicule(['allows_hourly' => false])),
-        );
-    }
 
     // --- L'acompte propre au vehicule ----------------------------------------
 
@@ -240,38 +207,6 @@ class VehiculeConfigurableTest extends TestCase
 
     // --- L'ecran d'administration --------------------------------------------
 
-    /**
-     * Cocher un mode EXIGE son tarif.
-     *
-     * « Quand on coche propose a la location il faut mettre le prix et donner
-     * au client la possibilite de louer. » Cocher sans prix ne proposerait
-     * rien, et le client ne saurait pas ce qu'il paie.
-     */
-    public function test_cocher_la_journee_exige_son_tarif(): void
-    {
-        $this->admin();
-
-        Livewire::test(EditVehicle::class, ['record' => $this->vehicule()->getRouteKey()])
-            ->fillForm(['allows_daily' => true, 'daily_rate' => null])
-            ->call('save')
-            ->assertHasFormErrors(['daily_rate']);
-    }
-
-    /** Decocher la journee efface son tarif, au lieu de le laisser trainer. */
-    public function test_decocher_la_journee_efface_son_tarif(): void
-    {
-        $this->admin();
-
-        $vehicule = $this->vehicule();
-
-        Livewire::test(EditVehicle::class, ['record' => $vehicule->getRouteKey()])
-            ->fillForm(['allows_daily' => false])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $this->assertNull($vehicule->fresh()->daily_rate);
-    }
-
     /** Les modalites se saisissent sur la fiche. */
     public function test_l_admin_saisit_la_duree_minimale_et_l_acompte(): void
     {
@@ -295,10 +230,15 @@ class VehiculeConfigurableTest extends TestCase
     /** Le catalogue dit tout ce qui decide de la location. */
     public function test_le_catalogue_annonce_les_reglages_du_vehicule(): void
     {
+        /*
+         * Sans tarif horaire, le vehicule ne se loue qu'a la journee : c'est
+         * le TARIF qui le dit, il n'y a pas de case a cocher. « Si le prix est
+         * defini et superieur a zero, la location s'active. »
+         */
         $this->vehicule([
             'minimum_hours' => 48,
             'deposit_percentage' => 30,
-            'allows_hourly' => false,
+            'hourly_rate' => 0,
         ]);
 
         $this->getJson('/api/rental/vehicles')

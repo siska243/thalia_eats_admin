@@ -133,25 +133,24 @@ class BookingPricing
     /**
      * La journee est-elle proposee ?
      *
-     * Elle se COCHE en administration, et ne se deduit plus de la presence
-     * d'un tarif : un vehicule qu'on ne veut plus louer a la journee n'avait
-     * aucun moyen de le dire, sinon effacer son tarif — qui sert encore a
-     * l'affichage.
+     * **Le TARIF est la decision.** Le proprietaire, le 16 octobre : « si le
+     * prix est defini et superieur a zero, la location a la journee ou a
+     * l'heure s'active ».
      *
-     * La case ET le tarif : cocher sans prix ne propose rien, parce que le
-     * client ne pourrait pas savoir ce qu'il paie.
+     * Une case en plus serait un second etat a tenir coherent avec le
+     * premier, et un vehicule pourrait se retrouver coche sans prix, ou
+     * l'inverse. Pour retirer un mode, on efface son tarif : c'est le meme
+     * geste, et il ne peut pas se contredire.
      */
     public function estProposeALaJournee(Vehicle $vehicle): bool
     {
-        return (bool) $vehicle->allows_daily
-            && $vehicle->daily_rate !== null
-            && (float) $vehicle->daily_rate > 0;
+        return $vehicle->daily_rate !== null && (float) $vehicle->daily_rate > 0;
     }
 
     /** Jumelle de la precedente, pour l'heure. */
     public function estProposeALHeure(Vehicle $vehicle): bool
     {
-        return (bool) $vehicle->allows_hourly && (float) $vehicle->hourly_rate > 0;
+        return $vehicle->hourly_rate !== null && (float) $vehicle->hourly_rate > 0;
     }
 
     /**

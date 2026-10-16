@@ -143,7 +143,7 @@ class RentalApiTest extends TestCase
     /** Le catalogue chiffre au mode demande. */
     public function test_le_catalogue_chiffre_a_la_journee(): void
     {
-        $this->vehicle->update(['daily_rate' => 149, 'allows_daily' => true]);
+        $this->vehicle->update(['daily_rate' => 149]);
 
         $this->getJson('/api/rental/vehicles?'.http_build_query(array_merge(
             $this->creneau('+2 days 08:00', '+3 days 08:00'),
@@ -176,7 +176,7 @@ class RentalApiTest extends TestCase
     /** Reserver a la journee fige le mode sur la reservation. */
     public function test_le_client_reserve_a_la_journee(): void
     {
-        $this->vehicle->update(['daily_rate' => 149, 'allows_daily' => true]);
+        $this->vehicle->update(['daily_rate' => 149]);
         $this->connecte();
 
         $this->postJson('/api/rental/bookings', array_merge(
