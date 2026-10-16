@@ -32,6 +32,37 @@ class Product extends Model
         });
     }
 
+    /**
+     * Le stock de ce plat est-il suivi ?
+     *
+     * `stock_quantity` a null veut dire « non suivi », et c'est le defaut :
+     * tout le catalogue d'aujourd'hui se comporte comme avant. Zero est un
+     * etat different, et il veut dire epuise.
+     *
+     * Le proprietaire, le 16 octobre : « le stock est pris en charge que si on
+     * l'active depuis l'admin dans chaque produit ».
+     */
+    public function suitLeStock(): bool
+    {
+        return $this->stock_quantity !== null;
+    }
+
+    /**
+     * Ce plat est-il epuise ?
+     *
+     * **La regle vit ici, une seule fois.** Trois ecrans et trois refus la
+     * posent la meme question ; la recopier, c'est se preparer a la voir
+     * diverger — c'est deja arrive sur les horaires d'ouverture et sur la
+     * portee de livraison.
+     *
+     * Un plat non suivi n'est JAMAIS epuise : ne rien savoir du stock ne doit
+     * pas fermer la vente.
+     */
+    public function estEpuise(): bool
+    {
+        return $this->suitLeStock() && $this->stock_quantity <= 0;
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class, 'restaurant_id');

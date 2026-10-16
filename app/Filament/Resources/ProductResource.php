@@ -9,11 +9,21 @@ use App\Models\Currency;
 use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\SubCategoryProduct;
+use Filament\Actions\ActionGroup;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -38,9 +48,9 @@ class ProductResource extends Resource
         return $schema
             ->components(
                 [
-                    \Filament\Schemas\Components\Section::make()->schema(
+                    Section::make()->schema(
                         [
-                            \Filament\Schemas\Components\Section::make('Information basique')
+                            Section::make('Information basique')
                                 ->schema([
                                     TextInput::make('title')
                                         ->required()
@@ -63,7 +73,7 @@ class ProductResource extends Resource
                                         ->options(Currency::query()->where('is_active', 1)->pluck('title', 'id')),
                                 ])->columns(2),
 
-                            \Filament\Schemas\Components\Section::make('Information complementaire')
+                            Section::make('Information complementaire')
                                 ->schema([TextInput::make('price')
                                     ->required()
                                     ->numeric()
@@ -76,6 +86,54 @@ class ProductResource extends Resource
                                         ->disk('uploads_image')
                                         ->acceptedFileTypes(['image/*'])->columnSpanFull(),
                                 ]),
+
+                            /*
+                             * Le stock, plat par plat.
+                             *
+                             * Le proprietaire, le 16 octobre : « le stock est
+                             * pris en charge que si on l'active depuis l'admin
+                             * dans chaque produit ».
+                             *
+                             * L'interrupteur n'est PAS une colonne : il lit et
+                             * ecrit `stock_quantity`, dont `null` dit deja
+                             * « non suivi ». Un booleen en base serait un
+                             * second etat a tenir coherent avec le premier.
+                             */
+                            Section::make('Stock')
+                                ->description('Sans suivi, le plat se commande sans limite de quantite, comme aujourd\'hui.')
+                                ->schema([
+                                    Toggle::make('suit_le_stock')
+                                        ->label('Suivre le stock de ce plat')
+                                        ->dehydrated(false)
+                                        ->live()
+                                        ->formatStateUsing(fn (?Product $record) => $record?->suitLeStock() ?? false),
+                                    /*
+                                     * Grise, et non cache, quand le suivi est
+                                     * eteint. Filament ne derive PAS l'etat
+                                     * d'un champ cache : la valeur d'avant
+                                     * restait en base, et le plat restait
+                                     * suivi apres qu'on a dit de ne plus le
+                                     * suivre. Grise, le champ reste dans le
+                                     * formulaire, part a l'enregistrement, et
+                                     * l'admin voit qu'il existe.
+                                     *
+                                     * `$state` et non un nom choisi : Filament
+                                     * injecte ses closures par le NOM du
+                                     * parametre, et tout autre nom recevrait
+                                     * null.
+                                     */
+                                    TextInput::make('stock_quantity')
+                                        ->label('Quantite en stock')
+                                        ->helperText('Diminue a chaque commande payee. Zero : le plat s\'affiche epuise.')
+                                        ->numeric()
+                                        ->minValue(0)
+                                        ->required(fn (Get $get) => (bool) $get('suit_le_stock'))
+                                        ->disabled(fn (Get $get) => ! $get('suit_le_stock'))
+                                        ->dehydrated()
+                                        ->dehydrateStateUsing(
+                                            fn ($state, Get $get) => $get('suit_le_stock') ? $state : null
+                                        ),
+                                ])->columns(2),
                         ]
                     ),
                 ]
@@ -91,6 +149,18 @@ class ProductResource extends Resource
                 TextColumn::make('title')->searchable(),
                 TextColumn::make('price')
                     ->money()
+                    ->sortable(),
+                /*
+                 * « Cote admin on doit voir la quantite en stock. »
+                 *
+                 * Un tiret pour un plat non suivi : zero ferait croire a un
+                 * plat epuise.
+                 */
+                TextColumn::make('stock_quantity')
+                    ->label('Stock')
+                    ->placeholder('-')
+                    ->badge()
+                    ->color(fn (?int $state) => $state === null ? 'gray' : ($state > 0 ? 'success' : 'danger'))
                     ->sortable(),
                 TextColumn::make('restaurant.name')
                     ->sortable(),
@@ -113,20 +183,20 @@ class ProductResource extends Resource
                 //
             ])
             ->recordActions([
-                \Filament\Actions\ActionGroup::make([
-                    \Filament\Actions\EditAction::make(),
-                    \Filament\Actions\ViewAction::make(),
-                    \Filament\Actions\DeleteAction::make(),
+                ActionGroup::make([
+                    EditAction::make(),
+                    ViewAction::make(),
+                    DeleteAction::make(),
                 ]),
 
             ])
             ->toolbarActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                \Filament\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 
