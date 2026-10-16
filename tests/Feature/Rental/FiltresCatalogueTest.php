@@ -179,4 +179,34 @@ class FiltresCatalogueTest extends TestCase
             'course_type_id' => $type->id,
         ]));
     }
+
+    /**
+     * L'ecran de filtre a besoin de savoir quels types EXISTENT.
+     *
+     * Cette liste avait ete retiree de la configuration en T116, parce que le
+     * detail d'un vehicule devait lire SES types et non un catalogue global.
+     * Un filtre pose une autre question — « quels choix proposer » — et ne
+     * peut pas la poser au parc sans charger tout le parc.
+     */
+    public function test_la_configuration_donne_les_types_pour_le_filtre(): void
+    {
+        CourseType::query()->updateOrCreate(
+            ['code' => 'A'],
+            ['title' => 'Course simple', 'position' => 1, 'is_active' => true],
+        );
+        CourseType::query()->updateOrCreate(
+            ['code' => 'Z'],
+            ['title' => 'Retire du catalogue', 'position' => 2, 'is_active' => false],
+        );
+
+        $types = $this->getJson('/api/rental/config')
+            ->assertSuccessful()
+            ->json('data.course_types');
+
+        // A, B et C sont poses par la migration de reference ; seul le
+        // retrait du catalogue est en jeu ici.
+        $codes = array_column($types, 'code');
+        $this->assertContains('A', $codes);
+        $this->assertNotContains('Z', $codes);
+    }
 }

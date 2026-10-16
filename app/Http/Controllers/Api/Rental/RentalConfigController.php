@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Rental;
 
 use App\Http\Controllers\Controller;
+use App\Models\CourseType;
 use App\Models\Town;
 use App\Settings\RentalSettings;
 use App\Wrappers\ApiResponse;
@@ -58,6 +59,21 @@ class RentalConfigController extends Controller
                  */
                 'towns' => $towns,
 
+                /*
+                 * Les types de course EXISTANTS, pour les filtres du
+                 * catalogue — « dans le filtre il faut ajouter le type de
+                 * course ».
+                 *
+                 * A ne pas confondre avec le `course_types` d'un VEHICULE,
+                 * qui dit ce que CE vehicule propose. Les deux ne peuvent pas
+                 * diverger : la liste du vehicule est tiree de cette meme
+                 * table, et celle-ci ne sert qu'a dresser les choix d'un
+                 * filtre. Deux questions differentes, une seule source.
+                 *
+                 * Le libelle suffit : un filtre n'applique aucune regle, il
+                 * restreint une liste. Les regles voyagent avec le vehicule.
+                 */
+                'course_types' => CourseType::query()->actifs()->get(['id', 'code', 'title']),
             ],
         ]);
     }
