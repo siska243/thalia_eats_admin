@@ -56,26 +56,7 @@ class PorteeLivraison
         $rayon = $this->rayonPour($restaurant);
 
         /*
-         * Le client doit-il aussi etre a portee ?
-         *
-         * Option d'administration, eteinte par defaut. Allumee, se trouver
-         * loin suffit a refuser : « je suis au Maroc, je dois voir que les
-         * restaurants proches ». Le controle de LIVRAISON reste applique
-         * par-dessus — sinon allumer l'option ouvrirait un contournement, il
-         * suffirait d'etre sur place pour faire livrer n'importe ou.
-         *
-         * Position inconnue, permission refusee : on ne refuse rien de ce
-         * fait. Un catalogue vide pour une permission declinee serait pire que
-         * la regle qu'on cherche a tenir.
-         */
-        $refusClient = $this->refuserSurLaPositionDuClient($restaurant, $depuis, $rayon, $positionClient);
-
-        if ($refusClient !== null) {
-            return $refusClient;
-        }
-
-        /*
-         * La ville tranche avant la distance, quand l'option est allumee.
+         * La ville tranche AVANT tout le reste, quand l'option est allumee.
          *
          * Le proprietaire, le 16 octobre : « on tient compte soit de la
          * ville, et la distance c'est un repli ». Kinshasa fait plus de
@@ -93,6 +74,30 @@ class PorteeLivraison
                 : null;
 
             return new Portee(true, $distance, is_infinite($rayon) ? null : $rayon);
+        }
+
+        /*
+         * Le client doit-il aussi etre a portee ?
+         *
+         * Option d'administration, eteinte par defaut. Allumee, se trouver
+         * loin suffit a refuser : « je suis au Maroc, je dois voir que les
+         * restaurants proches ».
+         *
+         * Elle passe APRES la ville, et c'est un arbitrage du proprietaire du
+         * 16 octobre : les deux options allumees se contredisaient des qu'on
+         * voyage, et le controle de position refusait jusqu'a une livraison a
+         * Gombe depuis un restaurant de Gombe. On commande pour sa famille de
+         * la ou l'on est ; la position ne tranche plus que les cas ou la ville
+         * ne dit rien.
+         *
+         * Position inconnue, permission refusee : on ne refuse rien de ce
+         * fait. Un catalogue vide pour une permission declinee serait pire que
+         * la regle qu'on cherche a tenir.
+         */
+        $refusClient = $this->refuserSurLaPositionDuClient($restaurant, $depuis, $rayon, $positionClient);
+
+        if ($refusClient !== null) {
+            return $refusClient;
         }
 
         if ($vers === null) {

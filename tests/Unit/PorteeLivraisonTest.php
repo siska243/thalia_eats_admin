@@ -574,6 +574,78 @@ class PorteeLivraisonTest extends TestCase
         $this->assertFalse($this->portee()->pour($restaurant->fresh(), $arrivee)->autorise);
     }
 
+    /**
+     * La ville l'emporte sur la position du client.
+     *
+     * Arbitrage du proprietaire, le 16 octobre. Les deux options allumees se
+     * contredisent des qu'on voyage : depuis le Maroc, le controle de
+     * position refusait tout, y compris une livraison a Gombe depuis un
+     * restaurant de Gombe. On peut commander pour sa famille de la ou l'on
+     * est ; la position ne tranche plus que les cas ou la ville ne dit rien.
+     */
+    public function test_la_ville_l_emporte_sur_la_position_du_client(): void
+    {
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => true,
+            'city_first' => true,
+        ], loadMissingValues: false);
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
+
+        $gombe = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $gombe->id, 'location' => null,
+        ]);
+
+        // Le client est au Maroc, mais il fait livrer a Gombe, ou se trouve
+        // le restaurant.
+        $portee = $this->portee()->pour($restaurant->fresh(), $gombe, null, null, self::MAROC);
+
+        $this->assertTrue($portee->autorise);
+    }
+
+    /**
+     * La position garde son role quand la ville ne tranche pas.
+     *
+     * Villes differentes : c'est la position qui doit refuser, sinon allumer
+     * l'option « ville » desactiverait l'autre en silence.
+     */
+    public function test_la_position_refuse_encore_quand_les_villes_different(): void
+    {
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => true,
+            'city_first' => true,
+        ], loadMissingValues: false);
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
+        $lubumbashi = City::factory()->create(['title' => 'Lubumbashi', 'is_active' => true]);
+
+        $gombe = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $ailleurs = Town::factory()->create([
+            'city_id' => $lubumbashi->id,
+            'latitude' => self::LUBUMBASHI[0], 'longitude' => self::LUBUMBASHI[1],
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $gombe->id, 'location' => null,
+        ]);
+
+        $portee = $this->portee()->pour($restaurant->fresh(), $ailleurs, null, null, self::MAROC);
+
+        $this->assertFalse($portee->autorise);
+    }
+
     public function test_une_ville_sans_surcharge_applique_le_rayon_global(): void
     {
         $city = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
