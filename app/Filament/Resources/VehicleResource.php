@@ -5,14 +5,13 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\VehicleResource\Pages\CreateVehicle;
 use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
 use App\Filament\Resources\VehicleResource\Pages\ListVehicles;
-use App\Models\CourseType;
+use App\Filament\Resources\VehicleResource\RelationManagers\CoursePricesRelationManager;
 use App\Models\Vehicle;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -113,47 +112,6 @@ class VehicleResource extends Resource
                         ->imageEditor()
                         ->directory('vehicles')
                         ->columnSpanFull(),
-                ]),
-
-            /*
-             * Les tarifs par type de course.
-             *
-             * Le proprietaire, le 16 octobre : « tu mets le prix par defaut
-             * comme il est maintenant et ensuite tu ajoutes le prix en
-             * fonction du type (par heure, jour) ».
-             *
-             * Une ligne par type SEULEMENT si son prix differe : laissee vide,
-             * le vehicule garde le tarif de la section precedente. Le parc
-             * existant n'a donc rien a saisir.
-             */
-            Section::make('Tarifs par type de course')
-                ->description('Facultatif. Un tarif laissé vide retombe sur le tarif habituel du véhicule.')
-                ->schema([
-                    Repeater::make('coursePrices')
-                        ->relationship()
-                        ->label('')
-                        ->addActionLabel('Ajouter un type de course')
-                        ->defaultItems(0)
-                        ->schema([
-                            Select::make('course_type_id')
-                                ->label('Type de course')
-                                ->options(fn () => CourseType::query()->actifs()->pluck('title', 'id'))
-                                ->native(false)
-                                ->distinct()
-                                ->required(),
-
-                            TextInput::make('hourly_rate')
-                                ->label("Tarif de l'heure")
-                                ->numeric()
-                                ->minValue(0)
-                                ->prefix('$'),
-
-                            TextInput::make('daily_rate')
-                                ->label('Tarif de la journée')
-                                ->numeric()
-                                ->minValue(0)
-                                ->prefix('$'),
-                        ])->columns(3)->columnSpanFull(),
                 ]),
 
             Section::make('Tarif')
@@ -281,6 +239,16 @@ class VehicleResource extends Resource
     {
         return parent::getEloquentQuery()
             ->withoutGlobalScopes([SoftDeletingScope::class]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            // Les tarifs par type de course se gerent sous la fiche, et non
+            // dans le formulaire : une ligne s'ajoute, se corrige et se
+            // supprime seule, sans toucher au reste du vehicule.
+            CoursePricesRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

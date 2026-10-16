@@ -4,6 +4,7 @@ namespace Tests\Feature\Rental;
 
 use App\Filament\Resources\CourseTypeResource\Pages\CreateCourseType;
 use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
+use App\Filament\Resources\VehicleResource\RelationManagers\CoursePricesRelationManager;
 use App\Models\Booking;
 use App\Models\CourseType;
 use App\Models\Currency;
@@ -475,16 +476,45 @@ class TypeCourseTest extends TestCase
 
         $b = CourseType::query()->create(['code' => 'B', 'title' => 'Hors agglomeration']);
 
-        Livewire::test(EditVehicle::class, ['record' => $this->vehicle->getRouteKey()])
-            ->fillForm([
-                'coursePrices' => [
-                    ['course_type_id' => $b->id, 'hourly_rate' => 30, 'daily_rate' => 225],
-                ],
+        Livewire::test(CoursePricesRelationManager::class, [
+            'ownerRecord' => $this->vehicle,
+            'pageClass' => EditVehicle::class,
+        ])
+            ->callTableAction('create', data: [
+                'course_type_id' => $b->id,
+                'hourly_rate' => 30,
+                'daily_rate' => 225,
             ])
-            ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoTableActionErrors();
 
         $this->assertSame(225.0, $this->vehicle->fresh()->tarifPour($b, BookingPricing::MODE_DAILY));
+    }
+
+    /**
+     * Un tarif laisse vide retombe sur le tarif habituel du vehicule.
+     *
+     * C'est la regle qui permet de ne renseigner que l'exception : une course
+     * hors agglomeration ne se vend pas a l'heure, et sa ligne n'a donc qu'un
+     * tarif journalier.
+     */
+    public function test_un_tarif_laisse_vide_retombe_sur_le_tarif_habituel(): void
+    {
+        $this->admin();
+
+        $b = CourseType::query()->create(['code' => 'B', 'title' => 'Hors agglomeration']);
+
+        Livewire::test(CoursePricesRelationManager::class, [
+            'ownerRecord' => $this->vehicle,
+            'pageClass' => EditVehicle::class,
+        ])
+            ->callTableAction('create', data: ['course_type_id' => $b->id, 'daily_rate' => 225])
+            ->assertHasNoTableActionErrors();
+
+        $vehicule = $this->vehicle->fresh();
+
+        $this->assertSame(225.0, $vehicule->tarifPour($b, BookingPricing::MODE_DAILY));
+        // Aucun tarif horaire saisi : le devis reprendra celui du vehicule.
+        $this->assertNull($vehicule->tarifPour($b, BookingPricing::MODE_HOURLY));
     }
 
     /**
