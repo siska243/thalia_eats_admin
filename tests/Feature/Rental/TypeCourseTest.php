@@ -460,6 +460,42 @@ class TypeCourseTest extends TestCase
             );
     }
 
+    /**
+     * Le catalogue chiffre selon le type demande.
+     *
+     * Sans cela, la fiche annoncerait le tarif habituel et la reservation en
+     * facturerait un autre : le client croirait qu'on a change le prix au
+     * moment de payer.
+     */
+    public function test_le_catalogue_chiffre_selon_le_type_demande(): void
+    {
+        $c = CourseType::query()->create([
+            'code' => 'C', 'title' => 'Aeroport',
+            'parking_option' => true, 'parking_hourly_fee' => 10,
+        ]);
+
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $c->id, 'hourly_rate' => 35,
+        ]);
+
+        $debut = Carbon::parse('+2 days 10:00')->toDateTimeString();
+        $fin = Carbon::parse('+2 days 13:00')->toDateTimeString();
+
+        $url = '/api/rental/vehicles?'.http_build_query([
+            'starts_at' => $debut,
+            'ends_at' => $fin,
+            'course_type_id' => $c->id,
+            'parking' => 1,
+        ]);
+
+        $this->getJson($url)
+            ->assertSuccessful()
+            // 3 heures a 35 $, plus 3 heures de parking a 10 $.
+            ->assertJsonPath('data.0.quote.base_price', fn ($v) => (float) $v === 105.0)
+            ->assertJsonPath('data.0.quote.parking_fee', fn ($v) => (float) $v === 30.0)
+            ->assertJsonPath('data.0.quote.total', fn ($v) => (float) $v === 135.0);
+    }
+
     // --- Le detail du total --------------------------------------------------
 
     // --- L'ecran d'administration --------------------------------------------

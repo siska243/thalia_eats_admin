@@ -42,6 +42,15 @@ class VehicleSearchRequest extends FormRequest
              * reste mondial, chaque vehicule dit simplement s'il opere ici.
              */
             'pickup_town_id' => ['nullable', 'integer', 'exists:towns,id'],
+            /*
+             * Le type de course demande, et l'option parking.
+             *
+             * Ils changent le PRIX : sans eux, la fiche annoncerait un montant
+             * que la reservation ne tiendrait pas, et le client croirait qu'on
+             * a change le prix au moment de payer.
+             */
+            'course_type_id' => ['nullable', 'integer', 'exists:course_types,id'],
+            'parking' => ['nullable', 'boolean'],
         ];
     }
 

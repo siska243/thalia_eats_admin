@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Rental\VehicleSearchRequest;
 use App\Http\Resources\Rental\VehicleResource;
 use App\Models\Booking;
+use App\Models\CourseType;
 use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
 use App\Services\Rental\VehicleAvailability;
@@ -129,7 +130,22 @@ class VehicleController extends Controller
                 ? BookingPricing::MODE_HOURLY
                 : $mode;
 
-        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $modeApplique);
+        /*
+         * Le type demande chiffre la course, s'il en existe un. Le catalogue
+         * doit annoncer exactement ce que la reservation facturera.
+         */
+        $courseType = $request->filled('course_type_id')
+            ? CourseType::query()->find($request->integer('course_type_id'))
+            : null;
+
+        $quote = $this->pricing->quote(
+            $vehicle,
+            $startsAt,
+            $endsAt,
+            $modeApplique,
+            $courseType,
+            $request->boolean('parking'),
+        );
 
         return array_merge($ligne, [
             // Dans la liste, ils sortent tous de availableVehiclesQuery : ils
@@ -141,6 +157,10 @@ class VehicleController extends Controller
                 'unit_price' => $quote->unitPrice,
                 'billed_units' => $quote->billedUnits,
                 'duration_hours' => $quote->durationHours,
+                // Le detail, pour que l'ecran puisse dire d'ou vient le total
+                // au lieu de laisser croire a un prix change.
+                'base_price' => $quote->base,
+                'parking_fee' => $quote->parkingFee,
                 'total' => $quote->total,
                 'deposit' => $quote->deposit,
                 'balance' => $quote->balance,
