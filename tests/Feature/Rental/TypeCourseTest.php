@@ -568,4 +568,76 @@ class TypeCourseTest extends TestCase
 
         $this->assertSame($devis->total, round($devis->base + $devis->parkingFee, 2));
     }
+
+    /**
+     * L'ACOMPTE PORTE SUR LE PARKING AUSSI (T124).
+     *
+     * « A la reservation on paye 20 % du total ; si le prix du parking est
+     * paye dans le total general on doit le voir, et c'est super important. »
+     *
+     * Le parking entre dans le total, donc dans l'acompte : le client en
+     * regle sa part EN LIGNE. Le chiffre ci-dessous est la raison pour
+     * laquelle les deux ecrans doivent le detailler — sans la ligne, cette
+     * somme est prelevee sans etre annoncee.
+     */
+    public function test_l_acompte_porte_aussi_sur_le_parking(): void
+    {
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
+
+        $this->vehicle->update(['deposit_percentage' => 20]);
+
+        $devis = $this->prix()->quote(
+            $this->vehicle->fresh(),
+            Carbon::parse('+2 days 10:00'),
+            Carbon::parse('+2 days 13:00'),
+            BookingPricing::MODE_HOURLY,
+            $c,
+            parking: true,
+        );
+
+        // Trois heures de parking a 10, soit 30 qui entrent dans le total.
+        $this->assertSame(30.0, $devis->parkingFee);
+
+        // L'acompte est bien 20 % du total PARKING COMPRIS, et non de la
+        // course seule : sans la ligne de detail, six dollars seraient
+        // preleves sans que rien ne les annonce.
+        $this->assertSame(round($devis->total * 0.2, 2), $devis->deposit);
+        $this->assertNotSame(round($devis->base * 0.2, 2), $devis->deposit);
+    }
+
+    /**
+     * Le devis de l'API porte le detail : sans lui, aucun ecran ne peut
+     * afficher la ligne de parking, quelle que soit sa bonne volonte.
+     */
+    public function test_le_devis_de_l_api_porte_le_detail_du_total(): void
+    {
+        $c = CourseType::query()->updateOrCreate(
+            ['code' => 'C'],
+            ['title' => 'Aeroport',
+                'parking_option' => true, 'parking_hourly_fee' => 10,
+            ]);
+
+        $this->vehicle->coursePrices()->updateOrCreate(
+            ['course_type_id' => $c->id],
+            ['hourly_rate' => 20],
+        );
+
+        $reponse = $this->getJson(sprintf(
+            '/api/rental/vehicles/%s?starts_at=%s&ends_at=%s&course_type_id=%d&parking=1',
+            $this->vehicle->slug,
+            urlencode(Carbon::parse('+2 days 10:00')->format('Y-m-d H:i:s')),
+            urlencode(Carbon::parse('+2 days 13:00')->format('Y-m-d H:i:s')),
+            $c->id,
+        ))->assertSuccessful();
+
+        $devis = $reponse->json('data.quote');
+
+        $this->assertSame(30.0, (float) $devis['parking_fee']);
+        $this->assertSame(60.0, (float) $devis['base_price']);
+        $this->assertSame(90.0, (float) $devis['total']);
+    }
 }
