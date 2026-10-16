@@ -3,6 +3,10 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\HealthCheckResults;
+use App\Filament\Widgets\CeQuiBloque;
+use App\Filament\Widgets\CommandesParJour;
+use App\Filament\Widgets\DernieresCommandes;
+use App\Filament\Widgets\StatistiquesDuJour;
 use App\Http\Middleware\SetAdminLocale;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -44,6 +48,16 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
+                /*
+                 * Les widgets metier d'abord : en ouvrant l'admin, on cherche
+                 * l'etat du commerce, pas la version du cadriciel. Chacun
+                 * porte son propre garde de permission — `define_via_gate` est
+                 * a false, super_admin ne contourne rien.
+                 */
+                StatistiquesDuJour::class,
+                CeQuiBloque::class,
+                CommandesParJour::class,
+                DernieresCommandes::class,
                 AccountWidget::class,
                 FilamentInfoWidget::class,
             ])
