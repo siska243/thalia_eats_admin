@@ -80,10 +80,16 @@ class Restaurant extends Model
             return true;
         }
 
+        /*
+         * Un creneau qui passe minuit tient jusqu'a la fin de la journee ; sa
+         * queue appartient au LENDEMAIN, traitee plus haut comme creneau de la
+         * veille. La compter ici aussi ouvrait le restaurant le matin de son
+         * propre jour : « lundi 23h - 2h » couvre la nuit du lundi au mardi,
+         * pas celle du dimanche au lundi.
+         */
         return $fin > $debut
             ? $minute >= $debut && $minute < $fin
-            // Passe minuit : ouvert apres l'ouverture OU avant la fermeture.
-            : $minute >= $debut || $minute < $fin;
+            : $minute >= $debut;
     }
 
     /** Le creneau saisi pour ce jour, s'il y en a un. */

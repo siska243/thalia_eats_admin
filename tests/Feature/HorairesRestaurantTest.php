@@ -119,6 +119,42 @@ class HorairesRestaurantTest extends TestCase
         $this->assertFalse($restaurant->estOuvert(Carbon::parse('2026-10-12 10:00:00')));
     }
 
+    /**
+     * Le creneau ne deborde pas non plus sur SON PROPRE matin.
+     *
+     * « Lundi 23h - 2h » couvre la nuit du lundi au mardi, pas celle du
+     * dimanche au lundi. Tant que le debordement etait traite dans le creneau
+     * du jour courant (`minute < fin`), le lundi a une heure du matin passait
+     * pour ouvert : la nuit du dimanche etait comptee deux fois, une fois ici,
+     * une fois par le creneau du dimanche s'il existait.
+     */
+    public function test_un_creneau_qui_passe_minuit_ne_couvre_pas_son_propre_matin(): void
+    {
+        $restaurant = Restaurant::factory()->create([
+            'openHours' => [['day' => 'lundi', 'startAt' => '23:00:00', 'endAt' => '02:00:00']],
+        ]);
+
+        $this->assertFalse($restaurant->estOuvert(Carbon::parse('2026-10-12 01:00:00')));
+    }
+
+    /** Deux nuits de suite : chacune est tenue par le creneau de sa veille. */
+    public function test_deux_creneaux_de_nuit_se_suivent_sans_se_chevaucher(): void
+    {
+        $restaurant = Restaurant::factory()->create([
+            'openHours' => [
+                ['day' => 'dimanche', 'startAt' => '23:00:00', 'endAt' => '02:00:00'],
+                ['day' => 'lundi', 'startAt' => '23:00:00', 'endAt' => '02:00:00'],
+            ],
+        ]);
+
+        // Lundi 1h : tenu par le creneau du dimanche.
+        $this->assertTrue($restaurant->estOuvert(Carbon::parse('2026-10-12 01:00:00')));
+        // Mardi 1h : tenu par le creneau du lundi.
+        $this->assertTrue($restaurant->estOuvert(Carbon::parse('2026-10-13 01:00:00')));
+        // Lundi 3h : plus rien.
+        $this->assertFalse($restaurant->estOuvert(Carbon::parse('2026-10-12 03:00:00')));
+    }
+
     /** Un creneau ordinaire ne deborde sur rien. */
     public function test_un_creneau_ordinaire_ne_deborde_pas_sur_le_lendemain(): void
     {
