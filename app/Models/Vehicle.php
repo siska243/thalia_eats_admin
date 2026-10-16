@@ -43,6 +43,41 @@ class Vehicle extends Model
         return $this->belongsTo(City::class);
     }
 
+    /**
+     * Les tarifs propres a ce vehicule, par type de course.
+     *
+     * Une ligne absente, ou un tarif nul, et le vehicule garde son prix
+     * habituel : « tu mets le prix par defaut comme il est maintenant et
+     * ensuite tu ajoutes le prix en fonction du type ». Le parc existant
+     * fonctionne donc sans aucune saisie.
+     */
+    public function coursePrices(): HasMany
+    {
+        return $this->hasMany(VehicleCoursePrice::class);
+    }
+
+    /**
+     * Le tarif de ce vehicule pour ce type et ce mode, s'il en a un.
+     *
+     * **La lecture vit ici, une seule fois.** Le devis, le catalogue et
+     * l'administration posent la meme question ; trois lectures finiraient
+     * par diverger, comme cela s'est deja produit sur les horaires.
+     */
+    public function tarifPour(?CourseType $type, string $mode): ?float
+    {
+        if (! $type) {
+            return null;
+        }
+
+        $ligne = $this->relationLoaded('coursePrices')
+            ? $this->coursePrices->firstWhere('course_type_id', $type->id)
+            : $this->coursePrices()->where('course_type_id', $type->id)->first();
+
+        $tarif = $mode === 'daily' ? $ligne?->daily_rate : $ligne?->hourly_rate;
+
+        return $tarif !== null && (float) $tarif > 0 ? (float) $tarif : null;
+    }
+
     public function currency(): BelongsTo
     {
         return $this->belongsTo(Currency::class, 'currency_id');

@@ -24,6 +24,16 @@ readonly class BookingQuote
         public float $hourlyRate,
         /** Les heures facturables du creneau, affichees quel que soit le mode. */
         public float $durationHours,
+        /**
+         * Le prix de la course seule, avant toute option.
+         *
+         * Sans ce detail, une course aeroport afficherait 90 $ la ou le
+         * catalogue annonce 60, et le client croirait qu'on a change le prix
+         * derriere son dos.
+         */
+        public float $base,
+        /** Le parking aeroport facture a l'heure, zero sinon. */
+        public float $parkingFee,
         public float $total,
         public float $deposit,
         public float $balance,
@@ -39,6 +49,8 @@ readonly class BookingQuote
             'billed_units' => $this->billedUnits,
             'hourly_rate' => $this->hourlyRate,
             'duration_hours' => $this->durationHours,
+            'base_price' => $this->base,
+            'parking_fee' => $this->parkingFee,
             'total' => $this->total,
             'deposit' => $this->deposit,
             'balance' => $this->balance,

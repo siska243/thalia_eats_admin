@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         // ]);
         $this->call(StatusPayementSeeder::class);
         $this->call(RentalPaimentMethodSeeder::class);
+        $this->call(CourseTypeSeeder::class);
         $this->call(KinshasaTownsSeeder::class);
     }
 }
