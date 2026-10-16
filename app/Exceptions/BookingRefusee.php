@@ -25,6 +25,16 @@ class BookingRefusee extends Exception
     /** La commune de prise en charge n'est pas desservie par la location. */
     public const HORS_ZONE = 'hors_zone';
 
+    /**
+     * Le vehicule n'opere pas dans la ville de prise en charge demandee.
+     *
+     * Distinct de `HORS_ZONE`, et ce n'est pas une nuance : « cette commune
+     * n'est pas desservie » envoie le client vers WhatsApp, « ce vehicule
+     * n'est pas d'ici » l'envoie vers un autre vehicule. Deux suites
+     * differentes pour le client, donc deux codes.
+     */
+    public const HORS_VILLE = 'hors_ville';
+
     /** La duree demandee sort des bornes du mode de tarification. */
     public const DUREE_HORS_BORNES = 'duree_hors_bornes';
 

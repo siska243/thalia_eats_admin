@@ -36,6 +36,12 @@ class VehicleSearchRequest extends FormRequest
             // Le mode de tarification demande. Absent, c'est l'heure : le
             // comportement d'un appelant qui ne le connait pas ne change pas.
             'pricing_mode' => ['nullable', Rule::in(BookingPricing::MODES)],
+            /*
+             * La commune de prise en charge, pour savoir ce qui est
+             * RESERVABLE. Facultative, et elle ne filtre rien : le catalogue
+             * reste mondial, chaque vehicule dit simplement s'il opere ici.
+             */
+            'pickup_town_id' => ['nullable', 'integer', 'exists:towns,id'],
         ];
     }
 

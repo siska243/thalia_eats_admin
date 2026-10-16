@@ -32,6 +32,17 @@ class Vehicle extends Model
         });
     }
 
+    /**
+     * La ville ou ce vehicule travaille.
+     *
+     * Nulle pour le parc existant : sans ville, il se reserve partout. C'est
+     * la saisie en administration qui le rattache.
+     */
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
+    }
+
     public function currency(): BelongsTo
     {
         return $this->belongsTo(Currency::class, 'currency_id');

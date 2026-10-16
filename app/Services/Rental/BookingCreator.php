@@ -93,6 +93,30 @@ class BookingCreator
         }
 
         /*
+         * Le vehicule travaille dans sa ville, et nulle part ailleurs.
+         *
+         * Le catalogue, lui, reste MONDIAL : « ils peuvent voir les vehicules
+         * disponibles qui se trouvent dans tous les pays mais ils peuvent
+         * commander que pour la course dans le pays d'origine de la voiture ».
+         * C'est donc ici qu'on refuse, pas a l'affichage.
+         *
+         * APRES le controle de la commune : une commune fermee prime, parce
+         * que son refus envoie vers WhatsApp quand l'autre envoie vers un
+         * autre vehicule.
+         *
+         * Un vehicule sans ville — tout le parc existant — passe : ne rien
+         * savoir de son rattachement ne doit pas fermer la location.
+         */
+        $ville = $townId ? Town::query()->whereKey($townId)->value('city_id') : null;
+
+        if ($ville && $vehicle->city_id && (int) $ville !== (int) $vehicle->city_id) {
+            throw new BookingRefusee(
+                BookingRefusee::HORS_VILLE,
+                "Ce véhicule effectue uniquement des courses à {$vehicle->city->title}.",
+            );
+        }
+
+        /*
          * La disponibilite est verifiee des la creation, meme si elle sera
          * revue au paiement. Laisser reserver un creneau visiblement pris
          * ferait payer un client pour rien, et la deception arriverait apres

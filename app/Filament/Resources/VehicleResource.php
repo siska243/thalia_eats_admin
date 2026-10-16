@@ -66,6 +66,22 @@ class VehicleResource extends Resource
                         // cette regle, l'erreur remonte en violation SQL brute.
                         ->unique(ignoreRecord: true),
 
+                    /*
+                     * La ville ou ce vehicule travaille.
+                     *
+                     * « Il y a pas des limites des kilometres mais il y'a des
+                     * limites par rapport a la ville. » Laissee vide, le
+                     * vehicule se reserve PARTOUT : c'est l'etat du parc
+                     * existant, et la remplir est ce qui le rattache.
+                     */
+                    Select::make('city_id')
+                        ->label('Ville de rattachement')
+                        ->relationship('city', 'title')
+                        ->searchable()
+                        ->preload()
+                        ->native(false)
+                        ->helperText('Laissée vide, le véhicule accepte les courses de toutes les villes.'),
+
                     TextInput::make('seats')
                         ->label('Nombre de places')
                         ->numeric()
@@ -166,6 +182,12 @@ class VehicleResource extends Resource
                     ->label('Chauffeur attitré')
                     ->placeholder('aucun')
                     ->toggleable(),
+
+                TextColumn::make('city.title')
+                    ->label('Ville')
+                    ->placeholder('Toutes')
+                    ->badge()
+                    ->sortable(),
 
                 TextColumn::make('seats')
                     ->label('Places')
