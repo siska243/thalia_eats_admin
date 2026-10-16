@@ -26,10 +26,12 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DelivreryPriceResource extends Resource
 {
+    protected static ?int $navigationSort = 3;
+
     protected static ?string $model = DelivreryPrice::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-banknotes';
-    protected static string | \UnitEnum | null $navigationGroup = "Livraison";
+    protected static string | \UnitEnum | null $navigationGroup = 'Livraison';
 
     public static function form(Schema $schema): Schema
     {

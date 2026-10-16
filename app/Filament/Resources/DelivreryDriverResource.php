@@ -33,10 +33,12 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DelivreryDriverResource extends Resource
 {
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $model = DelivreryDriver::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user';
-    protected static string | \UnitEnum | null $navigationGroup = "Livraison";
+    protected static string | \UnitEnum | null $navigationGroup = 'Livraison';
     protected static ?string $navigationLabel = "Livreur";
 
     public static function form(Schema $schema): Schema

@@ -33,6 +33,7 @@ class CataloguePorteeTest extends TestCase
             'max_delivery_radius_km' => 30.0,
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => false,
+            'city_first' => false,
         ], loadMissingValues: false);
     }
 

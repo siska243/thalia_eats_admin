@@ -25,9 +25,11 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class StatusPayementResource extends Resource
 {
+    protected static ?int $navigationSort = 6;
+
     protected static ?string $model = StatusPayement::class;
 
-    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    protected static string | \UnitEnum | null $navigationGroup = 'Configuration';
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-rectangle-stack';
 

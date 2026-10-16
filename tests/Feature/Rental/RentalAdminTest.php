@@ -79,7 +79,15 @@ class RentalAdminTest extends TestCase
             ['/admin/chauffeurs/create'],
             ['/admin/bookings'],
             ['/admin/bookings/create'],
-            ['/admin/manage-rental-settings'],
+            /*
+             * `/admin/parametres` n'est PAS liste ici.
+             *
+             * Les reglages de la location ont rejoint l'ecran unique, qui
+             * charge les cinq classes de reglages au montage. Ce test-ci ne
+             * pose que ceux de la location : il tomberait sur les autres. Cet
+             * ecran a son propre test, `AdminReglagesLivraisonTest`, qui les
+             * pose tous.
+             */
         ];
     }
 

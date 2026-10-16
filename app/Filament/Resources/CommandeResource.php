@@ -27,11 +27,13 @@ use Illuminate\Support\HtmlString;
 
 class CommandeResource extends Resource
 {
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $model = Commande::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Thalia eats';
+    protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
     protected static ?string $navigationModeleLabel = 'Commande';
 

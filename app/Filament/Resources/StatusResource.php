@@ -29,13 +29,15 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class StatusResource extends Resource
 {
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $model = Status::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-minus-circle';
 
     protected static ?string $label = "Status";
     protected static ?string $navigationLabel = "Status";
-    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    protected static string | \UnitEnum | null $navigationGroup = 'Configuration';
     public static function form(Schema $schema): Schema
     {
         return $schema

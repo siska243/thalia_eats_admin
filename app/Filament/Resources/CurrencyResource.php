@@ -24,13 +24,15 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CurrencyResource extends Resource
 {
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $model = Currency::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-currency-dollar';
 
     protected static ?string $label = "Devises";
 
-    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    protected static string | \UnitEnum | null $navigationGroup = 'Configuration';
 
     public static function form(Schema $schema): Schema
     {

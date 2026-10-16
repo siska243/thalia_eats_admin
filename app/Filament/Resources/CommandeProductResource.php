@@ -24,10 +24,12 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CommandeProductResource extends Resource
 {
+    protected static ?int $navigationSort = 7;
+
     protected static ?string $model = CommandeProduct::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
-    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
+    protected static string | \UnitEnum | null $navigationGroup = 'Restauration';
     protected static ?string $navigationModeleLabel = "Produit commande";
     protected static bool $shouldRegisterNavigation=false;
     public static function form(Schema $schema): Schema

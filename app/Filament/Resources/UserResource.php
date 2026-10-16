@@ -34,11 +34,13 @@ use Rawilk\FilamentPasswordInput\Password;
 
 class UserResource extends Resource
 {
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $model = User::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user-group';
     protected static ?string $label = "Nos utilisateurs";
-    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
+    protected static string | \UnitEnum | null $navigationGroup = 'Clients et partenaires';
 
     public static function form(Schema $schema): Schema
     {

@@ -26,11 +26,13 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PaimentMethodResource extends Resource
 {
+    protected static ?int $navigationSort = 7;
+
     protected static ?string $model = PaimentMethod::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-credit-card';
     protected static ?string $navigationLabel = "Methode de paiement";
-    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    protected static string | \UnitEnum | null $navigationGroup = 'Configuration';
     public static function form(Schema $schema): Schema
     {
         return $schema

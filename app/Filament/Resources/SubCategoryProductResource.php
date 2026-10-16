@@ -25,11 +25,13 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class SubCategoryProductResource extends Resource
 {
+    protected static ?int $navigationSort = 6;
+
     protected static ?string $model = SubCategoryProduct::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
     protected static ?string $navigationLabel = "Sous Categorie";
-    protected static string | \UnitEnum | null $navigationGroup = "Produits";
+    protected static string | \UnitEnum | null $navigationGroup = 'Restauration';
 
     protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 

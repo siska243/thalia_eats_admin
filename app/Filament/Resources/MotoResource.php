@@ -27,10 +27,12 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class MotoResource extends Resource
 {
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $model = Moto::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-cube-transparent';
-    protected static string | \UnitEnum | null $navigationGroup="Livraison";
+    protected static string | \UnitEnum | null $navigationGroup='Livraison';
 
     public static function form(Schema $schema): Schema
     {

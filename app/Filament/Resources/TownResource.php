@@ -23,13 +23,15 @@ use Filament\Tables\Table;
 
 class TownResource extends Resource
 {
+    protected static ?int $navigationSort = 3;
+
     protected static ?string $model = Town::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-flag';
 
     protected static ?string $label = 'Communes';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Parametre';
+    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
 
     public static function form(Schema $schema): Schema
     {

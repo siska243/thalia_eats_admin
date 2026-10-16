@@ -51,13 +51,13 @@ class SuiviDesCourses extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-map';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Suivi des courses';
+    protected static string|\UnitEnum|null $navigationGroup = 'Location';
 
     protected static ?string $title = 'Suivi des courses';
 
     protected static ?string $navigationLabel = 'Analyse des courses';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 4;
 
     protected string $view = 'filament.pages.suivi-des-courses';
 

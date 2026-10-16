@@ -38,6 +38,7 @@ class PorteeLivraisonTest extends TestCase
             'max_delivery_radius_km' => 30.0,
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => false,
+            'city_first' => false,
         ], loadMissingValues: false);
     }
 
@@ -308,6 +309,7 @@ class PorteeLivraisonTest extends TestCase
             'max_delivery_radius_km' => 30.0,
             'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
             'use_client_position' => $actif,
+            'city_first' => false,
         ], loadMissingValues: false);
     }
 
@@ -423,6 +425,153 @@ class PorteeLivraisonTest extends TestCase
         );
 
         $this->assertTrue($portee->autorise);
+    }
+
+    // --- La ville prime sur la distance --------------------------------------
+
+    /** Allume « la ville prime » sans toucher aux autres reglages. */
+    private function avecVillePrioritaire(bool $actif): void
+    {
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => ':restaurant est à :distance km. Rayon : :rayon km.',
+            'use_client_position' => false,
+            'city_first' => $actif,
+        ], loadMissingValues: false);
+    }
+
+    /**
+     * Deux adresses d'une meme ville se livrent, meme loin.
+     *
+     * Kinshasa fait plus de quarante kilometres de large : un rayon de trente
+     * y refusait des livraisons parfaitement normales.
+     */
+    public function test_la_ville_prime_une_longue_distance_dans_la_meme_ville_passe(): void
+    {
+        $this->avecVillePrioritaire(true);
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
+
+        $gombe = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $maluku = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            // Maluku, extremite est de Kinshasa : bien au-dela de 30 km.
+            'latitude' => -4.0700, 'longitude' => 15.5400,
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $gombe->id, 'location' => null,
+        ]);
+
+        $portee = $this->portee()->pour($restaurant->fresh(), $maluku);
+
+        $this->assertTrue($portee->autorise);
+    }
+
+    /** Eteinte, la meme situation est refusee : c'est le comportement actuel. */
+    public function test_sans_l_option_la_longue_distance_reste_refusee(): void
+    {
+        $this->avecVillePrioritaire(false);
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
+
+        $gombe = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $maluku = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => -4.0700, 'longitude' => 15.5400,
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $gombe->id, 'location' => null,
+        ]);
+
+        $this->assertFalse($this->portee()->pour($restaurant->fresh(), $maluku)->autorise);
+    }
+
+    /**
+     * Villes differentes : le rayon reprend la main.
+     *
+     * Kinshasa et Brazzaville se font face, a une dizaine de kilometres. Deux
+     * villes distinctes, mais une livraison plausible — c'est le rayon qui
+     * doit trancher, pas le nom de la ville.
+     */
+    public function test_villes_differentes_le_rayon_reprend_la_main(): void
+    {
+        $this->avecVillePrioritaire(true);
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
+        $brazza = City::factory()->create(['title' => 'Brazzaville', 'is_active' => true]);
+
+        $gombe = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $centre = Town::factory()->create([
+            'city_id' => $brazza->id,
+            'latitude' => -4.2634, 'longitude' => 15.2429,
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $gombe->id, 'location' => null,
+        ]);
+
+        // Une dizaine de kilometres : dans le rayon, donc autorise.
+        $this->assertTrue($this->portee()->pour($restaurant->fresh(), $centre)->autorise);
+    }
+
+    /** Villes differentes et loin : refuse, comme avant. */
+    public function test_villes_differentes_et_eloignees_restent_refusees(): void
+    {
+        $this->avecVillePrioritaire(true);
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
+        $lubumbashi = City::factory()->create(['title' => 'Lubumbashi', 'is_active' => true]);
+
+        $gombe = Town::factory()->create([
+            'city_id' => $kinshasa->id,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $centre = Town::factory()->create([
+            'city_id' => $lubumbashi->id,
+            'latitude' => self::LUBUMBASHI[0], 'longitude' => self::LUBUMBASHI[1],
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $gombe->id, 'location' => null, 'name' => 'Al-Dar',
+        ]);
+
+        $portee = $this->portee()->pour($restaurant->fresh(), $centre);
+
+        $this->assertFalse($portee->autorise);
+        $this->assertStringContainsString('Al-Dar', $portee->message);
+    }
+
+    /** Ville inconnue d'un cote : le rayon tranche, comme avant. */
+    public function test_ville_inconnue_le_rayon_tranche(): void
+    {
+        $this->avecVillePrioritaire(true);
+
+        // Commune sans ville rattachee, des deux cotes.
+        $depart = Town::factory()->create([
+            'city_id' => null,
+            'latitude' => self::GOMBE[0], 'longitude' => self::GOMBE[1],
+        ]);
+        $arrivee = Town::factory()->create([
+            'city_id' => null,
+            'latitude' => self::LUBUMBASHI[0], 'longitude' => self::LUBUMBASHI[1],
+        ]);
+
+        $restaurant = Restaurant::factory()->create([
+            'town_id' => $depart->id, 'location' => null,
+        ]);
+
+        $this->assertFalse($this->portee()->pour($restaurant->fresh(), $arrivee)->autorise);
     }
 
     public function test_une_ville_sans_surcharge_applique_le_rayon_global(): void

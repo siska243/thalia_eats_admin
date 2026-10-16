@@ -27,11 +27,13 @@ use Filament\Tables\Actions\{ActionGroup,
 
 class ProductResource extends Resource
 {
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $model = Product::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = "Liste";
-    protected static string | \UnitEnum | null $navigationGroup = "Produits";
+    protected static string | \UnitEnum | null $navigationGroup = 'Restauration';
 
     public static function form(Schema $schema): Schema
     {

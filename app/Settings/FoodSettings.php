@@ -43,6 +43,17 @@ class FoodSettings extends Settings
      */
     public bool $use_client_position;
 
+    /**
+     * La ville prime-t-elle sur la distance ?
+     *
+     * Allumee, deux adresses de la meme ville se livrent quelle que soit la
+     * distance : Kinshasa fait plus de quarante kilometres de large, et un
+     * rayon de trente y refusait des livraisons normales. Le rayon reprend la
+     * main quand la ville ne tranche pas — villes differentes, ou ville
+     * inconnue d'un cote.
+     */
+    public bool $city_first;
+
     public static function group(): string
     {
         return 'food';

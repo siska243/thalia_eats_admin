@@ -25,12 +25,14 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CategoryProductResource extends Resource
 {
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $model = CategoryProduct::class;
 
     protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-table-cells';
 
     protected static ?string $navigationLabel = "Categorie";
-    protected static string | \UnitEnum | null $navigationGroup = "Produits";
+    protected static string | \UnitEnum | null $navigationGroup = 'Restauration';
 
 
     protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;

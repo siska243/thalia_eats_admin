@@ -29,13 +29,15 @@ use Illuminate\Support\Str;
 
 class RestaurantResource extends Resource
 {
+    protected static ?string $navigationLabel = 'Restaurants';
+
     protected static ?string $model = Restaurant::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-home-modern';
 
     protected static ?string $label = 'Nos restaurants';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Thalia eats';
+    protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
     protected static ?int $navigationSort = 2;
 

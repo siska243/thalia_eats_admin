@@ -74,7 +74,26 @@ class PorteeLivraison
             return $refusClient;
         }
 
+        /*
+         * La ville tranche avant la distance, quand l'option est allumee.
+         *
+         * Le proprietaire, le 16 octobre : « on tient compte soit de la
+         * ville, et la distance c'est un repli ». Kinshasa fait plus de
+         * quarante kilometres de large : un rayon de trente y refusait des
+         * livraisons parfaitement normales.
+         *
+         * Le rayon reprend la main dans les deux cas ou la ville ne tranche
+         * pas — villes differentes, ou ville inconnue d'un cote.
+         */
         $vers = $this->positionDeLivraison($livraison, $lat, $lng);
+
+        if ($this->memeVille($restaurant, $livraison)) {
+            $distance = $vers !== null
+                ? RestaurantGeo::distanceKm($depuis['lat'], $depuis['lng'], $vers['lat'], $vers['lng'])
+                : null;
+
+            return new Portee(true, $distance, is_infinite($rayon) ? null : $rayon);
+        }
 
         if ($vers === null) {
             return Portee::sansControle();
@@ -103,6 +122,39 @@ class PorteeLivraison
             'distance' => $distance,
             'rayon' => $rayon,
         ]));
+    }
+
+    /**
+     * Le restaurant et la livraison sont-ils dans la meme ville ?
+     *
+     * Rend faux des qu'une des deux villes est inconnue : on ne conclut pas
+     * sur une donnee absente, le rayon reprendra la main.
+     */
+    private function memeVille(Restaurant $restaurant, ?Town $livraison): bool
+    {
+        if (! $this->villePrioritaire()) {
+            return false;
+        }
+
+        $depuis = $restaurant->town?->city_id;
+        $vers = $livraison?->city_id;
+
+        return $depuis !== null && $vers !== null && (int) $depuis === (int) $vers;
+    }
+
+    /**
+     * L'option est-elle allumee ?
+     *
+     * Meme precaution que `rayonGlobal()` : des reglages absents — migrations
+     * pas encore jouees — ne doivent pas faire tomber le catalogue.
+     */
+    private function villePrioritaire(): bool
+    {
+        try {
+            return $this->settings->city_first;
+        } catch (MissingSettings) {
+            return false;
+        }
     }
 
     /**
