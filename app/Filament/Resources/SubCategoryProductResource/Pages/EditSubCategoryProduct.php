@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\SubCategoryProductResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\SubCategoryProductResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditSubCategoryProduct extends EditRecord

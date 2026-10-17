@@ -17,6 +17,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Pages\Page;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -27,11 +28,13 @@ use Illuminate\Support\HtmlString;
 
 class CommandeResource extends Resource
 {
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $model = Commande::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Thalia eats';
+    protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
     protected static ?string $navigationModeleLabel = 'Commande';
 
@@ -182,7 +185,7 @@ class CommandeResource extends Resource
 
     protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
-    public static function getRecordSubNavigation(\Filament\Pages\Page $page): array
+    public static function getRecordSubNavigation(Page $page): array
     {
         return $page->generateNavigationItems([
             // ...

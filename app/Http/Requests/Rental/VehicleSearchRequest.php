@@ -36,6 +36,36 @@ class VehicleSearchRequest extends FormRequest
             // Le mode de tarification demande. Absent, c'est l'heure : le
             // comportement d'un appelant qui ne le connait pas ne change pas.
             'pricing_mode' => ['nullable', Rule::in(BookingPricing::MODES)],
+            /*
+             * La commune de prise en charge, pour savoir ce qui est
+             * RESERVABLE. Facultative, et elle ne filtre rien : le catalogue
+             * reste mondial, chaque vehicule dit simplement s'il opere ici.
+             */
+            'pickup_town_id' => ['nullable', 'integer', 'exists:towns,id'],
+            /*
+             * Le type de course demande, et l'option parking.
+             *
+             * Ils changent le PRIX : sans eux, la fiche annoncerait un montant
+             * que la reservation ne tiendrait pas, et le client croirait qu'on
+             * a change le prix au moment de payer.
+             */
+            'course_type_id' => ['nullable', 'integer', 'exists:course_types,id'],
+            'parking' => ['nullable', 'boolean'],
+
+            /*
+             * Les filtres du catalogue. Tous facultatifs, et combinables :
+             * une application deja installee n'en envoie aucun, et son
+             * catalogue ne change pas.
+             */
+            'city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'town_ids' => ['nullable', 'array'],
+            'town_ids.*' => ['integer', 'exists:towns,id'],
+            /*
+             * Ce que le vehicule doit PROPOSER, et non comment le chiffrer :
+             * `pricing_mode` repond a l'autre question, et les confondre
+             * cacherait du catalogue un vehicule qu'on sait encore chiffrer.
+             */
+            'proposes' => ['nullable', Rule::in(BookingPricing::MODES)],
         ];
     }
 

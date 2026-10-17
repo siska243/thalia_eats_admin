@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\StatusResource\Pages;
 
-use Filament\Actions\CreateAction;
 use App\Filament\Resources\StatusResource;
-use Filament\Actions;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListStatuses extends ListRecords

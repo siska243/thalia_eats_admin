@@ -106,6 +106,39 @@ class RentalDelaiPrevenanceTest extends TestCase
         $this->assertSame(0, Booking::query()->count());
     }
 
+    /**
+     * LA MINUTE PRESENTE (T127).
+     *
+     * « Actuellement il est 00h07, je ne peux pas commander une voiture a
+     * 00h07, le minimum c'est 01h07. 00h07 ca ne peut pas passer. »
+     *
+     * Le cas limite exact : ni passe ni futur, l'instant meme. Il tombe du
+     * bon cote d'un `>=` mal pose, et aucun test ne le couvrait.
+     */
+    public function test_la_minute_presente_est_refusee(): void
+    {
+        $this->reserve(now())
+            ->assertStatus(400)
+            ->assertJsonPath('error', BookingRefusee::DELAI_PREVENANCE);
+
+        $this->assertSame(0, Booking::query()->count());
+    }
+
+    /**
+     * Le MEME JOUR a une heure deja passee : « tenir compte heure et jour ».
+     *
+     * Un garde qui ne compare que les dates laisserait passer ce depart,
+     * puisque le jour, lui, est bien aujourd'hui.
+     */
+    public function test_une_heure_passee_du_jour_meme_est_refusee(): void
+    {
+        $this->reserve(now()->startOfDay()->addMinutes(7))
+            ->assertStatus(400)
+            ->assertJsonPath('error', BookingRefusee::DELAI_PREVENANCE);
+
+        $this->assertSame(0, Booking::query()->count());
+    }
+
     public function test_un_depart_dans_dix_minutes_est_refuse(): void
     {
         $this->reserve(now()->addMinutes(10))

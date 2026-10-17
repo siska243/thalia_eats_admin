@@ -4,7 +4,6 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -19,7 +18,7 @@ class PayementEvent implements ShouldBroadcast
     /**
      * Create a new event instance.
      *
-     * @param mixed $message
+     * @param  mixed  $message
      * @return void
      */
     public function __construct($message)
@@ -41,8 +40,6 @@ class PayementEvent implements ShouldBroadcast
 
     /**
      * The event's broadcast name.
-     *
-     * @return string
      */
     public function broadcastAs(): string
     {
@@ -51,13 +48,11 @@ class PayementEvent implements ShouldBroadcast
 
     /**
      * Get the data to broadcast.
-     *
-     * @return array
      */
     public function broadcastWith(): array
     {
         return [
-            'message' => $this->message
+            'message' => $this->message,
         ];
     }
 }

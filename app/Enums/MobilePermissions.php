@@ -2,15 +2,14 @@
 
 namespace App\Enums;
 
-
-enum MobilePermissions :string
+enum MobilePermissions: string
 {
     case AccepOrder = 'accept-order';
-    case DeclineOrder='decline-order';
+    case DeclineOrder = 'decline-order';
 
-    case AddOrder='add-order';
+    case AddOrder = 'add-order';
 
-    case Delivery="delivery";
+    case Delivery = 'delivery';
 
     public function getLabel(): string
     {
@@ -24,15 +23,13 @@ enum MobilePermissions :string
         };
     }
 
-
-    public static function getOptions(): array{
-        return  collect(self::cases())->mapWithKeys(fn(self $type): array
-        => [$type->value => $type->getLabel()])->toArray();
+    public static function getOptions(): array
+    {
+        return collect(self::cases())->mapWithKeys(fn (self $type): array => [$type->value => $type->getLabel()])->toArray();
     }
 
-    public static function getOptionFilter(): array{
-        return  collect(self::cases())->mapWithKeys(fn(self $type): array
-        => [$type->value => $type->getLabel()])->toArray();
+    public static function getOptionFilter(): array
+    {
+        return collect(self::cases())->mapWithKeys(fn (self $type): array => [$type->value => $type->getLabel()])->toArray();
     }
-
 }

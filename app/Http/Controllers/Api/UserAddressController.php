@@ -55,7 +55,7 @@ class UserAddressController extends Controller
                 return ApiResponse::BAD_REQUEST(
                     $validator->errors(),
                     'Oups',
-                    "Veuillez indiquer une adresse et une commune desservie"
+                    'Veuillez indiquer une adresse et une commune desservie'
                 );
             }
 
@@ -105,7 +105,7 @@ class UserAddressController extends Controller
                 ->where('slug', $slug)
                 ->first();
 
-            if (!$address) {
+            if (! $address) {
                 return ApiResponse::NOT_FOUND('Oups', "Cette adresse n'existe pas");
             }
 

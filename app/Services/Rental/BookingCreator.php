@@ -4,6 +4,7 @@ namespace App\Services\Rental;
 
 use App\Exceptions\BookingRefusee;
 use App\Models\Booking;
+use App\Models\CourseType;
 use App\Models\Town;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -93,6 +94,83 @@ class BookingCreator
         }
 
         /*
+         * Le vehicule travaille dans sa ville, et nulle part ailleurs.
+         *
+         * Le catalogue, lui, reste MONDIAL : « ils peuvent voir les vehicules
+         * disponibles qui se trouvent dans tous les pays mais ils peuvent
+         * commander que pour la course dans le pays d'origine de la voiture ».
+         * C'est donc ici qu'on refuse, pas a l'affichage.
+         *
+         * APRES le controle de la commune : une commune fermee prime, parce
+         * que son refus envoie vers WhatsApp quand l'autre envoie vers un
+         * autre vehicule.
+         *
+         * Un vehicule sans ville — tout le parc existant — passe : ne rien
+         * savoir de son rattachement ne doit pas fermer la location.
+         */
+        $ville = $townId ? Town::query()->whereKey($townId)->value('city_id') : null;
+
+        if ($ville && $vehicle->city_id && (int) $ville !== (int) $vehicle->city_id) {
+            throw new BookingRefusee(
+                BookingRefusee::HORS_VILLE,
+                "Ce véhicule effectue uniquement des courses à {$vehicle->city->title}.",
+            );
+        }
+
+        /*
+         * Les communes d'ou ce vehicule sort.
+         *
+         * Vide, il accepte toute sa ville : « aucune commune selectionnee, on
+         * prend toutes les communes ». APRES le controle de ville, qui prime —
+         * une commune cochee d'une autre ville ne rouvre rien, et ce cas
+         * arrive des qu'on change la ville sans revoir les communes.
+         */
+        if ($townId && ! $vehicle->dessertLaCommune((int) $townId)) {
+            $servies = $vehicle->towns()->orderBy('title')->pluck('title')->implode(', ');
+
+            throw new BookingRefusee(
+                BookingRefusee::HORS_COMMUNE,
+                "Ce véhicule prend ses courses uniquement à : {$servies}.",
+            );
+        }
+
+        /*
+         * Les regles du type de course.
+         *
+         * Elles sont lues SUR LA LIGNE du referentiel, jamais deduites d'un
+         * code : « le type c'est un referentiel », et un `if ($code === 'B')`
+         * ici rendrait impossible d'ajouter un quatrieme type sans livraison.
+         *
+         * Sans type transmis, aucune regle ne s'applique : les applications
+         * deja installees n'en envoient pas, et leurs reservations sont des
+         * courses urbaines ordinaires.
+         */
+        $courseType = ($details['course_type_id'] ?? null)
+            ? CourseType::query()->find($details['course_type_id'])
+            : null;
+
+        if ($courseType?->forced_mode && $courseType->forced_mode !== $mode) {
+            /*
+             * On REFUSE plutot que de basculer en silence : le client a choisi
+             * un mode et un prix, et un autre prix n'est pas le sien.
+             */
+            $libelle = $courseType->forced_mode === BookingPricing::MODE_DAILY ? 'à la journée' : "à l'heure";
+
+            throw new BookingRefusee(
+                BookingRefusee::MODE_IMPOSE,
+                "Une course « {$courseType->title} » se réserve {$libelle}.",
+            );
+        }
+
+        if ($courseType?->minimum_hours
+            && $this->pricing->billableHours($startsAt, $endsAt) < $courseType->minimum_hours) {
+            throw new BookingRefusee(
+                BookingRefusee::DUREE_MINIMALE_TYPE,
+                "Une course « {$courseType->title} » se réserve pour {$courseType->minimum_hours} heures au minimum.",
+            );
+        }
+
+        /*
          * La disponibilite est verifiee des la creation, meme si elle sera
          * revue au paiement. Laisser reserver un creneau visiblement pris
          * ferait payer un client pour rien, et la deception arriverait apres
@@ -152,7 +230,14 @@ class BookingCreator
                 );
             }
 
-            $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $mode);
+            $quote = $this->pricing->quote(
+                $vehicle,
+                $startsAt,
+                $endsAt,
+                $mode,
+                $courseType,
+                (bool) ($details['parking'] ?? false),
+            );
         } catch (InvalidArgumentException) {
             throw new BookingRefusee(BookingRefusee::CRENEAU_INVALIDE);
         }

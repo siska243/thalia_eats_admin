@@ -17,6 +17,11 @@ php artisan filament:optimize-clear && php artisan filament:optimize
 php artisan view:clear
 php artisan storage:link
 php artisan migrate --force
+# Un ecran d'administration dont la permission n'existe pas est INVISIBLE, meme
+# pour un super_admin : define_via_gate est a false dans la config de Shield.
+# Rien ne jouait shield:generate au deploiement, et c'est ce qui avait vide le
+# menu Location. Idempotent, rejoue a chaque mise en ligne.
+php artisan thalia:permissions-admin
 php artisan db:seed --force
 php artisan optimize
 

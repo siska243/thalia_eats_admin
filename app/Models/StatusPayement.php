@@ -20,8 +20,8 @@ class StatusPayement extends Model
         'is_paid',
     ];
 
-    protected $casts=[
-        'is_default'=>'boolean',
-        'is_paid'=>'boolean',
+    protected $casts = [
+        'is_default' => 'boolean',
+        'is_paid' => 'boolean',
     ];
 }

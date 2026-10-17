@@ -14,10 +14,9 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-
 class User extends Authenticatable implements FilamentUser
 {
-    use HasApiTokens, HasFactory, Notifiable, HasRoles;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -29,8 +28,8 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
-        "number_street",
-        "street",
+        'number_street',
+        'street',
         'principal_adresse',
         'town_id',
         'devices',
@@ -38,10 +37,9 @@ class User extends Authenticatable implements FilamentUser
         'creation_token',
         'mobile_permissions',
         'type_user',
-        "google_id",
-        "social_media_avatar"
+        'google_id',
+        'social_media_avatar',
     ];
-
 
     /**
      * Acces au panneau d'administration.
@@ -65,7 +63,6 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasRole('super_admin');
     }
-
 
     /**
      * The attributes that should be hidden for serialization.
@@ -100,7 +97,7 @@ class User extends Authenticatable implements FilamentUser
         'otp_expire_at' => 'datetime',
         'password' => 'hashed',
         'devices' => 'array',
-        'mobile_permissions' => 'array'
+        'mobile_permissions' => 'array',
     ];
 
     public function restaurant(): HasMany
@@ -118,15 +115,13 @@ class User extends Authenticatable implements FilamentUser
         return $this->belongsTo(Town::class);
     }
 
-
-    public function delivrery_driver(): hasMany
-
+    public function delivrery_driver(): HasMany
     {
         return $this->hasMany(DelivreryDriver::class);
     }
 
     public function fullName()
     {
-        return $this->first_name . ' ' . $this->name;
+        return $this->first_name.' '.$this->name;
     }
 }

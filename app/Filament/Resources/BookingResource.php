@@ -498,13 +498,48 @@ class BookingResource extends Resource
      * et du creneau. Un total saisi a la main divergerait du prix annonce au
      * client.
      */
-    public static function quoteFor(array $data): BookingQuote
+    public static function quoteFor(array $data, ?Booking $existante = null): BookingQuote
     {
+        $mode = $data['pricing_mode'] ?? BookingPricing::MODE_HOURLY;
+
+        /*
+         * Le prix d'une reservation est FIGE a la reservation.
+         *
+         * Le proprietaire, le 16 octobre : « quand on selectionne, il faut que
+         * le bon prix soit enregistre dans la location, et non quand on change
+         * le prix du vehicule ça impacte aussi le prix de la location deja en
+         * cours ».
+         *
+         * Ouvrir une reservation d'hier et la sauver sans rien changer
+         * suffisait a la reprendre au tarif du jour — alors que le client
+         * avait deja paye son acompte sur l'ancien.
+         *
+         * Le tarif convenu est donc repris TANT QUE L'OFFRE NE CHANGE PAS.
+         * Changer de vehicule ou de mode, c'est une autre offre : garder
+         * l'ancien tarif facturerait un 4x4 au prix d'une citadine. Changer
+         * seulement les heures laisse le tarif et recompte les unites.
+         */
+        /*
+         * `getOriginal()` et non les attributs courants : au moment ou
+         * Filament appelle ce code, l'enregistrement a DEJA ete rempli depuis
+         * le formulaire. Comparer les attributs reviendrait a comparer la
+         * nouvelle valeur avec elle-meme, et toute offre paraitrait
+         * inchangee — y compris un changement de vehicule.
+         */
+        $vehiculeOrigine = $existante?->getOriginal('vehicle_id');
+        $modeOrigine = $existante?->getOriginal('pricing_mode');
+        $tarifOrigine = $existante?->getOriginal('unit_price');
+
+        $memeOffre = $existante
+            && (int) $vehiculeOrigine === (int) $data['vehicle_id']
+            && $modeOrigine === $mode;
+
         return app(BookingPricing::class)->quote(
             Vehicle::findOrFail($data['vehicle_id']),
             Carbon::parse($data['starts_at']),
             Carbon::parse($data['ends_at']),
-            $data['pricing_mode'] ?? BookingPricing::MODE_HOURLY,
+            $mode,
+            tarifFige: $memeOffre && $tarifOrigine !== null ? (float) $tarifOrigine : null,
         );
     }
 

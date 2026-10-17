@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::table('delivrery_drivers', function (Blueprint $table) {
             //
-            $table->foreignIdFor(User::class,'user_id');
+            $table->foreignIdFor(User::class, 'user_id');
         });
     }
 
@@ -25,7 +25,7 @@ return new class extends Migration
     {
         Schema::table('delivrery_drivers', function (Blueprint $table) {
             //
-            $table->dropForeignIdFor(User::class,'user_id');
+            $table->dropForeignIdFor(User::class, 'user_id');
         });
     }
 };

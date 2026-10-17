@@ -2,13 +2,12 @@
 
 namespace App\Enums;
 
-
-enum TypeUser :string
+enum TypeUser: string
 {
     case Client = 'client';
-    case Delivery='delivery';
+    case Delivery = 'delivery';
 
-    case Restaurant='restaurant';
+    case Restaurant = 'restaurant';
 
     public function getLabel(): string
     {
@@ -20,11 +19,9 @@ enum TypeUser :string
         };
     }
 
-
-    public static function getOptions(): array{
-        return  collect(self::cases())
-        ->mapWithKeys(fn(self $type): array
-        => [$type->value => $type->getLabel()])->toArray();
+    public static function getOptions(): array
+    {
+        return collect(self::cases())
+            ->mapWithKeys(fn (self $type): array => [$type->value => $type->getLabel()])->toArray();
     }
-
 }

@@ -9,9 +9,9 @@ use Kreait\Firebase\Messaging\Notification;
 
 class FirebasePushNotification
 {
+    public static $URL = 'https://exp.host/--/api/v2/push/send';
 
-    static $URL = "https://exp.host/--/api/v2/push/send";
-    static $DEFAULT_EXPO_PUSH_TOKEN = "ExponentPushToken[HxsIy6FMQxNRGHn1U_O-lp]";
+    public static $DEFAULT_EXPO_PUSH_TOKEN = 'ExponentPushToken[HxsIy6FMQxNRGHn1U_O-lp]';
 
     public function body($token, $title, $content): array
     {
@@ -22,8 +22,8 @@ class FirebasePushNotification
             'title' => $title,
             'body' => $content,
             'data' => [
-                'someData' => 'goes here'
-            ]
+                'someData' => 'goes here',
+            ],
         ];
     }
 
@@ -32,11 +32,11 @@ class FirebasePushNotification
         return [
             'Accept' => 'application/json',
             'Accept-encoding' => 'gzip, deflate',
-            'Content-Type' => 'application/json'
+            'Content-Type' => 'application/json',
         ];
     }
 
-    public function sendPushNotification($deviceToken, $title, $body, string|null $image = null)
+    public function sendPushNotification($deviceToken, $title, $body, ?string $image = null)
     {
         $messaging = app('firebase.messaging');
 
@@ -53,7 +53,7 @@ class FirebasePushNotification
 
     }
 
-    public function sendPushNotificationMultiUser(array $deviceTokens, $title, $body, string|null $image = null)
+    public function sendPushNotificationMultiUser(array $deviceTokens, $title, $body, ?string $image = null)
     {
         $messaging = app('firebase.messaging');
 
@@ -63,11 +63,10 @@ class FirebasePushNotification
 
         $results = $messaging->validateRegistrationTokens($deviceTokens);
 
-        $validTokens = $results["valid"];
-        if (!empty($validTokens)) {
+        $validTokens = $results['valid'];
+        if (! empty($validTokens)) {
             $messaging->sendMulticast($message, $validTokens);
         }
-
 
     }
 
@@ -75,7 +74,7 @@ class FirebasePushNotification
     {
         $data = (new self)->body($token, $title, $content);
         Http::withHeaders(
-            (new self())->headers()
+            (new self)->headers()
         )->withBody(
             json_encode($data)
         )->post(self::$URL, $data);
@@ -95,5 +94,4 @@ class FirebasePushNotification
         }
 
     }
-
 }

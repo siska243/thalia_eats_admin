@@ -7,6 +7,7 @@ use App\Http\Middleware\EncryptCookies;
 use App\Http\Middleware\EnsureNotAgentToken;
 use App\Http\Middleware\PreventRequestsDuringMaintenance;
 use App\Http\Middleware\RedirectIfAuthenticated;
+use App\Http\Middleware\LimiterLesEchecs;
 use App\Http\Middleware\RefuserAgentSansAbility;
 use App\Http\Middleware\TrimStrings;
 use App\Http\Middleware\TrustProxies;
@@ -68,6 +69,15 @@ class Kernel extends HttpKernel
         'api' => [
             // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             ThrottleRequests::class.':api',
+            /*
+             * Le filet general sur les actions QUI ECHOUENT.
+             *
+             * Place apres le throttle de debit et avant tout le reste : il
+             * doit voir le statut final de chaque reponse de l'API, celles
+             * des routes publiques comprises — c'est la que se cherchent les
+             * identifiants devines et les parametres malformes.
+             */
+            LimiterLesEchecs::class,
             SubstituteBindings::class,
             RefuserAgentSansAbility::class,
             /*

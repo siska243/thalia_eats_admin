@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\BookingResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\BookingResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditBooking extends EditRecord
@@ -14,7 +13,9 @@ class EditBooking extends EditRecord
     /** Meme regle qu'a la creation : le serveur refait le calcul. */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        return array_merge($data, BookingResource::quoteFor($data)->toBookingAttributes());
+        // La reservation existante est passee : son tarif convenu l'emporte
+        // tant que l'offre - vehicule et mode - ne change pas.
+        return array_merge($data, BookingResource::quoteFor($data, $this->record)->toBookingAttributes());
     }
 
     protected function getHeaderActions(): array

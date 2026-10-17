@@ -2,38 +2,35 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Pages\Enums\SubNavigationPosition;
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Forms\Components\TextInput;
-use App\Filament\Resources\CategoryProductResource\Pages\EditCategoryProduct;
-use App\Filament\Resources\CategoryProductResource\Pages\ManageProducts;
-use App\Filament\Resources\CategoryProductResource\Pages\ListCategoryProducts;
 use App\Filament\Resources\CategoryProductResource\Pages\CreateCategoryProduct;
-use App\Filament\Resources\CategoryProductResource\Pages;
-use App\Filament\Resources\CategoryProductResource\RelationManagers;
+use App\Filament\Resources\CategoryProductResource\Pages\EditCategoryProduct;
+use App\Filament\Resources\CategoryProductResource\Pages\ListCategoryProducts;
+use App\Filament\Resources\CategoryProductResource\Pages\ManageProducts;
 use App\Models\CategoryProduct;
-use Filament\Forms;
+use Filament\Forms\Components\TextInput;
+use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
-use Filament\Tables\Actions\{BulkActionGroup, CreateAction, DeleteAction, DeleteBulkAction, EditAction};
-use Filament\Tables\Columns\{TextColumn, ToggleColumn};
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-
 
 class CategoryProductResource extends Resource
 {
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $model = CategoryProduct::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-table-cells';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
 
-    protected static ?string $navigationLabel = "Categorie";
-    protected static string | \UnitEnum | null $navigationGroup = "Produits";
+    protected static ?string $navigationLabel = 'Categorie';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
-    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -42,8 +39,8 @@ class CategoryProductResource extends Resource
                     TextInput::make('title')
                         ->required()
                         ->maxLength(65535)
-                        ->columnSpanFull()
-                ])
+                        ->columnSpanFull(),
+                ]),
             ])->columns(2);
     }
 
@@ -67,16 +64,16 @@ class CategoryProductResource extends Resource
                 //
             ])
             ->recordActions([
-               \Filament\Actions\EditAction::make(),
-                \Filament\Actions\DeleteAction::make()
+                \Filament\Actions\EditAction::make(),
+                \Filament\Actions\DeleteAction::make(),
             ])
             ->toolbarActions([
-               \Filament\Actions\BulkActionGroup::make([
-                   \Filament\Actions\DeleteBulkAction::make(),
+                \Filament\Actions\BulkActionGroup::make([
+                    \Filament\Actions\DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-               \Filament\Actions\CreateAction::make(),
+                \Filament\Actions\CreateAction::make(),
             ]);
     }
 
@@ -87,7 +84,6 @@ class CategoryProductResource extends Resource
         ];
     }
 
-
     public static function getRecordSubNavigation(Page $page): array
     {
         return $page->generateNavigationItems([
@@ -97,13 +93,14 @@ class CategoryProductResource extends Resource
 
         ]);
     }
+
     public static function getPages(): array
     {
         return [
             'index' => ListCategoryProducts::route('/'),
             'create' => CreateCategoryProduct::route('/create'),
             'edit' => EditCategoryProduct::route('/{record}/edit'),
-            'products'=>ManageProducts::route('/{record}/products'),
+            'products' => ManageProducts::route('/{record}/products'),
         ];
     }
 }

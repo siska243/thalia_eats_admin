@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use App\Wrappers\ApiResponse;
-use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
 
 class LoginUserRequest extends FormRequest
 {
@@ -40,9 +40,9 @@ class LoginUserRequest extends FormRequest
     {
         return [
             'email.required' => "L'email est obligatoire",
-            "email.email" => "Veuillez saisir un email valide",
-            'password.required' => "Le mot de passe est obligatoire",
-            'password.min' => "Le mot de passe doit contenir au moins 4 caracteres",
+            'email.email' => 'Veuillez saisir un email valide',
+            'password.required' => 'Le mot de passe est obligatoire',
+            'password.min' => 'Le mot de passe doit contenir au moins 4 caracteres',
         ];
     }
 }

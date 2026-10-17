@@ -13,21 +13,21 @@ class ConfigurationPayement extends Model
     /** @use HasFactory<ConfigurationPayementFactory> */
     use HasFactory,SoftDeletes;
 
-    protected $fillable=[
-      "token",
-      "token_key",
-      "active",
-      "environment",
-      "url",
-      "url_doc",
-      "user_id"
+    protected $fillable = [
+        'token',
+        'token_key',
+        'active',
+        'environment',
+        'url',
+        'url_doc',
+        'user_id',
     ];
 
-    protected $casts=[
-        "active"=>"boolean",
+    protected $casts = [
+        'active' => 'boolean',
     ];
 
-    public function user():BelongsTo
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }

@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use App\Wrappers\ApiResponse;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -15,7 +15,7 @@ class CommandeRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
-        //return auth()->user()->hasRole('clients');
+        // return auth()->user()->hasRole('clients');
     }
 
     /**
@@ -26,11 +26,11 @@ class CommandeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'adresse'=>'required',
-            'pricing'=>'required',
-            'products'=>[
-                'uid'=>'required',
-                'quantity'=>'required',
+            'adresse' => 'required',
+            'pricing' => 'required',
+            'products' => [
+                'uid' => 'required',
+                'quantity' => 'required',
             ],
         ];
     }
@@ -45,9 +45,8 @@ class CommandeRequest extends FormRequest
     {
         return [
             'adresse.required' => "L'adresse est obligatoire",
-            "products.required" => "le produit est obligatoire",
-            'pricing.required' => "Le montant est obligatoire",
+            'products.required' => 'le produit est obligatoire',
+            'pricing.required' => 'Le montant est obligatoire',
         ];
     }
-
 }

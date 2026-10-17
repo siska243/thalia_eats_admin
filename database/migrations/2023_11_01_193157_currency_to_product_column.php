@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::table('products', function (Blueprint $table) {
             //
-            $table->foreignIdFor(Currency::class,'currency_id');
+            $table->foreignIdFor(Currency::class, 'currency_id');
         });
     }
 

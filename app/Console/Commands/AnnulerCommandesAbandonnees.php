@@ -45,7 +45,7 @@ class AnnulerCommandesAbandonnees extends Command
 
         $this->info(
             ($simulation ? '[simulation] ' : '')
-            . "{$total} commande(s) en cours depuis plus de {$jours} jours."
+            ."{$total} commande(s) en cours depuis plus de {$jours} jours."
         );
 
         $annulees = 0;
@@ -74,7 +74,7 @@ class AnnulerCommandesAbandonnees extends Command
                     'commande_id' => $commande->id,
                     'reference' => $commande->refernce,
                     'creee_le' => $commande->created_at?->toDateTimeString(),
-                    'motif' => 'en cours depuis plus de ' . Commande::JOURS_AVANT_ABANDON . ' jours',
+                    'motif' => 'en cours depuis plus de '.Commande::JOURS_AVANT_ABANDON.' jours',
                 ]);
 
                 $annulees++;

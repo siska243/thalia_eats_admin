@@ -2,10 +2,9 @@
 
 namespace App\Mail;
 
-use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -29,7 +28,7 @@ class OtpReinitPasswordMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __("Reset with OTP"),
+            subject: __('Reset with OTP'),
         );
     }
 
@@ -41,8 +40,8 @@ class OtpReinitPasswordMail extends Mailable
         return new Content(
             view: 'emails.reset_password',
             with: [
-                "full_name" => $this->data['full_name'],
-                "otp"=>$this->data['otp'],
+                'full_name' => $this->data['full_name'],
+                'otp' => $this->data['otp'],
             ]
         );
     }

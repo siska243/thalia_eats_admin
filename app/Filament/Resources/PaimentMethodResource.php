@@ -2,35 +2,34 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Forms\Components\TextInput;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ToggleColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use App\Filament\Resources\PaimentMethodResource\Pages\ListPaimentMethods;
 use App\Filament\Resources\PaimentMethodResource\Pages\CreatePaimentMethod;
 use App\Filament\Resources\PaimentMethodResource\Pages\EditPaimentMethod;
-use App\Filament\Resources\PaimentMethodResource\Pages;
-use App\Filament\Resources\PaimentMethodResource\RelationManagers;
+use App\Filament\Resources\PaimentMethodResource\Pages\ListPaimentMethods;
 use App\Models\PaimentMethod;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PaimentMethodResource extends Resource
 {
+    protected static ?int $navigationSort = 7;
+
     protected static ?string $model = PaimentMethod::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-credit-card';
-    protected static ?string $navigationLabel = "Methode de paiement";
-    protected static string | \UnitEnum | null $navigationGroup = "Parametre";
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
+
+    protected static ?string $navigationLabel = 'Methode de paiement';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -38,8 +37,8 @@ class PaimentMethodResource extends Resource
                 Section::make()->schema([
                     TextInput::make('title')
                         ->required()
-                        ->maxLength(255)
-                ])
+                        ->maxLength(255),
+                ]),
 
             ]);
     }

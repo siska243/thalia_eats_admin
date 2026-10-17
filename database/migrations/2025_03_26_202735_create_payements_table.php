@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Commande;
+use App\Models\StatusPayement;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -23,8 +25,8 @@ return new class extends Migration
             $table->string('provider_reference')->nullable();
             $table->string('phone')->nullable();
             $table->string('code')->nullable();
-            $table->foreignIdFor(\App\Models\Commande::class)->constrained()->cascadeOnDelete();
-            $table->foreignIdFor(\App\Models\StatusPayement::class)->constrained()->cascadeOnDelete();
+            $table->foreignIdFor(Commande::class)->constrained()->cascadeOnDelete();
+            $table->foreignIdFor(StatusPayement::class)->constrained()->cascadeOnDelete();
             $table->softDeletes();
             $table->timestamps();
         });

@@ -24,7 +24,11 @@ class ProductSearchService
         ['ids' => $ids, 'distances' => $distances] = $this->eligibleRestaurants($filters);
 
         $query = Product::query()
-            ->with(['currency', 'restaurant', 'sub_category_product'])
+            // `restaurant.town.city` : QuotationService lit la ville du restaurant pour
+            // son rayon, et BudgetSuggestionService appelle quote() dans une boucle
+            // sur 50 produits. Sans ce prechargement, chaque suggestion coutait deux
+            // requetes paresseuses de plus, soit une centaine par appel.
+            ->with(['currency', 'restaurant.town.city', 'sub_category_product'])
             ->where('products.is_active', true)
             ->whereNull('products.deleted_at')
             ->whereIn('products.restaurant_id', $ids === [] ? [0] : $ids);
@@ -61,11 +65,14 @@ class ProductSearchService
             $query->where(fn (Builder $q) => $q->whereNull('town_id')->orWhere('town_id', $town_id));
         }
 
-        $restaurants = $query->get(['id', 'name', 'location']);
+        // `town.city` : le plafond de rayon vient de la ville du restaurant.
+        $restaurants = $query->with('town.city')->get(['id', 'name', 'location', 'town_id']);
 
         $lat = isset($filters['lat']) ? (float) $filters['lat'] : null;
         $lng = isset($filters['lng']) ? (float) $filters['lng'] : null;
         $radius = isset($filters['radius']) ? (float) $filters['radius'] : null;
+
+        $portees = app(PorteeLivraison::class);
 
         $geolocalises = [];
         $sans_position = [];
@@ -73,26 +80,45 @@ class ProductSearchService
 
         foreach ($restaurants as $restaurant) {
             $id = (int) $restaurant->id;
-            $coords = ($lat !== null && $lng !== null)
-                ? RestaurantGeo::coordinates($restaurant->location)
+
+            /*
+             * La distance et le verdict viennent de `PorteeLivraison`, jamais
+             * d'un calcul recopié ici.
+             *
+             * Cette boucle refaisait son propre Haversine, et elle échappait
+             * donc aux garde-fous de la règle : une position à (0, 0) — un GPS
+             * qui n'a pas encore fixé — plaçait le client dans le golfe de
+             * Guinée et excluait TOUS les restaurants géolocalisés. La
+             * recherche rendait zéro résultat.
+             *
+             * C'est exactement le motif que ce lot est censé fermer : une règle
+             * à deux endroits finit par diverger.
+             */
+            $portee = ($lat !== null && $lng !== null)
+                ? $portees->pour($restaurant, null, $lat, $lng)
                 : null;
 
-            if ($coords === null) {
+            if ($portee?->distance_km === null) {
                 $distances[$id] = null;
                 $sans_position[] = ['id' => $id, 'name' => (string) $restaurant->name];
 
                 continue;
             }
 
-            $distance = RestaurantGeo::distanceKm($lat, $lng, $coords['lat'], $coords['lng']);
-
-            // Le rayon n'exclut que les restaurants dont on connaît la position.
-            if ($radius !== null && $distance > $radius) {
+            /*
+             * Le rayon du client ne fait que RESSERRER celui du réglage.
+             *
+             * Avant, `radius` venait entièrement du client : il filtrait un
+             * affichage sans rien contraindre, et `radius=10000` rendait tout
+             * le pays éligible. La borne haute appartient au serveur, comme le
+             * prix.
+             */
+            if (! $portee->autorise || ($radius !== null && $portee->distance_km > $radius)) {
                 continue;
             }
 
-            $distances[$id] = $distance;
-            $geolocalises[] = ['id' => $id, 'distance' => $distance];
+            $distances[$id] = $portee->distance_km;
+            $geolocalises[] = ['id' => $id, 'distance' => $portee->distance_km];
         }
 
         usort($geolocalises, fn ($a, $b) => $a['distance'] <=> $b['distance']);

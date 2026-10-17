@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Rental\VehicleSearchRequest;
 use App\Http\Resources\Rental\VehicleResource;
 use App\Models\Booking;
+use App\Models\CourseType;
 use App\Models\Vehicle;
 use App\Services\Rental\BookingPricing;
 use App\Services\Rental\VehicleAvailability;
@@ -64,8 +65,9 @@ class VehicleController extends Controller
             : Vehicle::query()->rentable()->orderBy('hourly_rate');
 
         $this->appliquerRecherche($requete, $search);
+        $this->appliquerFiltres($requete, $request);
 
-        $page = $requete->with('currency')->paginate(self::PAR_PAGE);
+        $page = $requete->with(['currency', 'city', 'coursePrices.courseType'])->paginate(self::PAR_PAGE);
 
         // Un seul appel pour toute la page : demander vehicule par vehicule
         // s'il est libre ferait une requete par ligne affichee.
@@ -89,6 +91,62 @@ class VehicleController extends Controller
                 'per_page' => $page->perPage(),
             ],
         ]);
+    }
+
+    /**
+     * Les filtres du catalogue, poses sur la REQUETE.
+     *
+     * Sur la requete et jamais sur la page : filtrer une page deja chargee
+     * donnerait des pages a trous, et filtrer une collection complete
+     * obligerait a lire tout le parc pour en renvoyer quinze.
+     *
+     * Chacun ne s'applique que s'il est transmis : une application deja
+     * installee n'en envoie aucun, et son catalogue ne change pas.
+     *
+     * @param  Builder<Vehicle>  $requete
+     */
+    private function appliquerFiltres(Builder $requete, VehicleSearchRequest $request): void
+    {
+        if ($ville = $request->integer('city_id')) {
+            $requete->where('city_id', $ville);
+        }
+
+        /*
+         * Un vehicule SANS commune sort toujours : il dessert toute sa ville,
+         * et le retirer cacherait justement celui qui accepte la course.
+         */
+        if ($communes = array_filter((array) $request->input('town_ids', []))) {
+            $requete->where(fn (Builder $q) => $q
+                ->whereDoesntHave('towns')
+                ->orWhereHas('towns', fn (Builder $t) => $t->whereIn('towns.id', $communes)));
+        }
+
+        if ($type = $request->integer('course_type_id')) {
+            $requete->whereHas('coursePrices', fn (Builder $q) => $q->where('course_type_id', $type));
+        }
+
+        /*
+         * `proposes` et NON `pricing_mode` : ce sont deux questions
+         * differentes, et les confondre casse un comportement voulu.
+         *
+         * `pricing_mode` dit comment CHIFFRER, et un vehicule sans tarif
+         * journalier reste chiffre a l'heure quand la journee est demandee —
+         * le cacher du catalogue laisserait croire qu'il n'existe pas. C'est
+         * ecrit dans `ligne()` et c'etait deja teste.
+         *
+         * `proposes` dit ce qu'on CHERCHE, et la le client demande a ne voir
+         * que ce qu'il peut reserver ainsi. A la journee, la case et le tarif
+         * vont ensemble : cocher sans prix ne propose rien.
+         */
+        $propose = $request->input('proposes');
+
+        if ($propose === BookingPricing::MODE_DAILY) {
+            $requete->whereNotNull('daily_rate')->where('daily_rate', '>', 0);
+        }
+
+        if ($propose === BookingPricing::MODE_HOURLY) {
+            $requete->whereNotNull('hourly_rate')->where('hourly_rate', '>', 0);
+        }
     }
 
     /**
@@ -129,7 +187,22 @@ class VehicleController extends Controller
                 ? BookingPricing::MODE_HOURLY
                 : $mode;
 
-        $quote = $this->pricing->quote($vehicle, $startsAt, $endsAt, $modeApplique);
+        /*
+         * Le type demande chiffre la course, s'il en existe un. Le catalogue
+         * doit annoncer exactement ce que la reservation facturera.
+         */
+        $courseType = $request->filled('course_type_id')
+            ? CourseType::query()->find($request->integer('course_type_id'))
+            : null;
+
+        $quote = $this->pricing->quote(
+            $vehicle,
+            $startsAt,
+            $endsAt,
+            $modeApplique,
+            $courseType,
+            $request->boolean('parking'),
+        );
 
         return array_merge($ligne, [
             // Dans la liste, ils sortent tous de availableVehiclesQuery : ils
@@ -141,6 +214,10 @@ class VehicleController extends Controller
                 'unit_price' => $quote->unitPrice,
                 'billed_units' => $quote->billedUnits,
                 'duration_hours' => $quote->durationHours,
+                // Le detail, pour que l'ecran puisse dire d'ou vient le total
+                // au lieu de laisser croire a un prix change.
+                'base_price' => $quote->base,
+                'parking_fee' => $quote->parkingFee,
                 'total' => $quote->total,
                 'deposit' => $quote->deposit,
                 'balance' => $quote->balance,
@@ -162,7 +239,7 @@ class VehicleController extends Controller
     {
         $vehicle = Vehicle::query()
             ->rentable()
-            ->with('currency')
+            ->with(['currency', 'city', 'coursePrices.courseType'])
             ->where('slug', $slug)
             ->first();
 

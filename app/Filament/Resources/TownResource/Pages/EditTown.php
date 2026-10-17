@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\TownResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\TownResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Str;
 
@@ -12,10 +11,10 @@ class EditTown extends EditRecord
 {
     protected static string $resource = TownResource::class;
 
-
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $data['slug']=Str::slug($data['title']);
+        $data['slug'] = Str::slug($data['title']);
+
         return $data;
 
     }

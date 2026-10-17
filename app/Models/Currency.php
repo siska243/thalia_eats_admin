@@ -44,7 +44,9 @@ class Currency extends Model
      */
     public static function parSlugOuCode(?string $valeur): ?self
     {
-        if (! $valeur) return null;
+        if (! $valeur) {
+            return null;
+        }
 
         return static::query()
             ->whereRaw('LOWER(slug) = ?', [mb_strtolower($valeur)])

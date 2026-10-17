@@ -66,6 +66,11 @@ fi
 if [ "${THALIA_RUN_MIGRATIONS:-false}" = "true" ]; then
     echo "[thalia] migrations demandees explicitement"
     php artisan migrate --force --ansi
+
+    # Les permissions des ecrans d'administration suivent les migrations : un
+    # ecran ajoute sans sa permission reste invisible, meme pour un
+    # super_admin. Idempotent.
+    php artisan thalia:permissions-admin --ansi || true
 fi
 
 echo "[thalia] mise en cache de la configuration"

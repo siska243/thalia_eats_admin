@@ -2,11 +2,10 @@
 
 namespace App\Enums;
 
-
-enum Device :string
+enum Device: string
 {
     case Mobile = 'mobile';
-    case Web='web';
+    case Web = 'web';
 
     public function getLabel(): string
     {
@@ -18,11 +17,9 @@ enum Device :string
         };
     }
 
-
-    public static function getOptions(): array{
-        return  collect(self::cases())
-        ->mapWithKeys(fn(self $type): array
-        => [$type->value => $type->getLabel()])->toArray();
+    public static function getOptions(): array
+    {
+        return collect(self::cases())
+            ->mapWithKeys(fn (self $type): array => [$type->value => $type->getLabel()])->toArray();
     }
-
 }

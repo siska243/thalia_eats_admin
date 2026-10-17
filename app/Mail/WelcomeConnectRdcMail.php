@@ -2,10 +2,9 @@
 
 namespace App\Mail;
 
-use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -41,7 +40,7 @@ class WelcomeConnectRdcMail extends Mailable
         return new Content(
             view: 'emails.welcome',
             with: [
-                "full_name" => $this->data['full_name'],
+                'full_name' => $this->data['full_name'],
             ]
         );
     }

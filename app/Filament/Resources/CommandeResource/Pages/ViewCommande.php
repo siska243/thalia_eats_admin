@@ -7,6 +7,5 @@ use Filament\Resources\Pages\ViewRecord;
 
 class ViewCommande extends ViewRecord
 {
-
     protected static string $resource = CommandeResource::class;
 }

@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Filament\Resources\CategoryResource;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CategorieResource;
 use App\Models\CategoryProduct;
-use App\Models\SubCategoryProduct;
 use Exception;
 use Illuminate\Http\Request;
 
@@ -18,7 +16,7 @@ class CategorieProductController extends Controller
     public function index()
     {
         //
-        try{
+        try {
             // Catalogue global : tous les restaurants confondus, mais les
             // produits sont precharges explicitement. La ressource ne les
             // charge plus paresseusement, et ce prechargement supprime au
@@ -26,9 +24,9 @@ class CategorieProductController extends Controller
             $categorie = CategoryProduct::with(['sub_category_product.product' => function ($query) {
                 $query->where('is_active', true);
             }])->get();
+
             return CategorieResource::collection($categorie);
-        }
-        catch(Exception $e){
+        } catch (Exception $e) {
             return $e;
         }
 
