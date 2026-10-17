@@ -110,7 +110,7 @@ class Parametres extends SettingsPage
              */
             foreach (self::GROUPES as $cle => $classe) {
                 $reglages = app($classe);
-                $reglages->fill($donnees[$cle] ?? []);
+                $reglages->fill(self::sansNullInterdit($classe, $donnees[$cle] ?? []));
                 $reglages->save();
             }
 
@@ -126,6 +126,55 @@ class Parametres extends SettingsPage
         $this->rememberData();
 
         $this->getSavedNotification()?->send();
+    }
+
+    /**
+     * Retire les `null` que la classe de reglages visee n'accepte pas.
+     *
+     * Filament rend `null` tout champ texte vide : `HasState::getState()`
+     * transforme une chaine blanche en `null`. Les proprietes de reglages sont
+     * declarees `string` non nullable — un champ facultatif qu'on vide levait
+     * donc un `\TypeError` dans `Settings::fill()`.
+     *
+     * Et ce `TypeError` etait invisible : Livewire le journalise puis rend un
+     * **419 generique** quand `app.debug` est a faux
+     * (`HandleRequests::handleUpdate`). En production, vider le numero WhatsApp
+     * faisait echouer l'enregistrement sans aucun message — l'ecran repondait
+     * 419, qu'on lit spontanement comme une session perdue.
+     *
+     * La garde est ici, et non champ par champ, parce que tout champ texte
+     * facultatif ajoute plus tard retomberait exactement dans le meme piege.
+     * Une chaine non nullable devient '' ; tout autre type non nullable reste
+     * a sa valeur actuelle plutot que d'ecrire une valeur inventee.
+     *
+     * @param  class-string<Settings>  $classe
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private static function sansNullInterdit(string $classe, array $donnees): array
+    {
+        foreach ($donnees as $nom => $valeur) {
+            if ($valeur !== null) {
+                continue;
+            }
+
+            $propriete = new \ReflectionProperty($classe, $nom);
+            $type = $propriete->getType();
+
+            if ($type === null || $type->allowsNull()) {
+                continue;
+            }
+
+            if ($type instanceof \ReflectionNamedType && $type->getName() === 'string') {
+                $donnees[$nom] = '';
+
+                continue;
+            }
+
+            unset($donnees[$nom]);
+        }
+
+        return $donnees;
     }
 
     public function form(Schema $schema): Schema
