@@ -92,6 +92,7 @@ class User extends Authenticatable implements FilamentUser
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'blocked_at' => 'datetime',
         // Sans ce cast, otp_expire_at est manipule comme une chaine et toute
         // comparaison de date depend du bon vouloir du parseur.
         'otp_expire_at' => 'datetime',
@@ -123,5 +124,64 @@ class User extends Authenticatable implements FilamentUser
     public function fullName()
     {
         return $this->first_name.' '.$this->name;
+    }
+
+    // --- Validation et blocage d'un compte ---------------------------------
+
+    /**
+     * Ce compte est-il bloque ?
+     *
+     * La regle vit ici, une seule fois : la connexion, le garde de l'API et
+     * l'administration posent la meme question, et trois lectures de
+     * `blocked_at` finiraient par diverger.
+     *
+     * `blocked_at` est une colonne NEUVE, nullable. `is_active` existait,
+     * mais vaut faux pour la quasi-totalite des comptes et n'est lu nulle
+     * part : s'en servir aurait mis presque tous les clients dehors.
+     */
+    public function estBloque(): bool
+    {
+        return $this->blocked_at !== null;
+    }
+
+    /**
+     * Bloque le compte et le met dehors tout de suite.
+     *
+     * Revoquer les jetons n'est pas un supplement : sans cela, un compte
+     * bloque reste a l'interieur aussi longtemps que son telephone ne se
+     * deconnecte pas, et c'est precisement le compte qu'on voulait sortir.
+     */
+    public function bloquer(?string $raison = null): void
+    {
+        $this->forceFill([
+            'blocked_at' => now(),
+            'blocked_reason' => $raison,
+        ])->save();
+
+        $this->tokens()->delete();
+    }
+
+    public function debloquer(): void
+    {
+        $this->forceFill(['blocked_at' => null, 'blocked_reason' => null])->save();
+    }
+
+    /**
+     * Marque l'adresse comme confirmee, depuis l'administration.
+     *
+     * Le meme champ que la confirmation par code : valider a la main et
+     * valider par email doivent produire exactement le meme compte, sinon le
+     * garde de [[T146]] laisserait passer l'un et pas l'autre.
+     *
+     * Une date deja posee n'est pas repoussee : elle dit quand l'adresse a
+     * ete confirmee, pas combien de fois on a clique.
+     */
+    public function marquerAdresseConfirmee(): void
+    {
+        if ($this->email_verified_at !== null) {
+            return;
+        }
+
+        $this->forceFill(['email_verified_at' => now()])->save();
     }
 }

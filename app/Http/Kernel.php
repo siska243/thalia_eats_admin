@@ -5,10 +5,12 @@ namespace App\Http;
 use App\Http\Middleware\Authenticate;
 use App\Http\Middleware\EncryptCookies;
 use App\Http\Middleware\EnsureNotAgentToken;
+use App\Http\Middleware\ExigerAdresseConfirmee;
+use App\Http\Middleware\LimiterLesEchecs;
 use App\Http\Middleware\PreventRequestsDuringMaintenance;
 use App\Http\Middleware\RedirectIfAuthenticated;
-use App\Http\Middleware\LimiterLesEchecs;
 use App\Http\Middleware\RefuserAgentSansAbility;
+use App\Http\Middleware\RefuserCompteBloque;
 use App\Http\Middleware\TrimStrings;
 use App\Http\Middleware\TrustProxies;
 use App\Http\Middleware\ValidateSignature;
@@ -79,6 +81,19 @@ class Kernel extends HttpKernel
              */
             LimiterLesEchecs::class,
             SubstituteBindings::class,
+            /*
+             * Un compte bloque n'atteint aucune route authentifiee. Place ici
+             * parce que c'est la seule porte que toutes traversent : le poser
+             * route par route reviendrait a l'oublier sur la prochaine.
+             */
+            RefuserCompteBloque::class,
+            /*
+             * Et un compte non confirme n'atteint rien non plus, hors les
+             * trois exceptions que le garde porte lui-meme. Le proprietaire :
+             * « un compte non valide ou bloque ne peut pas acceder a
+             * l'application (web ou mobile) ».
+             */
+            ExigerAdresseConfirmee::class,
             RefuserAgentSansAbility::class,
             /*
              * NE PAS DECOMMENTER CETTE LIGNE.
@@ -113,6 +128,7 @@ class Kernel extends HttpKernel
      * @var array<string, class-string|string>
      */
     protected $middlewareAliases = [
+        'adresse.confirmee' => ExigerAdresseConfirmee::class,
         // 'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
         // 'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
         // 'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,

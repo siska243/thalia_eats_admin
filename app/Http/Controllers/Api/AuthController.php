@@ -14,6 +14,7 @@ use App\Mail\WelcomeOtpMail;
 use App\Models\User;
 use App\Wrappers\ApiResponse;
 use Exception;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -199,6 +200,19 @@ class AuthController extends Controller
                 return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Email ou mot de passe incorrect');
             }
 
+            /*
+             * Le refus vient APRES la verification du mot de passe : annoncer
+             * « compte bloque » a qui ne connait pas le mot de passe
+             * apprendrait a un inconnu que cette adresse existe, et laquelle
+             * a ete bloquee.
+             */
+            if ($user->estBloque()) {
+                ApiResponse::FORBIDEN(
+                    'Compte bloqué',
+                    "Ce compte a été bloqué. Contactez le support si vous pensez qu'il s'agit d'une erreur.",
+                );
+            }
+
             $token = $user->createToken('api token')->plainTextToken;
 
             $roles = $user->getRoleNames();
@@ -212,6 +226,14 @@ class AuthController extends Controller
                 ],
             );
 
+        } catch (HttpResponseException $e) {
+            /*
+             * `ApiResponse::FORBIDEN()` leve plutot que de rendre : sans cette
+             * branche, le catch generique ci-dessous transformait le refus
+             * d'un compte bloque en 500 « erreur serveur ». Le refus doit
+             * sortir tel quel.
+             */
+            throw $e;
         } catch (Exception $e) {
             // throw $th;
             return ApiResponse::SERVER_ERROR($e);
