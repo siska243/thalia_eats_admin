@@ -12,6 +12,7 @@ use App\Http\Resources\UserResource;
 use App\Mail\OtpReinitPasswordMail;
 use App\Mail\WelcomeOtpMail;
 use App\Models\User;
+use App\Services\Securite\DoubleAuthentification;
 use App\Services\Securite\Turnstile;
 use App\Wrappers\ApiResponse;
 use Exception;
@@ -25,6 +26,49 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    /**
+     * La seconde etape de la connexion : le code du second facteur.
+     *
+     * Trois codes sont acceptes, et le client ne choisit pas lequel il
+     * saisit — celui de son application, celui recu par courriel, ou un code
+     * de secours. Il saisit ce qu'il a sous la main.
+     *
+     * Le defi est detruit des qu'il aboutit, et au bout de cinq essais : un
+     * code a six chiffres se devine, sur cinq minutes, si on laisse essayer.
+     */
+    public function doubleAuthentification(Request $request, DoubleAuthentification $double)
+    {
+        $valide = $request->validate([
+            'defi' => ['required', 'string'],
+            'code' => ['required', 'string'],
+        ]);
+
+        $user = $double->verifierDefi($valide['defi'], $valide['code']);
+
+        if (! $user) {
+            return ApiResponse::BAD_REQUEST(
+                'code_invalide',
+                'Code incorrect',
+                'Ce code ne correspond pas, ou votre demande a expiré. Reconnectez-vous.',
+            );
+        }
+
+        // Le blocage est reverifie ici : un compte peut avoir ete bloque
+        // entre les deux etapes, et la seconde delivre un jeton.
+        if ($user->estBloque()) {
+            ApiResponse::FORBIDEN(
+                'Compte bloqué',
+                "Ce compte a été bloqué. Contactez le support si vous pensez qu'il s'agit d'une erreur.",
+            );
+        }
+
+        return ApiResponse::GET_DATA([
+            'user' => new UserResource($user),
+            'roles' => $user->getRoleNames(),
+            'token' => $user->createToken('api token')->plainTextToken,
+        ]);
+    }
+
     public static function generateOtp(): string
     {
         return Str::padLeft(random_int(0, 9999), 4, '0');
@@ -192,7 +236,7 @@ class AuthController extends Controller
         }
     }
 
-    public function login(LoginUserRequest $request)
+    public function login(LoginUserRequest $request, DoubleAuthentification $double)
     {
         try {
             // code...
@@ -228,6 +272,28 @@ class AuthController extends Controller
                     'Compte bloqué',
                     "Ce compte a été bloqué. Contactez le support si vous pensez qu'il s'agit d'une erreur.",
                 );
+            }
+
+            /*
+             * LE SECOND FACTEUR, s'il est actif.
+             *
+             * Aucun jeton n'est emis a ce stade : le mot de passe seul ne
+             * doit pas ouvrir la session, sinon la mesure ne protege rien.
+             * Le client recoit un defi, le resout, et c'est la seconde route
+             * qui delivre le jeton.
+             *
+             * Les clients deja installes ne voient jamais ce chemin : il ne
+             * s'ouvre que pour les comptes qui ont eux-memes active la
+             * double authentification.
+             */
+            if ($double->estActive($user)) {
+                // La meme forme que la reponse de connexion ordinaire :
+                // les champs a la racine, pas sous `data`. Deux formes pour
+                // un meme endpoint obligeraient chaque client a deviner.
+                return ApiResponse::GET_DATA(array_merge(
+                    ['double_authentification_requise' => true],
+                    $double->ouvrirDefi($user),
+                ));
             }
 
             $token = $user->createToken('api token')->plainTextToken;

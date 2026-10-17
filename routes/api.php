@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CategorieProductController;
 use App\Http\Controllers\Api\CommandeController;
 use App\Http\Controllers\Api\DefaultDataController;
 use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DoubleAuthentificationController;
 use App\Http\Controllers\Api\LienPaiementPrecommandeController;
 use App\Http\Controllers\Api\PayementController;
 use App\Http\Controllers\Api\PrecommandeController;
@@ -111,6 +112,16 @@ Route::post('/login', [AuthController::class, 'login'])
     ->middleware(['guest', 'throttle:auth-sensibles'])
     ->name('api.login');
 
+/*
+ * La seconde etape de la connexion, pour les comptes qui ont active la
+ * double authentification. Sous le meme compteur que la connexion et les
+ * codes : c'est un code a six chiffres, et il se devine si on laisse
+ * essayer.
+ */
+Route::post('/login/double-authentification', [AuthController::class, 'doubleAuthentification'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.login.double-authentification');
+
 Route::get('/not-auth', [AuthController::class, 'notlogin'])
     ->middleware('guest')
     ->name('login');
@@ -139,6 +150,23 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
         Route::post('/update/adresse', 'update_adresse');
 
     });
+
+    /*
+     * La double authentification, activee par le client lui-meme.
+     *
+     * Elle s'appuie sur les MEMES COLONNES que celle de l'administration,
+     * qui vient de Filament : un compte qui l'active ici la retrouve
+     * la-bas.
+     */
+    Route::prefix('/account/double-authentification')
+        ->controller(DoubleAuthentificationController::class)
+        ->group(function () {
+            Route::get('/', 'index');
+            Route::post('/application/preparer', 'preparer');
+            Route::post('/application/activer', 'activer');
+            Route::post('/application/desactiver', 'desactiver');
+            Route::post('/courriel', 'basculerCourriel');
+        });
     Route::post('/update/expo/token', [UserAccountController::class, 'expo']);
 
     // Carnet d'adresses de livraison. La table existait depuis l'origine mais

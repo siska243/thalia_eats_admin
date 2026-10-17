@@ -4,6 +4,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\Email\Contracts\HasEmailAuthentication;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasEmailAuthentication
 {
     use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
@@ -83,6 +86,9 @@ class User extends Authenticatable implements FilamentUser
          */
         'otp',
         'otp_expire_at',
+        // Le second facteur ne sort jamais dans une reponse d'API.
+        'app_authentication_secret',
+        'app_authentication_recovery_codes',
     ];
 
     /**
@@ -93,6 +99,16 @@ class User extends Authenticatable implements FilamentUser
     protected $casts = [
         'email_verified_at' => 'datetime',
         'blocked_at' => 'datetime',
+        /*
+         * Le secret TOTP et les codes de secours sont CHIFFRES en base.
+         *
+         * Une fuite de la table livrerait sinon le second facteur en meme
+         * temps que le premier, et la double authentification n'aurait plus
+         * aucun sens. `encrypted:array` chiffre aussi la liste des codes.
+         */
+        'app_authentication_secret' => 'encrypted',
+        'app_authentication_recovery_codes' => 'encrypted:array',
+        'has_email_authentication' => 'boolean',
         // Sans ce cast, otp_expire_at est manipule comme une chaine et toute
         // comparaison de date depend du bon vouloir du parseur.
         'otp_expire_at' => 'datetime',
@@ -124,6 +140,68 @@ class User extends Authenticatable implements FilamentUser
     public function fullName()
     {
         return $this->first_name.' '.$this->name;
+    }
+
+    // --- Double authentification -------------------------------------------
+
+    /*
+     * Les deux facteurs que Filament sait deja faire : une application
+     * d'authentification (TOTP) et un code envoye par courriel. Le
+     * proprietaire : « tu peux mettre les 2, c'est a l'utilisateur de
+     * choisir ».
+     *
+     * Rien n'est impose : tant que personne n'active rien, la connexion se
+     * passe exactement comme avant.
+     */
+
+    public function getAppAuthenticationSecret(): ?string
+    {
+        return $this->app_authentication_secret;
+    }
+
+    public function saveAppAuthenticationSecret(?string $secret): void
+    {
+        $this->app_authentication_secret = $secret;
+        $this->save();
+    }
+
+    /**
+     * Le nom affiche dans l'application d'authentification.
+     *
+     * L'adresse, et non le prenom : on y voit souvent une dizaine de
+     * comptes, et « Eva » ne dit pas lequel.
+     */
+    public function getAppAuthenticationHolderName(): string
+    {
+        return $this->email;
+    }
+
+    /**
+     * @return ?array<string>
+     */
+    public function getAppAuthenticationRecoveryCodes(): ?array
+    {
+        return $this->app_authentication_recovery_codes;
+    }
+
+    /**
+     * @param  ?array<string>  $codes
+     */
+    public function saveAppAuthenticationRecoveryCodes(?array $codes): void
+    {
+        $this->app_authentication_recovery_codes = $codes;
+        $this->save();
+    }
+
+    public function hasEmailAuthentication(): bool
+    {
+        return (bool) $this->has_email_authentication;
+    }
+
+    public function toggleEmailAuthentication(bool $condition): void
+    {
+        $this->has_email_authentication = $condition;
+        $this->save();
     }
 
     // --- Validation et blocage d'un compte ---------------------------------

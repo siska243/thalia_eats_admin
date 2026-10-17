@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Connexion;
 use App\Filament\Pages\HealthCheckResults;
 use App\Filament\Widgets\CeQuiBloque;
 use App\Filament\Widgets\CommandesParJour;
@@ -9,6 +10,8 @@ use App\Filament\Widgets\DernieresCommandes;
 use App\Filament\Widgets\StatistiquesDuJour;
 use App\Http\Middleware\SetAdminLocale;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\Auth\MultiFactor\App\AppAuthentication;
+use Filament\Auth\MultiFactor\Email\EmailAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -17,8 +20,6 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -37,7 +38,56 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(Connexion::class)
+            /*
+             * La marque, au lieu du mot « Admin » en gras.
+             *
+             * Le panneau n'affichait aucun logo : rien, sur l'ecran de
+             * connexion comme dans la barre laterale, ne disait de quelle
+             * maison il s'agit. Le fichier est celui du site, recopie ici —
+             * les trois depots sont separes, il n'y a pas d'assets partages.
+             *
+             * `brandLogoHeight` compte : l'image est carree en 1080 px, et
+             * sans hauteur imposee elle remplirait l'en-tete.
+             */
+            ->brandName('Thalia')
+            ->brandLogo(asset('assets/logo-thalia.png'))
+            ->brandLogoHeight('2.5rem')
+            ->favicon(asset('assets/logo-thalia.png'))
+            /*
+             * La double authentification, LAISSEE AU CHOIX.
+             *
+             * `isRequired` reste a faux : personne n'est enrole d'office, et
+             * la connexion de ceux qui n'activent rien ne change pas d'un
+             * ecran. Le proprietaire : « c'est a l'utilisateur de choisir ».
+             *
+             * Les deux facteurs sont proposes. L'application
+             * d'authentification est la plus solide — elle ne depend ni du
+             * reseau ni de la messagerie, ce qui compte a Kinshasa — et
+             * `recoverable()` donne les codes de secours, sans quoi un
+             * telephone perdu ferme le compte pour de bon. Le courriel reste
+             * la pour qui n'installe pas d'application.
+             *
+             * Aucune dependance ajoutee : `pragmarx/google2fa-qrcode` et
+             * `chillerlan/php-qrcode` arrivent deja avec Filament, et le QR
+             * se genere sans `bacon/bacon-qr-code`.
+             */
+            ->multiFactorAuthentication([
+                AppAuthentication::make()->recoverable(),
+                EmailAuthentication::make(),
+            ], isRequired: false)
+            /*
+             * Et l'ecran ou on l'active. Sans page de profil, les deux
+             * facteurs seraient configures nulle part.
+             *
+             * `isSimple: false` N'EST PAS UN DETAIL : par defaut Filament
+             * rend cette page en « simple page », c'est-a-dire une carte
+             * seule, hors de la coquille du panneau — sans barre laterale ni
+             * en-tete. On y entre et on ne peut plus en sortir autrement
+             * qu'en modifiant l'adresse. Avec `false`, elle s'affiche comme
+             * n'importe quel ecran d'administration, et le menu reste la.
+             */
+            ->profile(isSimple: false)
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -58,8 +108,15 @@ class AdminPanelProvider extends PanelProvider
                 CeQuiBloque::class,
                 CommandesParJour::class,
                 DernieresCommandes::class,
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                /*
+                 * AccountWidget et FilamentInfoWidget sont RETIRES.
+                 *
+                 * Le premier repetait le nom du compte, deja dans le coin
+                 * haut droit ; le second affichait la version du cadriciel et
+                 * un lien vers sa documentation — une information pour nous,
+                 * sur un ecran qui appartient au commerce. Ils poussaient les
+                 * chiffres du jour sous le pli.
+                 */
             ])
             ->databaseNotificationsPolling(2)
             ->databaseNotifications()
