@@ -12,6 +12,7 @@ use App\Http\Resources\UserResource;
 use App\Mail\OtpReinitPasswordMail;
 use App\Mail\WelcomeOtpMail;
 use App\Models\User;
+use App\Services\Securite\Turnstile;
 use App\Wrappers\ApiResponse;
 use Exception;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -29,9 +30,25 @@ class AuthController extends Controller
         return Str::padLeft(random_int(0, 9999), 4, '0');
     }
 
-    public function register(RegistrationRequest $request)
+    public function register(RegistrationRequest $request, Turnstile $turnstile)
     {
         try {
+            /*
+             * Le defi anti-robot, AVANT tout le reste : inutile de chercher
+             * en base pour un appel qui ne vient pas d'un navigateur.
+             *
+             * Eteint tant que `TURNSTILE_SECRET_KEY` n'est pas posee, donc
+             * sans effet sur les clients mobiles deja installes, qui
+             * n'envoient pas ce jeton.
+             */
+            if (! $turnstile->verifier($request->input('turnstile_token'), $request->ip())) {
+                return ApiResponse::BAD_REQUEST(
+                    'turnstile_echoue',
+                    'Vérification impossible',
+                    "Nous n'avons pas pu vérifier que vous n'êtes pas un robot. Rechargez la page et réessayez."
+                );
+            }
+
             // code...
             $check_user = User::query()->where('email', $request->email)->first();
 

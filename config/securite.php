@@ -74,6 +74,18 @@ return [
      * l'adresse. Deux inscriptions au nom manifestement fabrique l'ont
      * montre le 17 octobre.
      */
+    /*
+     * Cloudflare Turnstile sur le formulaire d'inscription du site.
+     *
+     * VIDE = ETEINT, et l'inscription se comporte comme avant. C'est voulu :
+     * un garde qui refuserait tout parce qu'une variable manque fermerait les
+     * inscriptions sans prevenir, le jour du deploiement.
+     */
+    'turnstile' => [
+        'secret' => env('TURNSTILE_SECRET_KEY'),
+        'timeout' => (int) env('TURNSTILE_TIMEOUT', 5),
+    ],
+
     'confirmation_email' => [
 
         /*
