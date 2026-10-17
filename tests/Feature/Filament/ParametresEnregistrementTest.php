@@ -6,6 +6,7 @@ use App\Filament\Pages\Parametres;
 use App\Models\User;
 use App\Settings\ExpirationSettings;
 use App\Settings\FoodSettings;
+use App\Settings\NotificationSettings;
 use App\Settings\ProspectionSettings;
 use App\Settings\RentalSettings;
 use App\Settings\SuiviSettings;
@@ -74,6 +75,12 @@ class ParametresEnregistrementTest extends TestCase
             'interval_minutes' => 1,
             'stale_minutes' => 10,
             'retention_days' => 30,
+        ], loadMissingValues: false);
+
+        NotificationSettings::fake([
+            'emails_commande' => '',
+            'copie_client' => true,
+            'copie_restaurant' => true,
         ], loadMissingValues: false);
 
         ProspectionSettings::fake(

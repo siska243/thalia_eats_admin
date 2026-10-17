@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\PayementEvent;
-use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CommandeRequest;
 use App\Http\Resources\CommandeResource;
@@ -14,6 +13,7 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\StatusPayement;
 use App\Models\Town;
+use App\Services\Notification\NotifierCommandePayee;
 use App\Services\Portee;
 use App\Services\PorteeLivraison;
 use App\Services\Quotation;
@@ -934,7 +934,7 @@ class CommandeController extends Controller
         //
     }
 
-    public function swr_check_paiement($orderNumber)
+    public function swr_check_paiement($orderNumber, NotifierCommandePayee $notifier)
     {
 
         try {
@@ -976,26 +976,23 @@ class CommandeController extends Controller
 
                     $order->status_id = 2;
                     $order->reference_paiement = $result['transaction']['provider_reference'];
-                    // envoyer la commande au restaurateur
+
                     if (! $order->paied_at) {
                         $order->paied_at = now()->format('Y-m-d H:i:s');
-
-                        $user = CurrentHelpers::getUserByOrder($order);
-
-                        $body = [
-                            'action' => 'new-order',
-                            'status' => $status_paiement,
-                        ];
-
-                        if ($user->expo_push_token) {
-                            $push = new FirebasePushNotification;
-                            $push->sendPushNotification($user->expo_push_token, 'Nouvelle commande', json_encode($body));
-
-                            FirebasePushNotification::sendNotification($user->expo_push_token, 'Thalia eats commande', 'Nouvelle commande');
-                        }
                     }
 
                     $order->save();
+
+                    /*
+                     * Prevenir l'administration, le client et le restaurant.
+                     *
+                     * Le push au restaurateur etait ecrit ici ET dans le
+                     * webhook, en deux copies du meme bout de code. Tout vit
+                     * desormais dans le service, qui est idempotent : ce
+                     * chemin et le webhook peuvent tous deux y passer pour
+                     * une meme commande sans envoyer deux fois.
+                     */
+                    $notifier($order);
 
                     // Le stock part au paiement, et une seule fois : la regle
                     // et sa garantie d'unicite vivent sur la commande.

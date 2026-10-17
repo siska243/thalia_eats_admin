@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Settings\ExpirationSettings;
 use App\Settings\FoodSettings;
+use App\Settings\NotificationSettings;
 use App\Settings\ProspectionSettings;
 use App\Settings\RentalSettings;
 use App\Settings\SuiviSettings;
@@ -69,6 +70,7 @@ class Parametres extends SettingsPage
         'expiration' => ExpirationSettings::class,
         'suivi' => SuiviSettings::class,
         'prospection' => ProspectionSettings::class,
+        'notification' => NotificationSettings::class,
     ];
 
     protected function fillForm(): void
@@ -462,6 +464,42 @@ class Parametres extends SettingsPage
                                  */
                                 ->dehydrateStateUsing(fn (?string $state): string => (string) $state)
                                 ->helperText('Les formulaires « Devenir restaurant partenaire » et « Roulez avec nous » arrivent à cette adresse. Laissée vide, aucun e-mail n\'est envoyé : les demandes restent consultables dans « Demandes de partenariat ».'),
+                        ]),
+
+                    Tab::make('Notifications de commande')
+                        ->icon('heroicon-o-bell-alert')
+                        ->statePath('notification')
+                        ->schema([
+                            Section::make('Qui est prévenu quand une commande est payée')
+                                ->description("Avant, une commande payée n'envoyait qu'une notification au restaurateur, et seulement s'il avait installé l'application. Ni vous ni le client n'appreniez rien.")
+                                ->schema([
+                                    Textarea::make('emails_commande')
+                                        ->label('Adresses de l’équipe')
+                                        ->rows(3)
+                                        ->placeholder("commandes@thaliaeats.com\ndirection@thaliaeats.com")
+                                        /*
+                                         * Une zone de texte et non un
+                                         * `repeater` : on y colle trois
+                                         * adresses d'un coup, et un
+                                         * repeater demanderait trois clics
+                                         * pour la meme chose.
+                                         *
+                                         * `NotificationSettings` separe et
+                                         * VALIDE a la lecture : une adresse
+                                         * mal saisie est ignoree sans
+                                         * empecher l'envoi aux autres.
+                                         */
+                                        ->dehydrateStateUsing(fn (?string $state): string => (string) $state)
+                                        ->helperText('Une adresse par ligne, ou séparées par des virgules. Laissé vide, aucun e-mail ne part à l’équipe — la cloche du back-office continue de signaler les commandes.'),
+
+                                    Toggle::make('copie_client')
+                                        ->label('Envoyer une copie au client')
+                                        ->helperText('Le récapitulatif de sa commande, à l’adresse de son compte.'),
+
+                                    Toggle::make('copie_restaurant')
+                                        ->label('Envoyer une copie au restaurant')
+                                        ->helperText('En plus de la notification sur son téléphone, qui ne part que s’il a installé l’application.'),
+                                ]),
                         ]),
                 ]),
         ]);
