@@ -522,6 +522,45 @@ class Commande extends Model
         );
     }
 
+    /**
+     * La devise de la commande.
+     *
+     * Elle n'a pas de colonne : elle se lit sur les produits commandes. Quand
+     * il n'y en a plus — lignes heritees dont les produits ont disparu — on
+     * retombe sur la devise active de la plateforme plutot que de ne rien
+     * rendre, parce qu'un montant sans unite n'est pas une information.
+     *
+     * Elle vivait en prive dans `CommandeResource`, donc hors d'atteinte du
+     * courriel de confirmation, qui aurait du la recalculer a sa facon. Elle
+     * est ici, et la ressource la lit : une commande n'a qu'une devise.
+     *
+     * Memorisee pour la requete en cours, et pas plus loin. C'etait une
+     * `static` de methode : elle survit a tout le processus PHP. Sous un
+     * serveur qui garde l'application en memoire, changer la devise active en
+     * administration n'aurait jamais pris effet, et dans la suite de tests une
+     * classe empoisonnait la suivante.
+     */
+    public function devise(): ?Currency
+    {
+        $surLaCommande = $this->product?->first()?->currency;
+
+        if ($surLaCommande) {
+            return $surLaCommande;
+        }
+
+        $cle = 'commande.devise_par_defaut';
+
+        if (! app()->bound($cle)) {
+            // Enveloppee dans un tableau : le conteneur stocke bien `null`,
+            // mais `make()` teste l'existence avec `isset()` et repartirait
+            // construire une classe de ce nom. Sans devise active en base, il
+            // levait donc une exception au lieu de rendre null.
+            app()->instance($cle, ['devise' => Currency::query()->where('is_active', 1)->first()]);
+        }
+
+        return app($cle)['devise'];
+    }
+
     public function town(): BelongsTo
     {
         return $this->belongsTo(Town::class);

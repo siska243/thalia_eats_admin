@@ -23,6 +23,12 @@ use Filament\Tables\Table;
 
 class TownResource extends Resource
 {
+    protected static ?string $modelLabel = 'Commune';
+
+    protected static ?string $pluralModelLabel = 'Communes';
+
+    protected static ?string $navigationLabel = 'Communes';
+
     protected static ?int $navigationSort = 3;
 
     protected static ?string $model = Town::class;
@@ -31,7 +37,7 @@ class TownResource extends Resource
 
     protected static ?string $label = 'Communes';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     public static function form(Schema $schema): Schema
     {

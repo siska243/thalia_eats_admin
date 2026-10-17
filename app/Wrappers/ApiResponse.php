@@ -24,12 +24,21 @@ class ApiResponse
 
     }
 
-    public static function FORBIDEN()
+    /**
+     * Le nom porte une faute d'origine : il fait partie du contrat, on ne le
+     * corrige pas.
+     *
+     * Les deux arguments sont facultatifs et par defaut rendent exactement la
+     * reponse d'avant : aucun appelant existant ne change de comportement.
+     * Ils evitent une seconde methode « FORBIDDEN » a une lettre pres, qu'on
+     * confondrait a la lecture.
+     */
+    public static function FORBIDEN($title = 'Forbiden', $message = 'Vous etes pas authorizer')
     {
         throw new HttpResponseException(
             response()->json([
-                'title' => 'Forbiden',
-                'message' => 'Vous etes pas authorizer',
+                'title' => $title,
+                'message' => $message,
             ], 403)
         );
     }

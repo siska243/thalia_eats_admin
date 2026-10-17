@@ -36,6 +36,10 @@ class CourseTypeResource extends Resource
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-map';
 
+    protected static ?string $modelLabel = 'Type de course';
+
+    protected static ?string $pluralModelLabel = 'Types de course';
+
     protected static ?string $navigationLabel = 'Types de course';
 
     protected static ?string $label = 'type de course';

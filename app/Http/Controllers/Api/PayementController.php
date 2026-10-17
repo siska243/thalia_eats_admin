@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\PayementEvent;
-use App\Helpers\CurrentHelpers;
 use App\Http\Controllers\Controller;
 use App\Models\Commande;
 use App\Models\Payement;
 use App\Models\Precommande;
 use App\Models\StatusPayement;
 use App\Services\ConversionPrecommande;
+use App\Services\Notification\NotifierCommandePayee;
 use App\Services\Rental\DepositWebhook;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\FirebasePushNotification;
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
 
 class PayementController extends Controller
 {
-    public function webhook(Request $request)
+    public function webhook(Request $request, NotifierCommandePayee $notifier)
     {
         try {
 
@@ -280,22 +280,19 @@ class PayementController extends Controller
                     // l'empeche de retirer deux fois.
                     $order->decrementerLesStocks();
 
-                    $user = CurrentHelpers::getUserByOrder($order);
-
-                    if ($user) {
-                        $body = [
-                            'action' => 'paiement-check',
-                            'status' => $status_paiement,
-                        ];
-
-                        if ($user->expo_push_token) {
-                            $push = new FirebasePushNotification;
-                            $push->sendPushNotification($user->expo_push_token, 'Nouvelle commande', json_encode($body));
-
-                            FirebasePushNotification::sendNotification($user->expo_push_token, 'Thalia eats commande', 'Nouvelle commande');
-                        }
-
-                    }
+                    /*
+                     * Prevenir l'administration, le client et le restaurant.
+                     *
+                     * Le push au restaurateur etait ecrit ici ET dans
+                     * CommandeController, en deux copies du meme bout de
+                     * code. Tout vit desormais dans le service.
+                     *
+                     * Il est idempotent, et c'est indispensable ici : ce
+                     * webhook peut etre rejoue par la passerelle, et ce
+                     * chemin ecrit `paied_at` SANS CONDITION. Sans la marque,
+                     * le client recevrait son recapitulatif deux fois.
+                     */
+                    $notifier($order);
                 }
 
                 $body = [

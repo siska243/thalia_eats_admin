@@ -32,13 +32,17 @@ use Filament\Tables\Table;
 
 class ProductResource extends Resource
 {
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $model = Product::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-building-storefront';
 
-    protected static ?string $navigationLabel = 'Liste';
+    protected static ?string $modelLabel = 'Plat';
+
+    protected static ?string $pluralModelLabel = 'Plats';
+
+    protected static ?string $navigationLabel = 'Plats';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 

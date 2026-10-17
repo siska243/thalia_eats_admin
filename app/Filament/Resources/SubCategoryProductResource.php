@@ -7,6 +7,11 @@ use App\Filament\Resources\SubCategoryProductResource\Pages\EditSubCategoryProdu
 use App\Filament\Resources\SubCategoryProductResource\Pages\ListSubCategoryProducts;
 use App\Filament\Resources\SubCategoryProductResource\Pages\ManageProducts;
 use App\Models\SubCategoryProduct;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -14,6 +19,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -22,13 +28,17 @@ use Filament\Tables\Table;
 
 class SubCategoryProductResource extends Resource
 {
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 5;
 
     protected static ?string $model = SubCategoryProduct::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
 
-    protected static ?string $navigationLabel = 'Sous Categorie';
+    protected static ?string $modelLabel = 'Sous-catégorie';
+
+    protected static ?string $pluralModelLabel = 'Sous-catégories';
+
+    protected static ?string $navigationLabel = 'Sous-catégories';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
@@ -38,7 +48,7 @@ class SubCategoryProductResource extends Resource
     {
 
         return $schema->components([
-            \Filament\Schemas\Components\Section::make()
+            Section::make()
                 ->columns(2)
                 ->schema([
                     Select::make('category_product_id')->label('Categorie')
@@ -80,17 +90,17 @@ class SubCategoryProductResource extends Resource
                 //
             ])
             ->recordActions([
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\ViewAction::make(),
+                EditAction::make(),
+                ViewAction::make(),
 
             ])
             ->toolbarActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                \Filament\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 

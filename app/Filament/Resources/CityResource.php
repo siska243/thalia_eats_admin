@@ -20,11 +20,17 @@ use Filament\Tables\Table;
 
 class CityResource extends Resource
 {
-    protected static ?int $navigationSort = 2;
+    protected static ?string $modelLabel = 'Ville';
+
+    protected static ?string $pluralModelLabel = 'Villes';
+
+    protected static ?string $navigationLabel = 'Villes';
+
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $model = City::class;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 

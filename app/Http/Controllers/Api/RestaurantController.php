@@ -90,9 +90,29 @@ class RestaurantController extends Controller
             // rayon : sans ce prechargement, chaque ligne couterait trois
             // requetes de plus.
             ->with('town.city')
-            ->when($search, fn ($query) => $query->where('name', 'like', '%'.$search.'%')
-                ->orWhere('description', 'like', '%'.$search.'%')
-            )
+            /*
+             * La recherche couvre aussi le TITRE DES PLATS : le client cherche
+             * « poulet », pas « Chez Eva ». Le mobile delegue sa recherche a
+             * cet endpoint, le web la refaisait de son cote sur le nom et
+             * l'adresse — deux lectures de la meme regle, qui avaient deja
+             * diverge. Elle vit ici, une seule fois.
+             *
+             * Le groupe parenthese n'est pas cosmetique : sans lui,
+             * `is_active AND name OR description` laissait ressortir un
+             * restaurant eteint dont la description contenait le terme.
+             */
+            ->when($search, function ($query) use ($search) {
+                $terme = '%'.$search.'%';
+
+                $query->where(function ($groupe) use ($terme) {
+                    $groupe->where('name', 'like', $terme)
+                        ->orWhere('description', 'like', $terme)
+                        ->orWhereHas('product', fn ($plats) => $plats
+                            ->where('is_active', true)
+                            ->where('title', 'like', $terme)
+                        );
+                });
+            })
             ->get();
 
         /*
