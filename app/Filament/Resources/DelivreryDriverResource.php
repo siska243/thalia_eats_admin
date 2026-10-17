@@ -37,7 +37,11 @@ class DelivreryDriverResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Livraison';
 
-    protected static ?string $navigationLabel = 'Livreur';
+    protected static ?string $modelLabel = 'Livreur';
+
+    protected static ?string $pluralModelLabel = 'Livreurs';
+
+    protected static ?string $navigationLabel = 'Livreurs';
 
     /*
      * Les onglets EN HAUT, et non sur le cote.

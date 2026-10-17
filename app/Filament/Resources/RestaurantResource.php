@@ -40,6 +40,10 @@ use Illuminate\Support\Str;
 
 class RestaurantResource extends Resource
 {
+    protected static ?string $modelLabel = 'Restaurant';
+
+    protected static ?string $pluralModelLabel = 'Restaurants';
+
     protected static ?string $navigationLabel = 'Restaurants';
 
     protected static ?string $model = Restaurant::class;

@@ -35,11 +35,15 @@ class GerantResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 6;
 
     protected static ?string $label = 'Gérant';
 
     protected static ?string $pluralLabel = 'Gérants';
+
+    protected static ?string $modelLabel = 'Gérant';
+
+    protected static ?string $pluralModelLabel = 'Gérants';
 
     protected static ?string $navigationLabel = 'Gérants';
 

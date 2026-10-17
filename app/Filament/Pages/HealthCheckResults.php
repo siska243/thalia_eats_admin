@@ -8,9 +8,9 @@ class HealthCheckResults extends Page
 {
     protected static ?string $navigationLabel = 'État du système';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 10;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 

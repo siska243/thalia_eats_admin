@@ -19,11 +19,17 @@ use Filament\Tables\Table;
 
 class StatusPayementResource extends Resource
 {
-    protected static ?int $navigationSort = 6;
+    protected static ?string $modelLabel = 'Statut de paiement';
+
+    protected static ?string $pluralModelLabel = 'Statuts de paiement';
+
+    protected static ?string $navigationLabel = 'Statuts de paiement';
+
+    protected static ?int $navigationSort = 7;
 
     protected static ?string $model = StatusPayement::class;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 

@@ -28,6 +28,12 @@ use Illuminate\Support\HtmlString;
 
 class CommandeResource extends Resource
 {
+    protected static ?string $modelLabel = 'Commande';
+
+    protected static ?string $pluralModelLabel = 'Commandes';
+
+    protected static ?string $navigationLabel = 'Commandes';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $model = Commande::class;

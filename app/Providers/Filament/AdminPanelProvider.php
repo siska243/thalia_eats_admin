@@ -91,6 +91,25 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Amber,
             ])
+            /*
+             * L'ORDRE DES GROUPES, declare ici.
+             *
+             * Sans cette liste, Filament les range dans l'ordre ou il
+             * decouvre les ressources — c'est-a-dire alphabetique par nom de
+             * fichier : « Clients et partenaires » tombait avant
+             * « Restauration », et les reglages se retrouvaient au milieu.
+             *
+             * L'ordre suit la journee de travail : ce qu'on regarde tous les
+             * jours en haut, ce qu'on regle une fois en bas.
+             */
+            ->navigationGroups([
+                'Restauration',
+                'Location',
+                'Livraison',
+                'Clients et partenaires',
+                'Paramètres',
+                'Outils système',
+            ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
@@ -134,6 +153,17 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->plugins([
                 FilamentShieldPlugin::make()
+                    /*
+                     * Les roles vivent dans les PARAMETRES, et non dans leur
+                     * propre groupe en bas du menu : « tu mets role dans
+                     * group parametre ». Qui vient regler les droits vient
+                     * regler quelque chose, pas consulter le commerce.
+                     *
+                     * Juste apres l'ecran Parametres, qui garde le rang 1.
+                     */
+                    ->navigationGroup('Paramètres')
+                    ->navigationLabel('Rôles')
+                    ->navigationSort(2)
                     ->gridColumns([
                         'default' => 1,
                         'sm' => 2,
@@ -169,7 +199,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationItem::make('Logs')
                     ->url('/log-viewer', shouldOpenInNewTab: true)
                     ->icon('heroicon-o-bug-ant')
-                    ->group('System Tools')
+                    ->group('Outils système')
                     ->sort(1),
             ])
             ->authMiddleware([

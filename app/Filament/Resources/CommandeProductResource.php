@@ -18,6 +18,12 @@ use Filament\Tables\Table;
 
 class CommandeProductResource extends Resource
 {
+    protected static ?string $modelLabel = 'Ligne de commande';
+
+    protected static ?string $pluralModelLabel = 'Lignes de commande';
+
+    protected static ?string $navigationLabel = 'Lignes de commande';
+
     protected static ?int $navigationSort = 7;
 
     protected static ?string $model = CommandeProduct::class;

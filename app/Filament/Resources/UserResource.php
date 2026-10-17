@@ -34,6 +34,12 @@ use Rawilk\FilamentPasswordInput\Password;
 
 class UserResource extends Resource
 {
+    protected static ?string $modelLabel = 'Utilisateur';
+
+    protected static ?string $pluralModelLabel = 'Utilisateurs';
+
+    protected static ?string $navigationLabel = 'Utilisateurs';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $model = User::class;

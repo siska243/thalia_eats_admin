@@ -21,9 +21,15 @@ use Filament\Tables\Table;
 
 class ConfigurationPayementResource extends Resource
 {
-    protected static ?int $navigationSort = 8;
+    protected static ?string $modelLabel = 'Passerelle de paiement';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static ?string $pluralModelLabel = 'Passerelles de paiement';
+
+    protected static ?string $navigationLabel = 'Passerelles de paiement';
+
+    protected static ?int $navigationSort = 9;
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     protected static ?string $model = ConfigurationPayement::class;
 
