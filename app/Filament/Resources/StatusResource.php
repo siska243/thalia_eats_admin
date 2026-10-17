@@ -23,7 +23,7 @@ use Guava\IconPicker\Tables\Columns\IconColumn;
 
 class StatusResource extends Resource
 {
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 6;
 
     protected static ?string $model = Status::class;
 
@@ -31,9 +31,13 @@ class StatusResource extends Resource
 
     protected static ?string $label = 'Status';
 
-    protected static ?string $navigationLabel = 'Status';
+    protected static ?string $modelLabel = 'Statut de commande';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static ?string $pluralModelLabel = 'Statuts de commande';
+
+    protected static ?string $navigationLabel = 'Statuts de commande';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     public static function form(Schema $schema): Schema
     {

@@ -35,6 +35,14 @@ class RentalConfigController extends Controller
                 'whatsapp_number' => $settings->whatsapp_number,
                 'out_of_zone_message' => $settings->out_of_zone_message,
                 /*
+                 * La part payee a la reservation. Elle etait ecrite en dur sur
+                 * l'accueil du mobile — « 10 % » alors que le reglage dit 20 —
+                 * et le proprietaire ne pouvait pas la corriger depuis
+                 * l'administration. Le solde s'en deduit, personne ne le
+                 * calcule deux fois.
+                 */
+                'deposit_percentage' => $settings->deposit_percentage,
+                /*
                  * Les bornes de duree, que l'application applique a ses
                  * champs et que l'API refuse au-dela. Une seule source : le
                  * mobile les avait en dur, et le serveur acceptait ce que

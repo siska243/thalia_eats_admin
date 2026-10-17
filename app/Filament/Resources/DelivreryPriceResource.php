@@ -20,6 +20,12 @@ use Filament\Tables\Table;
 
 class DelivreryPriceResource extends Resource
 {
+    protected static ?string $modelLabel = 'Tarif de livraison';
+
+    protected static ?string $pluralModelLabel = 'Tarifs de livraison';
+
+    protected static ?string $navigationLabel = 'Tarifs de livraison';
+
     protected static ?int $navigationSort = 3;
 
     protected static ?string $model = DelivreryPrice::class;

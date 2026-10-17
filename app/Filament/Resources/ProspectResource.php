@@ -32,6 +32,12 @@ use Filament\Tables\Table;
  */
 class ProspectResource extends Resource
 {
+    protected static ?string $modelLabel = 'Demande de partenariat';
+
+    protected static ?string $pluralModelLabel = 'Demandes de partenariat';
+
+    protected static ?string $navigationLabel = 'Demandes de partenariat';
+
     protected static ?int $navigationSort = 2;
 
     protected static ?string $model = Prospect::class;

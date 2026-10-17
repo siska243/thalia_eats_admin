@@ -9,6 +9,8 @@ use App\Filament\Resources\UserResource\Pages\CreateUser;
 use App\Filament\Resources\UserResource\Pages\EditUser;
 use App\Filament\Resources\UserResource\Pages\ListUsers;
 use App\Models\User;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
@@ -16,6 +18,7 @@ use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -31,6 +34,12 @@ use Rawilk\FilamentPasswordInput\Password;
 
 class UserResource extends Resource
 {
+    protected static ?string $modelLabel = 'Utilisateur';
+
+    protected static ?string $pluralModelLabel = 'Utilisateurs';
+
+    protected static ?string $navigationLabel = 'Utilisateurs';
+
     protected static ?int $navigationSort = 1;
 
     protected static ?string $model = User::class;
@@ -279,6 +288,22 @@ class UserResource extends Resource
                     ->alignCenter()
                     ->sortable(),
 
+                /*
+                 * Bloque ou non. La colonne est rouge quand elle l'est : un
+                 * compte coupe doit se voir en parcourant la liste, pas en
+                 * ouvrant la fiche.
+                 */
+                IconColumn::make('blocked_at')
+                    ->label('Bloqué')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-no-symbol')
+                    ->falseIcon('heroicon-o-check-circle')
+                    ->trueColor('danger')
+                    ->falseColor('gray')
+                    ->tooltip(fn ($record): ?string => $record->blocked_reason)
+                    ->alignCenter()
+                    ->sortable(),
+
                 TextColumn::make('created_at')
                     ->label('Inscrit le')
                     ->date('d/m/Y')
@@ -310,12 +335,110 @@ class UserResource extends Resource
                         false: fn (Builder $query): Builder => $query->whereNull('email_verified_at'),
                         blank: fn (Builder $query): Builder => $query,
                     ),
+
+                TernaryFilter::make('blocked_at')
+                    ->label('Compte bloqué')
+                    ->placeholder('Tous')
+                    ->trueLabel('Bloqués')
+                    ->falseLabel('Actifs')
+                    ->queries(
+                        true: fn (Builder $query): Builder => $query->whereNotNull('blocked_at'),
+                        false: fn (Builder $query): Builder => $query->whereNull('blocked_at'),
+                        blank: fn (Builder $query): Builder => $query,
+                    ),
             ])
+            /*
+             * Valider et bloquer SUR LA LISTE, pas dans la fiche : « bloquer
+             * / valider tu le mets sur la liste directement ». On arrive ici
+             * en voyant une inscription suspecte, et on doit pouvoir trancher
+             * sans ouvrir trois ecrans.
+             *
+             * Les trois actions sont ecrites une fois et servent aussi en
+             * masse, par `Action::make()->action()` d'un cote et la meme
+             * methode du modele de l'autre : la regle vit dans `User`.
+             */
             ->recordActions([
+                Action::make('valider')
+                    ->label('Valider')
+                    ->icon('heroicon-m-check-badge')
+                    ->color('success')
+                    ->visible(fn ($record): bool => $record->email_verified_at === null)
+                    ->requiresConfirmation()
+                    ->modalHeading('Valider ce compte')
+                    ->modalDescription("L'adresse sera marquée comme confirmée, exactement comme si le client avait saisi son code.")
+                    ->action(function ($record): void {
+                        $record->marquerAdresseConfirmee();
+
+                        Notification::make()->success()->title('Compte validé')->send();
+                    }),
+
+                Action::make('bloquer')
+                    ->label('Bloquer')
+                    ->icon('heroicon-m-no-symbol')
+                    ->color('danger')
+                    ->visible(fn ($record): bool => ! $record->estBloque())
+                    ->requiresConfirmation()
+                    ->modalHeading('Bloquer ce compte')
+                    ->modalDescription('Ses jetons seront révoqués : il sera déconnecté du site et de l’application, et ne pourra plus se reconnecter.')
+                    ->form([
+                        TextInput::make('raison')
+                            ->label('Motif')
+                            ->placeholder('Inscriptions automatisées, impayés…')
+                            ->maxLength(255),
+                    ])
+                    ->action(function ($record, array $data): void {
+                        $record->bloquer($data['raison'] ?? null);
+
+                        Notification::make()->success()->title('Compte bloqué')->send();
+                    }),
+
+                Action::make('debloquer')
+                    ->label('Débloquer')
+                    ->icon('heroicon-m-lock-open')
+                    ->color('warning')
+                    ->visible(fn ($record): bool => $record->estBloque())
+                    ->requiresConfirmation()
+                    ->modalHeading('Débloquer ce compte')
+                    ->action(function ($record): void {
+                        $record->debloquer();
+
+                        Notification::make()->success()->title('Compte débloqué')->send();
+                    }),
+
                 EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    BulkAction::make('valider')
+                        ->label('Valider')
+                        ->icon('heroicon-m-check-badge')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(fn ($records) => $records->each->marquerAdresseConfirmee()),
+
+                    BulkAction::make('bloquer')
+                        ->label('Bloquer')
+                        ->icon('heroicon-m-no-symbol')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->modalDescription('Les jetons de ces comptes seront révoqués.')
+                        ->deselectRecordsAfterCompletion()
+                        ->form([
+                            TextInput::make('raison')
+                                ->label('Motif')
+                                ->maxLength(255),
+                        ])
+                        ->action(fn ($records, array $data) => $records->each->bloquer($data['raison'] ?? null)),
+
+                    BulkAction::make('debloquer')
+                        ->label('Débloquer')
+                        ->icon('heroicon-m-lock-open')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(fn ($records) => $records->each->debloquer()),
+
                     DeleteBulkAction::make(),
                 ]),
             ])

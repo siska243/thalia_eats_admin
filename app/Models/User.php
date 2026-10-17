@@ -4,6 +4,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\Email\Contracts\HasEmailAuthentication;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,7 +17,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasEmailAuthentication
 {
     use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
@@ -83,6 +86,9 @@ class User extends Authenticatable implements FilamentUser
          */
         'otp',
         'otp_expire_at',
+        // Le second facteur ne sort jamais dans une reponse d'API.
+        'app_authentication_secret',
+        'app_authentication_recovery_codes',
     ];
 
     /**
@@ -92,6 +98,17 @@ class User extends Authenticatable implements FilamentUser
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'blocked_at' => 'datetime',
+        /*
+         * Le secret TOTP et les codes de secours sont CHIFFRES en base.
+         *
+         * Une fuite de la table livrerait sinon le second facteur en meme
+         * temps que le premier, et la double authentification n'aurait plus
+         * aucun sens. `encrypted:array` chiffre aussi la liste des codes.
+         */
+        'app_authentication_secret' => 'encrypted',
+        'app_authentication_recovery_codes' => 'encrypted:array',
+        'has_email_authentication' => 'boolean',
         // Sans ce cast, otp_expire_at est manipule comme une chaine et toute
         // comparaison de date depend du bon vouloir du parseur.
         'otp_expire_at' => 'datetime',
@@ -123,5 +140,126 @@ class User extends Authenticatable implements FilamentUser
     public function fullName()
     {
         return $this->first_name.' '.$this->name;
+    }
+
+    // --- Double authentification -------------------------------------------
+
+    /*
+     * Les deux facteurs que Filament sait deja faire : une application
+     * d'authentification (TOTP) et un code envoye par courriel. Le
+     * proprietaire : « tu peux mettre les 2, c'est a l'utilisateur de
+     * choisir ».
+     *
+     * Rien n'est impose : tant que personne n'active rien, la connexion se
+     * passe exactement comme avant.
+     */
+
+    public function getAppAuthenticationSecret(): ?string
+    {
+        return $this->app_authentication_secret;
+    }
+
+    public function saveAppAuthenticationSecret(?string $secret): void
+    {
+        $this->app_authentication_secret = $secret;
+        $this->save();
+    }
+
+    /**
+     * Le nom affiche dans l'application d'authentification.
+     *
+     * L'adresse, et non le prenom : on y voit souvent une dizaine de
+     * comptes, et « Eva » ne dit pas lequel.
+     */
+    public function getAppAuthenticationHolderName(): string
+    {
+        return $this->email;
+    }
+
+    /**
+     * @return ?array<string>
+     */
+    public function getAppAuthenticationRecoveryCodes(): ?array
+    {
+        return $this->app_authentication_recovery_codes;
+    }
+
+    /**
+     * @param  ?array<string>  $codes
+     */
+    public function saveAppAuthenticationRecoveryCodes(?array $codes): void
+    {
+        $this->app_authentication_recovery_codes = $codes;
+        $this->save();
+    }
+
+    public function hasEmailAuthentication(): bool
+    {
+        return (bool) $this->has_email_authentication;
+    }
+
+    public function toggleEmailAuthentication(bool $condition): void
+    {
+        $this->has_email_authentication = $condition;
+        $this->save();
+    }
+
+    // --- Validation et blocage d'un compte ---------------------------------
+
+    /**
+     * Ce compte est-il bloque ?
+     *
+     * La regle vit ici, une seule fois : la connexion, le garde de l'API et
+     * l'administration posent la meme question, et trois lectures de
+     * `blocked_at` finiraient par diverger.
+     *
+     * `blocked_at` est une colonne NEUVE, nullable. `is_active` existait,
+     * mais vaut faux pour la quasi-totalite des comptes et n'est lu nulle
+     * part : s'en servir aurait mis presque tous les clients dehors.
+     */
+    public function estBloque(): bool
+    {
+        return $this->blocked_at !== null;
+    }
+
+    /**
+     * Bloque le compte et le met dehors tout de suite.
+     *
+     * Revoquer les jetons n'est pas un supplement : sans cela, un compte
+     * bloque reste a l'interieur aussi longtemps que son telephone ne se
+     * deconnecte pas, et c'est precisement le compte qu'on voulait sortir.
+     */
+    public function bloquer(?string $raison = null): void
+    {
+        $this->forceFill([
+            'blocked_at' => now(),
+            'blocked_reason' => $raison,
+        ])->save();
+
+        $this->tokens()->delete();
+    }
+
+    public function debloquer(): void
+    {
+        $this->forceFill(['blocked_at' => null, 'blocked_reason' => null])->save();
+    }
+
+    /**
+     * Marque l'adresse comme confirmee, depuis l'administration.
+     *
+     * Le meme champ que la confirmation par code : valider a la main et
+     * valider par email doivent produire exactement le meme compte, sinon le
+     * garde de [[T146]] laisserait passer l'un et pas l'autre.
+     *
+     * Une date deja posee n'est pas repoussee : elle dit quand l'adresse a
+     * ete confirmee, pas combien de fois on a clique.
+     */
+    public function marquerAdresseConfirmee(): void
+    {
+        if ($this->email_verified_at !== null) {
+            return;
+        }
+
+        $this->forceFill(['email_verified_at' => now()])->save();
     }
 }

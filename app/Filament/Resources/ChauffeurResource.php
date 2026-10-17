@@ -40,7 +40,13 @@ class ChauffeurResource extends Resource
 
     protected static ?string $pluralLabel = 'Chauffeurs';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?string $modelLabel = 'Chauffeur';
+
+    protected static ?string $pluralModelLabel = 'Chauffeurs';
+
+    protected static ?string $navigationLabel = 'Chauffeurs';
+
+    protected static ?int $navigationSort = 3;
 
     public static function form(Schema $schema): Schema
     {

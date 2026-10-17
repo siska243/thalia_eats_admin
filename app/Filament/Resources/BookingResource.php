@@ -49,7 +49,13 @@ class BookingResource extends Resource
 
     protected static ?string $pluralLabel = 'Réservations';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?string $modelLabel = 'Réservation';
+
+    protected static ?string $pluralModelLabel = 'Réservations';
+
+    protected static ?string $navigationLabel = 'Réservations';
+
+    protected static ?int $navigationSort = 2;
 
     /** Les réservations à traiter sautent aux yeux depuis le menu. */
     public static function getNavigationBadge(): ?string

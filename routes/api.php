@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CategorieProductController;
 use App\Http\Controllers\Api\CommandeController;
 use App\Http\Controllers\Api\DefaultDataController;
 use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DoubleAuthentificationController;
 use App\Http\Controllers\Api\LienPaiementPrecommandeController;
 use App\Http\Controllers\Api\PayementController;
 use App\Http\Controllers\Api\PrecommandeController;
@@ -81,7 +82,18 @@ Route::get('/categorie-restaurant/{restaurant:slug}', [RestaurantController::cla
 Route::get('/menu/{restaurant:slug}/{slug}', [RestaurantController::class, 'productRestaurant']);
 Route::get('/product/{slug}', [RestaurantController::class, 'product']);
 
-Route::post('/register', [AuthController::class, 'register'])->name('api.register');
+/*
+ * L'inscription, sous le MEME compteur que la connexion et les codes.
+ *
+ * Elle n'avait que le plafond general de soixante par minute : de quoi
+ * fabriquer des centaines de comptes a l'heure depuis une seule adresse,
+ * ce qu'on a vu le 17 octobre avec deux adresses au nom manifestement
+ * compose. Six par minute et trente par heure, par adresse IP et par
+ * courriel — un humain ne s'inscrit pas six fois de suite.
+ */
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.register');
 
 /*
  * Connexion et codes OTP sous limitation dediee.
@@ -99,6 +111,16 @@ Route::post('/activation-account', [AuthController::class, 'activation'])
 Route::post('/login', [AuthController::class, 'login'])
     ->middleware(['guest', 'throttle:auth-sensibles'])
     ->name('api.login');
+
+/*
+ * La seconde etape de la connexion, pour les comptes qui ont active la
+ * double authentification. Sous le meme compteur que la connexion et les
+ * codes : c'est un code a six chiffres, et il se devine si on laisse
+ * essayer.
+ */
+Route::post('/login/double-authentification', [AuthController::class, 'doubleAuthentification'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.login.double-authentification');
 
 Route::get('/not-auth', [AuthController::class, 'notlogin'])
     ->middleware('guest')
@@ -128,6 +150,23 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
         Route::post('/update/adresse', 'update_adresse');
 
     });
+
+    /*
+     * La double authentification, activee par le client lui-meme.
+     *
+     * Elle s'appuie sur les MEMES COLONNES que celle de l'administration,
+     * qui vient de Filament : un compte qui l'active ici la retrouve
+     * la-bas.
+     */
+    Route::prefix('/account/double-authentification')
+        ->controller(DoubleAuthentificationController::class)
+        ->group(function () {
+            Route::get('/', 'index');
+            Route::post('/application/preparer', 'preparer');
+            Route::post('/application/activer', 'activer');
+            Route::post('/application/desactiver', 'desactiver');
+            Route::post('/courriel', 'basculerCourriel');
+        });
     Route::post('/update/expo/token', [UserAccountController::class, 'expo']);
 
     // Carnet d'adresses de livraison. La table existait depuis l'origine mais

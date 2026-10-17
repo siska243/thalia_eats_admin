@@ -100,6 +100,13 @@ class RentalZoneTest extends TestCase
             ->assertJsonPath('data.whatsapp_number', '+243900000000')
             ->assertJsonPath('data.out_of_zone_message', 'Nous ne desservons pas encore cette commune.');
 
+        /*
+         * La part payee a la reservation. L'accueil du mobile l'ecrivait en
+         * dur — « 10 % » quand le reglage disait autre chose — et le
+         * back-office ne pouvait rien y changer.
+         */
+        $reponse->assertJsonPath('data.deposit_percentage', 10);
+
         // Seules les communes desservies sortent : la liste sert a savoir ou
         // l'on peut reserver, pas a lister le pays.
         $reponse->assertJsonCount(1, 'data.towns')

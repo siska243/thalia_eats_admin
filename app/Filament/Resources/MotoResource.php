@@ -21,6 +21,12 @@ use Filament\Tables\Table;
 
 class MotoResource extends Resource
 {
+    protected static ?string $modelLabel = 'Moto';
+
+    protected static ?string $pluralModelLabel = 'Motos';
+
+    protected static ?string $navigationLabel = 'Motos';
+
     protected static ?int $navigationSort = 2;
 
     protected static ?string $model = Moto::class;

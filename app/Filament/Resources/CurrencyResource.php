@@ -19,7 +19,13 @@ use Filament\Tables\Table;
 
 class CurrencyResource extends Resource
 {
-    protected static ?int $navigationSort = 4;
+    protected static ?string $modelLabel = 'Devise';
+
+    protected static ?string $pluralModelLabel = 'Devises';
+
+    protected static ?string $navigationLabel = 'Devises';
+
+    protected static ?int $navigationSort = 5;
 
     protected static ?string $model = Currency::class;
 
@@ -27,7 +33,7 @@ class CurrencyResource extends Resource
 
     protected static ?string $label = 'Devises';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     public static function form(Schema $schema): Schema
     {

@@ -65,6 +65,11 @@ class AdminReglagesLivraisonTest extends TestCase
         'expiration' => ['minutes' => 15],
         'suivi' => ['interval_minutes' => 1, 'stale_minutes' => 5, 'retention_days' => 30],
         'prospection' => ['email_destinataire' => 'partenaires@thalia.test'],
+        'notification' => [
+            'emails_commande' => '',
+            'copie_client' => true,
+            'copie_restaurant' => true,
+        ],
     ];
 
     protected function setUp(): void

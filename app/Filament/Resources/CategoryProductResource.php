@@ -7,6 +7,11 @@ use App\Filament\Resources\CategoryProductResource\Pages\EditCategoryProduct;
 use App\Filament\Resources\CategoryProductResource\Pages\ListCategoryProducts;
 use App\Filament\Resources\CategoryProductResource\Pages\ManageProducts;
 use App\Models\CategoryProduct;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Pages\Page;
@@ -19,13 +24,17 @@ use Filament\Tables\Table;
 
 class CategoryProductResource extends Resource
 {
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $model = CategoryProduct::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-table-cells';
 
-    protected static ?string $navigationLabel = 'Categorie';
+    protected static ?string $modelLabel = 'Catégorie';
+
+    protected static ?string $pluralModelLabel = 'Catégories';
+
+    protected static ?string $navigationLabel = 'Catégories';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
 
@@ -64,16 +73,16 @@ class CategoryProductResource extends Resource
                 //
             ])
             ->recordActions([
-                \Filament\Actions\EditAction::make(),
-                \Filament\Actions\DeleteAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
             ->toolbarActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ])
             ->emptyStateActions([
-                \Filament\Actions\CreateAction::make(),
+                CreateAction::make(),
             ]);
     }
 

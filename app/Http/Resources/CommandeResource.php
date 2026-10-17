@@ -115,40 +115,12 @@ class CommandeResource extends JsonResource
     /**
      * La devise de la commande.
      *
-     * Elle n'a pas de colonne : elle se lit sur les produits commandes. Quand
-     * il n'y en a plus — lignes heritees dont les produits ont disparu — on
-     * retombe sur la devise active de la plateforme plutot que de ne rien
-     * renvoyer, parce qu'un montant sans unite n'est pas une information.
+     * La regle vit sur le modele : le courriel de confirmation en a besoin
+     * aussi, et une seconde lecture aurait fini par diverger de celle-ci.
      */
     private function devise(): ?Currency
     {
-        $surLaCommande = $this->resource->product?->first()?->currency;
-
-        if ($surLaCommande) {
-            return $surLaCommande;
-        }
-
-        /*
-         * Memorisee pour la requete en cours, et pas plus loin.
-         *
-         * C'etait une `static` de methode : elle survit a tout le processus
-         * PHP. Sous un serveur qui garde l'application en memoire, changer la
-         * devise active en administration n'aurait jamais pris effet, et dans
-         * la suite de tests une classe empoisonnait la suivante — c'est comme
-         * ça qu'on l'a vu. Le conteneur, lui, est reconstruit a chaque
-         * requete : une seule lecture par requete, et aucune fuite au-dela.
-         */
-        $cle = 'commande.devise_par_defaut';
-
-        if (! app()->bound($cle)) {
-            // Enveloppee dans un tableau : le conteneur stocke bien `null`,
-            // mais `make()` teste l'existence avec `isset()` et repartirait
-            // construire une classe de ce nom. Sans devise active en base, il
-            // levait donc une exception au lieu de rendre null.
-            app()->instance($cle, ['devise' => Currency::query()->where('is_active', 1)->first()]);
-        }
-
-        return app($cle)['devise'];
+        return $this->resource->devise();
     }
 
     public static function customTime($date, $time)

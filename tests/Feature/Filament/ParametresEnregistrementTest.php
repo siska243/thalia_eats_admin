@@ -4,8 +4,12 @@ namespace Tests\Feature\Filament;
 
 use App\Filament\Pages\Parametres;
 use App\Models\User;
+use App\Settings\ExpirationSettings;
+use App\Settings\FoodSettings;
+use App\Settings\NotificationSettings;
 use App\Settings\ProspectionSettings;
 use App\Settings\RentalSettings;
+use App\Settings\SuiviSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -28,6 +32,62 @@ use Tests\TestCase;
 class ParametresEnregistrementTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Les cinq classes de reglages sont fausses.
+     *
+     * Une autre suite vide la table `settings` : sans ces faux, ces tests
+     * passent seuls et tombent dans la suite complete. `loadMissingValues`
+     * a faux impose d'enumerer chaque propriete — c'est voulu, une propriete
+     * oubliee ici ressortirait en erreur plutot qu'en silence.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        FoodSettings::fake([
+            'max_delivery_radius_km' => 30.0,
+            'out_of_radius_message' => 'Trop loin.',
+            'use_client_position' => false,
+            'city_first' => false,
+            'stock_actif' => true,
+        ], loadMissingValues: false);
+
+        RentalSettings::fake([
+            'deposit_percentage' => 20.0,
+            'refund_percentage' => 100.0,
+            'minimum_hours' => 1.0,
+            'pickup_code_max_attempts' => 3,
+            'hours_min' => 1,
+            'hours_max' => 23,
+            'days_min' => 1,
+            'days_max' => 30,
+            'lead_time_minutes' => 60,
+            'whatsapp_number' => '+243900000000',
+            'brand_food' => 'Thalia Eats',
+            'brand_rental' => 'Thalia Trans',
+            'out_of_zone_message' => 'Hors zone.',
+        ], loadMissingValues: false);
+
+        ExpirationSettings::fake(['minutes' => 30], loadMissingValues: false);
+
+        SuiviSettings::fake([
+            'interval_minutes' => 1,
+            'stale_minutes' => 10,
+            'retention_days' => 30,
+        ], loadMissingValues: false);
+
+        NotificationSettings::fake([
+            'emails_commande' => '',
+            'copie_client' => true,
+            'copie_restaurant' => true,
+        ], loadMissingValues: false);
+
+        ProspectionSettings::fake(
+            ['email_destinataire' => 'contact@example.com'],
+            loadMissingValues: false,
+        );
+    }
 
     private function admin(): User
     {

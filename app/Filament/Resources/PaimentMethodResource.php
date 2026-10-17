@@ -20,15 +20,19 @@ use Filament\Tables\Table;
 
 class PaimentMethodResource extends Resource
 {
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 8;
 
     protected static ?string $model = PaimentMethod::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
-    protected static ?string $navigationLabel = 'Methode de paiement';
+    protected static ?string $modelLabel = 'Moyen de paiement';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Configuration';
+    protected static ?string $pluralModelLabel = 'Moyens de paiement';
+
+    protected static ?string $navigationLabel = 'Moyens de paiement';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Paramètres';
 
     public static function form(Schema $schema): Schema
     {
