@@ -93,6 +93,15 @@ php artisan view:cache --ansi
 # tres bien sans, on n'en fait donc pas une condition de demarrage.
 php artisan route:cache --ansi || echo "[thalia] route:cache ignore (closure dans les routes)"
 
+# Les actifs de Filament (CSS, JS, polices) sont republies a chaque demarrage.
+#
+# Ils ne sont PAS dans le depot et ne sont pas generes a la construction : le
+# Dockerfile lance composer avec --no-scripts, donc `filament:upgrade` — qui
+# appellerait `filament:assets` — ne tourne jamais. L'image ne portait donc que
+# les actifs d'une ancienne version, d'ou les 404 sur app.css et sur la police
+# inter de /admin. Idempotent, et peu couteux.
+php artisan filament:assets --ansi || echo "[thalia] filament:assets ignore"
+
 # Les composants Filament sont mis en cache comme le fait script-run.sh.
 php artisan filament:optimize-clear --ansi >/dev/null 2>&1 || true
 php artisan filament:optimize --ansi || echo "[thalia] filament:optimize ignore"
