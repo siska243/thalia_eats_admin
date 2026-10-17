@@ -3,7 +3,10 @@
 namespace App\Http\Resources\Rental;
 
 use App\Helpers\ImageUrl;
+use App\Models\CourseType;
+use App\Models\Town;
 use App\Models\Vehicle;
+use App\Services\Rental\BookingPricing;
 use App\Wrappers\Cipher;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -39,11 +42,170 @@ class VehicleResource extends JsonResource
             'currency' => $this->resource->currency,
 
             /*
+             * Ce que ce vehicule propose, et ce qu'il impose.
+             *
+             * « Toute les informations relatives a la location doivent
+             * apparaitre. » L'ecran ne devine plus rien : il affiche les modes
+             * coches, la duree minimale et l'acompte reellement appliques.
+             *
+             * `minimum_hours` reste NUL quand le vehicule n'impose rien : les
+             * bornes generales et le type de course s'appliquent alors, et
+             * l'ecran ne doit pas annoncer une contrainte qui n'existe pas.
+             *
+             * `deposit_percentage`, lui, est TOUJOURS rempli : c'est celui qui
+             * sera preleve, qu'il vienne du vehicule ou des reglages. Le
+             * client doit savoir ce qu'il paie en ligne, pas d'ou vient le
+             * chiffre.
+             */
+            'allows_hourly' => $this->pricing()->estProposeALHeure($this->resource),
+            'allows_daily' => $this->pricing()->estProposeALaJournee($this->resource),
+            'minimum_hours' => $this->resource->minimum_hours,
+            'deposit_percentage' => $this->pricing()->pourcentageAcompte($this->resource),
+
+            /*
+             * Le tarif qui S'APPLIQUE a la course demandee.
+             *
+             * Les deux champs au-dessus restent le prix habituel du vehicule.
+             * Ceux-ci tiennent compte du type demande, et retombent dessus
+             * quand le type n'a pas de tarif propre : « on affiche le prix en
+             * fonction du type, et s'il n'y a pas de type on affiche la valeur
+             * par defaut ».
+             *
+             * Ils existent parce que l'ecran annonçait un prix et en facturait
+             * un autre : la bascule heure/journee lisait le tarif du vehicule
+             * pendant que le total appliquait celui du type. Deux nombres pour
+             * la meme course, et le client ne savait pas lequel croire.
+             *
+             * La regle elle-meme vit sur `Vehicle::tarifPour()`, une seule
+             * fois : le devis, le catalogue et cet affichage la lisent, ils ne
+             * la recalculent pas.
+             */
+            /*
+             * Les types de course que CE vehicule propose.
+             *
+             * Ceux dont le tarif a ete saisi sur sa fiche, et eux seuls :
+             * configurer un tarif pour un type, c'est rendre ce type
+             * disponible sur ce vehicule. Le referentiel complet ne vaut que
+             * pour l'administration — un vehicule sans aucun tarif ne doit
+             * proposer aucun type, et l'ecran n'affiche alors rien de plus
+             * qu'avant.
+             *
+             * Les regles voyagent avec chaque ligne : l'ecran impose le mode,
+             * reclame le commentaire et propose le parking sans rien savoir
+             * des codes. Un quatrieme type reste donc gerable sans livraison.
+             */
+            'course_types' => $this->resource->coursePrices
+                ->map(fn ($ligne) => $ligne->courseType)
+                ->filter(fn (?CourseType $type) => $type?->is_active)
+                ->sortBy('position')
+                ->values()
+                ->map(fn (CourseType $type) => [
+                    'id' => $type->id,
+                    'code' => $type->code,
+                    'title' => $type->title,
+                    'description' => $type->description,
+                    'minimum_hours' => $type->minimum_hours,
+                    'forced_mode' => $type->forced_mode,
+                    'note_required' => $type->note_required,
+                    'parking_option' => $type->parking_option,
+                    'parking_hourly_fee' => $type->tarifParking(),
+                ]),
+
+            'applied_rates' => [
+                'hourly' => $this->tarifApplique('hourly', $request),
+                'daily' => $this->tarifApplique('daily', $request),
+            ],
+
+            /*
+             * La ville ou ce vehicule travaille, et s'il peut prendre la
+             * course demandee.
+             *
+             * Le catalogue reste MONDIAL — « ils peuvent voir les vehicules
+             * disponibles qui se trouvent dans tous les pays mais ils peuvent
+             * commander que pour la course dans le pays d'origine de la
+             * voiture ». Le vehicule d'ailleurs est donc rendu, et grise,
+             * exactement comme `available` traite celui qui est en course.
+             *
+             * `reservable` vaut VRAI quand on ne sait pas : pas de commune
+             * demandee, ou vehicule sans ville. Ne rien savoir ne doit pas
+             * fermer la location.
+             */
+            'city' => $this->resource->city
+                ? [
+                    'title' => $this->resource->city->title,
+                    'slug' => $this->resource->city->slug,
+                ]
+                : null,
+            'reservable' => $this->reservable($request),
+
+            /*
              * La plaque n'est pas exposee au catalogue : elle identifie un
              * vehicule precis sur la voie publique, et le client n'en a besoin
              * qu'une fois sa reservation confirmee. Elle figure alors sur la
              * reservation.
              */
         ];
+    }
+
+    /**
+     * Ce vehicule peut-il prendre une course au depart de la commune demandee ?
+     *
+     * La ville de la commune est resolue UNE FOIS par requete et non par
+     * vehicule : quinze lignes de catalogue feraient autrement quinze
+     * requetes identiques.
+     */
+    /**
+     * Le tarif de ce mode pour le type demande, celui du vehicule sinon.
+     *
+     * Nul pour le journalier d'un vehicule qui ne se loue qu'a l'heure :
+     * l'ecran n'affiche alors pas le mode journee, plutot qu'un prix a zero.
+     *
+     * Le type est resolu UNE FOIS par requete et non par vehicule : quinze
+     * lignes de catalogue feraient autrement quinze lectures identiques.
+     */
+    /** Le service de tarification, resolu une fois par requete. */
+    private function pricing(): BookingPricing
+    {
+        return once(fn () => app(BookingPricing::class));
+    }
+
+    private function tarifApplique(string $mode, Request $request): ?float
+    {
+        $defaut = $mode === 'daily'
+            ? ($this->resource->daily_rate !== null ? (float) $this->resource->daily_rate : null)
+            : (float) $this->resource->hourly_rate;
+
+        $typeId = $request->integer('course_type_id');
+
+        if (! $typeId) {
+            return $defaut;
+        }
+
+        $type = once(fn () => CourseType::query()->find($typeId));
+
+        return $this->resource->tarifPour($type, $mode) ?? $defaut;
+    }
+
+    private function reservable(Request $request): bool
+    {
+        $townId = $request->integer('pickup_town_id');
+
+        if (! $townId) {
+            return true;
+        }
+
+        // Les communes d'abord : la regle vit sur le modele, et le catalogue
+        // doit dire exactement ce que la reservation refusera.
+        if (! $this->resource->dessertLaCommune($townId)) {
+            return false;
+        }
+
+        if (! $this->resource->city_id) {
+            return true;
+        }
+
+        $cityId = once(fn () => Town::query()->whereKey($townId)->value('city_id'));
+
+        return ! $cityId || (int) $cityId === (int) $this->resource->city_id;
     }
 }

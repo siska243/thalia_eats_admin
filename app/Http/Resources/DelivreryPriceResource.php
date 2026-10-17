@@ -20,12 +20,12 @@ class DelivreryPriceResource extends JsonResource
     {
         // return parent::toArray($request);
         return [
-            'interval_pricing'=>$this->resource->interval_pricing,
-            'frais_livraison'=>$this->resource->frais,
-            'service_price'=>$this->resource->service_price,
-            'currency'=>$this->resource->currency,
-            'interval_max_price'=>$this->resource->interval_max_price,
-            'town'=>$this->whenLoaded('town',new TownResource($this->resource->town))
+            'interval_pricing' => $this->resource->interval_pricing,
+            'frais_livraison' => $this->resource->frais,
+            'service_price' => $this->resource->service_price,
+            'currency' => $this->resource->currency,
+            'interval_max_price' => $this->resource->interval_max_price,
+            'town' => $this->whenLoaded('town', new TownResource($this->resource->town)),
         ];
     }
 }

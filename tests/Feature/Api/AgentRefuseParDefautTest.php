@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Enums\TokenAbility;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -55,7 +56,7 @@ class AgentRefuseParDefautTest extends TestCase
         // declare une ici pour epingler le comportement avant qu'elle
         // n'existe : sans cela, la premiere route ecrite avec la variante
         // « toutes » serait silencieusement fermee aux assistants.
-        \Illuminate\Support\Facades\Route::middleware([
+        Route::middleware([
             'api',
             'auth:sanctum',
             'abilities:catalogue:lire,devis:calculer',

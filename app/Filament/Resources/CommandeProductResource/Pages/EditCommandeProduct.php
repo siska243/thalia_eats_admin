@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\CommandeProductResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\CommandeProductResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditCommandeProduct extends EditRecord

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Wrappers\Cipher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -93,7 +94,7 @@ class PrecommandeLectureTest extends TestCase
             'number_street' => '7',
             'reference' => 'Portail bleu',
             'label' => 'maison',
-            'slug' => 'carnet-'.\Illuminate\Support\Str::random(8),
+            'slug' => 'carnet-'.Str::random(8),
             'is_main' => true,
             'created_at' => now(),
             'updated_at' => now(),

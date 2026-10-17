@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\ImageUrl;
 use App\Models\SubCategoryProduct;
 use App\Wrappers\Cipher;
-use App\Helpers\ImageUrl;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,12 +20,12 @@ class SubCategoryProductResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        //return parent::toArray($request);
+        // return parent::toArray($request);
         return [
-            'uid'=>Cipher::Encrypt($this->id),
-            'title'=>$this->resource->title,
-            'slug'=>$this->slug,
-            'picture'=>ImageUrl::make($request, $this->resource->picture),
+            'uid' => Cipher::Encrypt($this->id),
+            'title' => $this->resource->title,
+            'slug' => $this->slug,
+            'picture' => ImageUrl::make($request, $this->resource->picture),
             /*
              * La valeur par defaut de whenLoaded etait evaluee immediatement
              * par PHP : $this->product declenchait un chargement paresseux de
@@ -38,7 +38,7 @@ class SubCategoryProductResource extends JsonResource
              * pas chargee : c'est desormais au controleur de la precharger
              * avec les contraintes qui conviennent a son contexte.
              */
-            'product'=>$this->whenLoaded('product', fn () => ProductResource::collection(
+            'product' => $this->whenLoaded('product', fn () => ProductResource::collection(
                 $this->resource->product->where('is_active', true)->values()
             )),
         ];

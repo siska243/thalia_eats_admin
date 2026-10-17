@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\ChauffeurResource\Pages;
 
-use Filament\Actions\CreateAction;
 use App\Filament\Resources\ChauffeurResource;
-use Filament\Actions;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListChauffeurs extends ListRecords

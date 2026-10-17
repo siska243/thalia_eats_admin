@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\User;
+use Filament\Models\Contracts\FilamentUser;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -82,7 +83,7 @@ class AccesAdministrationTest extends TestCase
         // Sans ce contrat, Filament n'appelle jamais canAccessPanel et decide
         // sur le seul environnement.
         $this->assertInstanceOf(
-            \Filament\Models\Contracts\FilamentUser::class,
+            FilamentUser::class,
             User::factory()->make()
         );
     }

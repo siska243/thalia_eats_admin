@@ -73,6 +73,10 @@ class BookingController extends Controller
                 $request->only([
                     'pickup_location', 'pickup_lat', 'pickup_lng', 'pickup_town_id',
                     'dropoff_location', 'dropoff_lat', 'dropoff_lng',
+                    // Le type de course, son commentaire et l'option parking.
+                    // Les trois sont facultatifs : une application installee
+                    // n'en envoie aucun, et sa reservation passe comme avant.
+                    'course_type_id', 'course_note', 'parking',
                 ]),
                 $request->input('pricing_mode', BookingPricing::MODE_HOURLY),
             );
@@ -230,6 +234,15 @@ class BookingController extends Controller
             // Filet seulement : le service compose la phrase, qui nomme le
             // delai lu dans les reglages.
             BookingRefusee::DELAI_PREVENANCE => 'Le départ demandé est trop proche.',
+            /*
+             * Ces trois-la portent normalement leur propre message, compose
+             * par le service avec le nom de la ville ou du type. Ce repli ne
+             * sert que si un appelant leve le refus sans message.
+             */
+            BookingRefusee::HORS_VILLE => "Ce véhicule n'effectue pas de course au départ de cette ville.",
+            BookingRefusee::HORS_COMMUNE => "Ce véhicule n'effectue pas de course au départ de cette commune.",
+            BookingRefusee::MODE_IMPOSE => 'Ce type de course impose un mode de réservation.',
+            BookingRefusee::DUREE_MINIMALE_TYPE => 'Ce type de course demande une durée minimale.',
             // Le service compose le message : il nomme la réservation qui
             // bloque. Cette phrase n'est qu'un filet si la référence manque.
             BookingRefusee::RESERVATION_NON_REGLEE => "Vous avez déjà une réservation non réglée. Payez-la ou annulez-la avant d'en réserver une autre.",

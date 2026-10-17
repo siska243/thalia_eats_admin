@@ -1,8 +1,14 @@
 <?php
 
 use App\Http\Controllers\Api\CallbackUrlController;
+use App\Http\Controllers\Api\GoogleAuthController;
+use App\Http\Controllers\Api\PayementController;
+use App\Http\Controllers\Oauth\AutorisationController;
+use App\Http\Controllers\Oauth\EnregistrementController;
+use App\Http\Controllers\Oauth\JetonController;
+use App\Http\Controllers\Oauth\MetadonneesController;
+use App\Http\Controllers\PaiementPrecommandeController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Http;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,20 +25,19 @@ use Illuminate\Support\Facades\Http;
     return view('welcome');
 }); */
 
-Route::get('/callback/{action}',[CallbackUrlController::class,'index'])->name('callback-web');
+Route::get('/callback/{action}', [CallbackUrlController::class, 'index'])->name('callback-web');
 
-Route::post('/create-payment-intent',[CallbackUrlController::class,'index'])->name('payment-intent-web');
+Route::post('/create-payment-intent', [CallbackUrlController::class, 'index'])->name('payment-intent-web');
 
-Route::get('/test-test',function (){
+Route::get('/test-test', function () {
     echo gethostbyname('backend.flexpay.cd');
 });
 
-Route::post('/webhook-paiement-flexpay', [\App\Http\Controllers\Api\PayementController::class, 'webhook']);
+Route::post('/webhook-paiement-flexpay', [PayementController::class, 'webhook']);
 
-
-Route::get('/auth/google', [\App\Http\Controllers\Api\GoogleAuthController::class, 'redirect']);
-Route::get('/auth/google/register', [\App\Http\Controllers\Api\GoogleAuthController::class, 'register']);
-Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthController::class, 'callback']);
+Route::get('/auth/google', [GoogleAuthController::class, 'redirect']);
+Route::get('/auth/google/register', [GoogleAuthController::class, 'register']);
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 
 /*
  * La page Blade de paiement d'une pre-commande.
@@ -47,18 +52,13 @@ Route::get('/auth/google/callback', [\App\Http\Controllers\Api\GoogleAuthControl
  * avec un repas commande et aucun moyen de payer. Ces deux routes pourront
  * partir une fois cette fenetre ecoulee.
  */
-Route::get('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'show'])
+Route::get('/paiement/precommande/{uid}', [PaiementPrecommandeController::class, 'show'])
     ->name('precommande.paiement')
     ->middleware(['signed', 'throttle:lien-paiement']);
 
-Route::post('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecommandeController::class, 'initier'])
+Route::post('/paiement/precommande/{uid}', [PaiementPrecommandeController::class, 'initier'])
     ->name('precommande.paiement.initier')
     ->middleware(['signed', 'throttle:lien-paiement']);
-
-
-
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -73,21 +73,21 @@ Route::post('/paiement/precommande/{uid}', [\App\Http\Controllers\PaiementPrecom
 |
 */
 
-Route::get('/.well-known/oauth-authorization-server', [\App\Http\Controllers\Oauth\MetadonneesController::class, 'show'])
+Route::get('/.well-known/oauth-authorization-server', [MetadonneesController::class, 'show'])
     ->name('oauth.metadonnees');
 
-Route::post('/oauth/register', [\App\Http\Controllers\Oauth\EnregistrementController::class, 'store'])
+Route::post('/oauth/register', [EnregistrementController::class, 'store'])
     ->name('oauth.register')
     ->middleware('throttle:oauth-enregistrement');
 
-Route::get('/oauth/authorize', [\App\Http\Controllers\Oauth\AutorisationController::class, 'show'])
+Route::get('/oauth/authorize', [AutorisationController::class, 'show'])
     ->name('oauth.authorize')
     ->middleware('throttle:oauth-autorisation');
 
-Route::post('/oauth/authorize', [\App\Http\Controllers\Oauth\AutorisationController::class, 'store'])
+Route::post('/oauth/authorize', [AutorisationController::class, 'store'])
     ->name('oauth.authorize.store')
     ->middleware('throttle:oauth-connexion');
 
-Route::post('/oauth/token', [\App\Http\Controllers\Oauth\JetonController::class, 'store'])
+Route::post('/oauth/token', [JetonController::class, 'store'])
     ->name('oauth.token')
     ->middleware('throttle:oauth-jeton');

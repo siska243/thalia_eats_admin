@@ -6,8 +6,11 @@ use App\Models\Commande;
 use App\Models\Precommande;
 use App\Models\Product;
 use App\Models\Status;
+use App\Models\StatusPayement;
+use App\Models\User;
 use App\Services\ConversionPrecommande;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ConversionPrecommandeTest extends TestCase
@@ -170,19 +173,19 @@ class ConversionPrecommandeTest extends TestCase
         // La table status_payements a pour colonnes reelles code/name/is_paid
         // (pas title/slug) ; le code '0' correspond au statut renvoye par le
         // Http::fake ci-dessous, sur lequel le controleur fait sa recherche.
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'En attente', 'is_paid' => false, 'is_default' => true]
         );
 
         $commande = Commande::query()->create([
             'refernce' => '4242',
-            'user_id' => \App\Models\User::factory()->create()->id,
+            'user_id' => User::factory()->create()->id,
             'status_id' => 5,
             'global_price' => 7000,
         ]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
         ], 200)]);
 
@@ -215,19 +218,19 @@ class ConversionPrecommandeTest extends TestCase
 
     public function test_le_webhook_d_une_commande_ordinaire_payee_met_a_jour_son_statut(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $commande = Commande::query()->create([
             'refernce' => '4243',
-            'user_id' => \App\Models\User::factory()->create()->id,
+            'user_id' => User::factory()->create()->id,
             'status_id' => 5,
             'global_price' => 7000,
         ]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
         ], 200)]);
 
@@ -250,14 +253,14 @@ class ConversionPrecommandeTest extends TestCase
 
     public function test_le_webhook_convertit_une_precommande_payee(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => $precommande->refernce, 'amount' => 5500],
         ], 200)]);
@@ -300,14 +303,14 @@ class ConversionPrecommandeTest extends TestCase
         // d'un paiement mobile money lance mais pas encore confirme par le
         // client sur son telephone. Convertir ici encaisserait rien et
         // ferait cuisiner un repas non paye.
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '2'],
             ['name' => 'Paiement en attente', 'is_paid' => false, 'is_default' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '2'],
         ], 200)]);
 
@@ -336,21 +339,21 @@ class ConversionPrecommandeTest extends TestCase
      */
     public function test_le_webhook_refuse_une_reference_qui_n_est_pas_celle_de_la_transaction(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $commande = Commande::query()->create([
             'refernce' => '4244',
-            'user_id' => \App\Models\User::factory()->create()->id,
+            'user_id' => User::factory()->create()->id,
             'status_id' => 5,
             'global_price' => 7000,
         ]);
 
         // La passerelle rattache la transaction a la commande 9999 ;
         // l'appelant, lui, annonce 4244.
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => '9999'],
         ], 200)]);
@@ -378,14 +381,14 @@ class ConversionPrecommandeTest extends TestCase
 
     public function test_le_webhook_refuse_une_precommande_dont_la_transaction_designe_autre_chose(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => 'P-AUTRECHOSE'],
         ], 200)]);
@@ -414,19 +417,19 @@ class ConversionPrecommandeTest extends TestCase
 
     public function test_le_webhook_accepte_une_commande_ordinaire_dont_la_reference_concorde(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $commande = Commande::query()->create([
             'refernce' => '4245',
-            'user_id' => \App\Models\User::factory()->create()->id,
+            'user_id' => User::factory()->create()->id,
             'status_id' => 5,
             'global_price' => 7000,
         ]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => '4245'],
         ], 200)]);
@@ -456,14 +459,14 @@ class ConversionPrecommandeTest extends TestCase
      */
     public function test_le_webhook_refuse_une_precommande_si_la_transaction_n_a_pas_de_reference(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
         ], 200)]);
 
@@ -494,19 +497,19 @@ class ConversionPrecommandeTest extends TestCase
      */
     public function test_une_commande_ordinaire_passe_encore_si_la_transaction_n_a_pas_de_reference(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $commande = Commande::query()->create([
             'refernce' => '4246',
-            'user_id' => \App\Models\User::factory()->create()->id,
+            'user_id' => User::factory()->create()->id,
             'status_id' => 5,
             'global_price' => 7000,
         ]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok', 'transaction' => ['status' => '0'],
         ], 200)]);
 
@@ -540,14 +543,14 @@ class ConversionPrecommandeTest extends TestCase
      */
     public function test_le_webhook_refuse_une_precommande_dont_le_montant_verifie_ne_correspond_pas(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => $precommande->refernce, 'amount' => 100],
         ], 200)]);
@@ -579,14 +582,14 @@ class ConversionPrecommandeTest extends TestCase
         // Le projet a deja un precedent de divergence d'un centime entre
         // round() cote PHP et toFixed(2) cote client : une egalite stricte
         // sur des flottants refuserait des paiements parfaitement valides.
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => $precommande->refernce, 'amount' => 5499.99],
         ], 200)]);
@@ -610,14 +613,14 @@ class ConversionPrecommandeTest extends TestCase
         // Mode ouvert sur le MONTANT : le nom du champ n'a pas ete etabli sur
         // une capture reelle, une hypothese fausse doit degrader vers le
         // comportement d'hier, jamais vers le refus.
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $precommande = $this->precommandeAvecLignes();
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => $precommande->refernce],
         ], 200)]);
@@ -643,19 +646,19 @@ class ConversionPrecommandeTest extends TestCase
      */
     public function test_une_commande_ordinaire_au_montant_divergent_est_journalisee_mais_passe(): void
     {
-        \App\Models\StatusPayement::query()->firstOrCreate(
+        StatusPayement::query()->firstOrCreate(
             ['code' => '0'],
             ['name' => 'Transaction traitée avec succès', 'is_paid' => true]
         );
 
         $commande = Commande::query()->create([
             'refernce' => '4247',
-            'user_id' => \App\Models\User::factory()->create()->id,
+            'user_id' => User::factory()->create()->id,
             'status_id' => 5,
             'global_price' => 7000,
         ]);
 
-        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response([
+        Http::fake(['*' => Http::response([
             'code' => 0, 'message' => 'ok',
             'transaction' => ['status' => '0', 'reference' => '4247', 'amount' => 100],
         ], 200)]);

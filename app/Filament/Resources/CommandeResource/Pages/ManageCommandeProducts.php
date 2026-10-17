@@ -2,19 +2,14 @@
 
 namespace App\Filament\Resources\CommandeResource\Pages;
 
-use Filament\Schemas\Schema;
+use App\Filament\Resources\CommandeResource;
+use Filament\Actions\BulkActionGroup;
 use Filament\Forms\Components\TextInput;
+use Filament\Resources\Pages\ManageRelatedRecords;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\BulkActionGroup;
-use App\Filament\Resources\CommandeResource;
-use Filament\Actions;
-use Filament\Forms;
-use Filament\Resources\Pages\ManageRelatedRecords;
-use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ManageCommandeProducts extends ManageRelatedRecords
 {
@@ -22,7 +17,7 @@ class ManageCommandeProducts extends ManageRelatedRecords
 
     protected static string $relationship = 'commande_products';
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-cart';
 
     public static function getNavigationLabel(): string
     {
@@ -46,11 +41,9 @@ class ManageCommandeProducts extends ManageRelatedRecords
             ->columns([
 
                 ImageColumn::make('product.picture')
-                    ->disk('uploads_image')->circular()
-                    ,
+                    ->disk('uploads_image')->circular(),
                 TextColumn::make('product.title')
-                ->searchable()
-                ,
+                    ->searchable(),
                 TextColumn::make('product.restaurant.name'),
                 TextColumn::make('quantity'),
                 TextColumn::make('price'),
@@ -58,8 +51,7 @@ class ManageCommandeProducts extends ManageRelatedRecords
 
                 TextColumn::make('user.name'),
                 TextColumn::make('created_at')
-                ->dateTime()
-                ,
+                    ->dateTime(),
             ])
             ->filters([
                 //

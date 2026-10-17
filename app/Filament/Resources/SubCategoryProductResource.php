@@ -2,36 +2,37 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Pages\Enums\SubNavigationPosition;
-use Filament\Schemas\Schema;
-use App\Filament\Resources\SubCategoryProductResource\Pages\EditSubCategoryProduct;
-use App\Filament\Resources\SubCategoryProductResource\Pages\ManageProducts;
-use App\Filament\Resources\SubCategoryProductResource\Pages\ListSubCategoryProducts;
 use App\Filament\Resources\SubCategoryProductResource\Pages\CreateSubCategoryProduct;
-use App\Filament\Resources\SubCategoryProductResource\Pages;
-use App\Filament\Resources\SubCategoryProductResource\RelationManagers;
-use App\Models\CategoryProduct;
+use App\Filament\Resources\SubCategoryProductResource\Pages\EditSubCategoryProduct;
+use App\Filament\Resources\SubCategoryProductResource\Pages\ListSubCategoryProducts;
+use App\Filament\Resources\SubCategoryProductResource\Pages\ManageProducts;
 use App\Models\SubCategoryProduct;
-use Filament\Pages\Page;
-use Filament\Forms\Components\{Grid, Section, TextInput, Textarea, Toggle, Select};
-use Filament\Resources\Resource;
-use Filament\Tables\Actions\{CreateAction, DeleteBulkAction, EditAction, ViewAction, DeleteAction, BulkActionGroup};
-use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\FileUpload;
-use Filament\Tables\Columns\{ImageColumn, TextColumn, CheckboxColumn, ToggleColumn};
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Pages\Enums\SubNavigationPosition;
+use Filament\Pages\Page;
+use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Table;
 
 class SubCategoryProductResource extends Resource
 {
+    protected static ?int $navigationSort = 6;
+
     protected static ?string $model = SubCategoryProduct::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
-    protected static ?string $navigationLabel = "Sous Categorie";
-    protected static string | \UnitEnum | null $navigationGroup = "Produits";
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-ellipsis-horizontal-circle';
 
-    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+    protected static ?string $navigationLabel = 'Sous Categorie';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
+
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
     public static function form(Schema $schema): Schema
     {
@@ -40,18 +41,18 @@ class SubCategoryProductResource extends Resource
             \Filament\Schemas\Components\Section::make()
                 ->columns(2)
                 ->schema([
-                Select::make('category_product_id')->label('Categorie')
-                    ->relationship('category_product', 'title')
-                    ->required(),
-                TextInput::make('title')
-                    ->required(),
-                Toggle::make('is_active')
-                    ->required(),
-                FileUpload::make('picture')
-                    ->disk('uploads_image')
-                    ->acceptedFileTypes(['image/*'])->columnSpanFull(),
+                    Select::make('category_product_id')->label('Categorie')
+                        ->relationship('category_product', 'title')
+                        ->required(),
+                    TextInput::make('title')
+                        ->required(),
+                    Toggle::make('is_active')
+                        ->required(),
+                    FileUpload::make('picture')
+                        ->disk('uploads_image')
+                        ->acceptedFileTypes(['image/*'])->columnSpanFull(),
 
-            ])
+                ]),
         ]);
     }
 
@@ -80,7 +81,7 @@ class SubCategoryProductResource extends Resource
             ])
             ->recordActions([
                 \Filament\Actions\EditAction::make(),
-                \Filament\Actions\ViewAction::make()
+                \Filament\Actions\ViewAction::make(),
 
             ])
             ->toolbarActions([
@@ -116,7 +117,7 @@ class SubCategoryProductResource extends Resource
             'index' => ListSubCategoryProducts::route('/'),
             'create' => CreateSubCategoryProduct::route('/create'),
             'edit' => EditSubCategoryProduct::route('/{record}/edit'),
-            'products'=>ManageProducts::route('/{record}/products'),
+            'products' => ManageProducts::route('/{record}/products'),
         ];
     }
 }

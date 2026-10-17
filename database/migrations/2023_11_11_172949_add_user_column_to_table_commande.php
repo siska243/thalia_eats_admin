@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::table('commandes', function (Blueprint $table) {
             //
-            $table->foreignIdFor(User::class,'user_id');
+            $table->foreignIdFor(User::class, 'user_id');
         });
     }
 

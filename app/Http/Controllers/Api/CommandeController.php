@@ -14,9 +14,12 @@ use App\Models\Product;
 use App\Models\Restaurant;
 use App\Models\StatusPayement;
 use App\Models\Town;
+use App\Services\Portee;
+use App\Services\PorteeLivraison;
 use App\Services\Quotation;
 use App\Services\QuotationService;
 use App\Services\Suivi\SuiviPositions;
+use App\Settings\FoodSettings;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
 use App\Wrappers\FirebasePushNotification;
@@ -25,6 +28,7 @@ use App\Wrappers\LibPhoneNumber;
 use Exception;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -138,6 +142,177 @@ class CommandeController extends Controller
     }
 
     /**
+     * Refuse une commande qui demande plus que le stock restant.
+     *
+     * Jumelle de `refuserSiRestaurantFerme`, et pour la meme raison : une
+     * regle qui ne vit que dans les ecrans ne protege rien. Le refus est
+     * oppose a l'ajout au panier ET au reglement — un panier rempli pendant
+     * qu'il restait du stock survit a la rupture, exactement comme il survit
+     * a la fermeture du restaurant.
+     *
+     * La regle elle-meme vit sur `Product::estEpuise()`, une seule fois.
+     *
+     * Un plat dont le stock n'est PAS suivi n'est jamais refuse : c'est ce qui
+     * garantit que le catalogue d'aujourd'hui, entierement non suivi, continue
+     * de se commander comme avant.
+     *
+     * @param  array<int, array<string, mixed>>|null  $products  Les lignes recues, portant un uid chiffre.
+     */
+    private function refuserSiProduitEpuise(?array $products, string $cle = 'product_id'): ?JsonResponse
+    {
+        $demande = [];
+
+        foreach ($products ?? [] as $ligne) {
+            $id = Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null);
+
+            if ($id === false || $id === '' || ! ctype_digit((string) $id)) {
+                continue;
+            }
+
+            // Un meme plat peut arriver sur plusieurs lignes : c'est le total
+            // demande qui doit tenir dans le stock, pas chaque ligne prise a
+            // part.
+            $demande[(int) $id] = ($demande[(int) $id] ?? 0) + max(1, (int) ($ligne['quantity'] ?? 1));
+        }
+
+        if (! $demande) {
+            return null;
+        }
+
+        $manquant = Product::query()
+            ->whereIn('id', array_keys($demande))
+            ->whereNotNull('stock_quantity')
+            ->get()
+            ->first(fn (Product $produit) => $produit->stock_quantity < $demande[$produit->id]);
+
+        /*
+         * L'interrupteur general, eteint : on ne refuse plus rien.
+         *
+         * Lu ICI et non en entree : la quasi-totalite des commandes ne porte
+         * aucun plat suivi, et il serait absurde d'interroger les reglages a
+         * chaque panier pour une fonctionnalite que personne n'a activee.
+         *
+         * Le decompte, lui, CONTINUE pendant l'extinction : sinon les
+         * quantites deriveraient et seraient fausses au rallumage.
+         */
+        if (! $manquant || ! FoodSettings::stockActif()) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            ['product' => $manquant->title, 'stock_disponible' => (int) $manquant->stock_quantity],
+            __('Plat épuisé'),
+            $manquant->estEpuise()
+                ? __(':plat n\'est plus disponible pour le moment.', ['plat' => $manquant->title])
+                : __('Il ne reste que :reste :plat.', ['reste' => (int) $manquant->stock_quantity, 'plat' => $manquant->title]),
+        );
+    }
+
+    /**
+     * Refuse une commande dont le restaurant est trop loin de la livraison.
+     *
+     * Jumelle de `refuserSiRestaurantFerme`, et pour la meme raison : une
+     * regle qui ne vit que dans les ecrans ne protege rien. Le proprietaire,
+     * le 15 octobre : « une personne a Kinshasa ne peut pas commander dans un
+     * restaurant au bas-Congo ».
+     *
+     * La regle elle-meme vit sur `PorteeLivraison`, une seule fois, et c'est
+     * elle qui decide quoi faire d'une position manquante — jamais ce
+     * controleur.
+     *
+     * Elle n'est appelee que la ou une adresse de livraison existe :
+     * `store()` et `valide()`. Le panier (`addProduct`) n'en a pas, et une
+     * distance ne se calcule pas sans destination.
+     *
+     * @param  array<int, array<string, mixed>>|null  $products
+     */
+    private function refuserSiRestaurantTropLoin(
+        ?array $products,
+        ?Town $town,
+        ?float $lat = null,
+        ?float $lng = null,
+        string $cle = 'uid',
+        /** @var array{0: float, 1: float}|null Ou se trouve physiquement le client. */
+        ?array $positionClient = null,
+    ): ?JsonResponse {
+        $ids = collect($products ?? [])
+            ->map(fn ($ligne) => Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null))
+            ->filter(fn ($id) => $id !== false && $id !== '' && ctype_digit((string) $id))
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (! $ids) {
+            return null;
+        }
+
+        return $this->refuserSiHorsPortee(
+            Product::query()
+                ->with('restaurant.town.city')
+                ->whereIn('id', $ids)
+                ->get()
+                ->pluck('restaurant')
+                ->filter()
+                ->unique('id'),
+            $town,
+            $lat,
+            $lng,
+            $positionClient,
+        );
+    }
+
+    /**
+     * Ou se trouve physiquement le client, quand il l'envoie.
+     *
+     * Distinct du lieu de LIVRAISON : les deux different des qu'on commande
+     * pour quelqu'un d'autre. Le serveur ne s'en sert que si l'administration
+     * a allume l'option.
+     *
+     * @return array{0: float, 1: float}|null
+     */
+    private function positionClientDe(Request $request): ?array
+    {
+        return $request->filled('client_lat') && $request->filled('client_lng')
+            ? [(float) $request->input('client_lat'), (float) $request->input('client_lng')]
+            : null;
+    }
+
+    /**
+     * Le coeur du refus, a partir de restaurants deja charges.
+     *
+     * Separe de `refuserSiRestaurantTropLoin` parce que tous les appelants ne
+     * partent pas d'une liste de produits chiffres : changer l'adresse d'une
+     * commande part de la commande elle-meme. Un second garde recopie aurait
+     * diverge du premier — c'est le motif que ce lot ferme, pas celui qu'il
+     * ouvre.
+     *
+     * @param  Collection<int, Restaurant>  $restaurants
+     */
+    private function refuserSiHorsPortee(
+        $restaurants,
+        ?Town $town,
+        ?float $lat = null,
+        ?float $lng = null,
+        /** @var array{0: float, 1: float}|null */
+        ?array $positionClient = null,
+    ): ?JsonResponse {
+        $portees = app(PorteeLivraison::class);
+
+        $refus = $restaurants
+            ->map(fn (Restaurant $restaurant) => $portees->pour($restaurant, $town, $lat, $lng, $positionClient))
+            ->first(fn (Portee $portee) => ! $portee->autorise);
+
+        if (! $refus) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            ['distance_km' => $refus->distance_km, 'rayon_km' => $refus->rayon_km],
+            __('Hors zone de livraison'),
+            $refus->message,
+        );
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(CommandeRequest $request)
@@ -172,6 +347,19 @@ class CommandeController extends Controller
             }
 
             $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
+
+            // Avant toute ecriture : une commande posee puis refusee laisserait
+            // une ligne orpheline, et le client la verrait dans sa liste.
+            if ($refus = $this->refuserSiRestaurantTropLoin(
+                $products,
+                $town,
+                isset($adresse['lat']) ? (float) $adresse['lat'] : null,
+                isset($adresse['long']) ? (float) $adresse['long'] : null,
+                'uid',
+                $this->positionClientDe($request),
+            )) {
+                return $refus;
+            }
 
             if (! $commande) {
 
@@ -258,6 +446,10 @@ class CommandeController extends Controller
             }
 
             if ($refus = $this->refuserSiRestaurantFerme($products)) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiProduitEpuise($products)) {
                 return $refus;
             }
 
@@ -355,7 +547,10 @@ class CommandeController extends Controller
             $uid = $request->input('uid');
 
             $commande = Commande::query()
-                ->with('product')
+                // `product.restaurant.town.city` : le garde de portee lit la
+                // ville du restaurant. Sans ce prechargement, chaque ligne du
+                // panier couterait trois requetes de plus.
+                ->with('product.product.restaurant.town.city')
                 ->where('user_id', $user?->id)
                 ->nonReglee()
                 ->when($uid, fn ($query) => $query->where('id', Cipher::Decrypt($uid)))
@@ -376,7 +571,30 @@ class CommandeController extends Controller
             $number_street = $request->input('number_street');
             $reference = $request->input('reference');
 
-            $commande->town_id = Town::query()->where('slug', $request->input('town'))->first()?->id;
+            $town = Town::query()->where('slug', $request->input('town'))->first();
+
+            /*
+             * La nouvelle adresse passe par le meme garde que la creation.
+             *
+             * Sans lui, un client commandait a la Gombe puis deplacait sa
+             * livraison a Lubumbashi : la commande n'etait refusee qu'au
+             * paiement, apres avoir rempli son panier. Le refus arrive ici,
+             * au moment ou il choisit.
+             */
+            if ($refus = $this->refuserSiHorsPortee(
+                $commande->product->pluck('product.restaurant')->filter()->unique('id'),
+                $town,
+                $request->filled('lat') ? (float) $request->input('lat') : null,
+                $request->filled('long') ? (float) $request->input('long') : null,
+                // Cinquieme argument : la position du client, pas une cle de
+                // produit — `refuserSiHorsPortee` part de restaurants deja
+                // charges et n'a pas de liste de produits a decoder.
+                $this->positionClientDe($request),
+            )) {
+                return $refus;
+            }
+
+            $commande->town_id = $town?->id;
             $commande->reference_adresse = $reference;
             $commande->adresse_delivery = $request->input('adresse')
                 ?: trim("{$street} {$number_street} {$reference}");
@@ -779,6 +997,10 @@ class CommandeController extends Controller
 
                     $order->save();
 
+                    // Le stock part au paiement, et une seule fois : la regle
+                    // et sa garantie d'unicite vivent sur la commande.
+                    $order->decrementerLesStocks();
+
                 }
 
                 return ApiResponse::GET_DATA($status_paiement);
@@ -921,9 +1143,27 @@ class CommandeController extends Controller
                 return $refus;
             }
 
+            if ($refus = $this->refuserSiProduitEpuise($products, 'uid')) {
+                return $refus;
+            }
+
             $adresse = $request->input('address');
 
             $town = Town::query()->where('slug', ! empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
+
+            // Avant tout appel a la passerelle, comme le refus de restaurant
+            // ferme juste au-dessus : un debit lance pour une livraison
+            // impossible est pire qu'un refus.
+            if ($refus = $this->refuserSiRestaurantTropLoin(
+                $products,
+                $town,
+                isset($adresse['lat']) ? (float) $adresse['lat'] : null,
+                isset($adresse['long']) ? (float) $adresse['long'] : null,
+                'uid',
+                $this->positionClientDe($request),
+            )) {
+                return $refus;
+            }
 
             // $last_commande = Commande::orderBy('created_at', 'desc')->first();
 
@@ -985,7 +1225,8 @@ class CommandeController extends Controller
                 }
 
                 $observes = Product::query()
-                    ->with('currency')
+                    // `restaurant.town.city` : le devis lit la ville du restaurant.
+                    ->with(['currency', 'restaurant.town.city'])
                     ->whereIn('id', $ids)
                     ->get()
                     ->keyBy('id');
@@ -1392,7 +1633,7 @@ class CommandeController extends Controller
     {
         try {
             event(new PayementEvent($orderNumber));
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             logger()->warning('Diffusion paiement Pusher echouee : '.$e->getMessage());
         }
     }

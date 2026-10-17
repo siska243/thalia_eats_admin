@@ -2,28 +2,25 @@
 
 namespace App\Filament\Resources\SubCategoryProductResource\Pages;
 
-use Filament\Pages\Enums\SubNavigationPosition;
-use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
-use Filament\Tables\Filters\TrashedFilter;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
 use App\Filament\Resources\SubCategoryProductResource;
 use App\Models\Currency;
 use App\Models\Restaurant;
 use App\Models\SubCategoryProduct;
-use Filament\Actions;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Pages\Enums\SubNavigationPosition;
 use Filament\Resources\Pages\ManageRelatedRecords;
-use Filament\Tables;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ToggleColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
@@ -34,10 +31,9 @@ class ManageProducts extends ManageRelatedRecords
 
     protected static string $relationship = 'product';
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
-
-    protected static ?\Filament\Pages\Enums\SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
+    protected static ?SubNavigationPosition $subNavigationPosition = SubNavigationPosition::Top;
 
     public static function getNavigationLabel(): string
     {
@@ -55,19 +51,17 @@ class ManageProducts extends ManageRelatedRecords
                             ->maxLength(65535),
                         Select::make('restaurant_id')
                             ->required()
-                            ->relationship('restaurant','name')
+                            ->relationship('restaurant', 'name')
                             ->options(Restaurant::where('is_active', true)->pluck('name', 'id'))
-                            ->searchable()
-                        ,
+                            ->searchable(),
                         Select::make('sub_category_product_id')
                             ->required()
-                            ->relationship('sub_category_product','title')
-                            ->options(SubCategoryProduct::where('is_active',true)->pluck('title','id'))
-                            ->searchable()
-                        ,
+                            ->relationship('sub_category_product', 'title')
+                            ->options(SubCategoryProduct::where('is_active', true)->pluck('title', 'id'))
+                            ->searchable(),
                         Select::make('currency_id')
-                            ->relationship('currency','title')->label('Devise')->required()
-                            ->options(Currency::where('is_active',1)->pluck('title','id'))
+                            ->relationship('currency', 'title')->label('Devise')->required()
+                            ->options(Currency::where('is_active', 1)->pluck('title', 'id')),
                     ])->columns(2),
 
                 Section::make('Information complementaire')
@@ -82,7 +76,7 @@ class ManageProducts extends ManageRelatedRecords
                         FileUpload::make('picture')
                             ->disk('uploads_image')
                             ->acceptedFileTypes(['image/*'])->columnSpanFull(),
-                    ])
+                    ]),
             ]);
     }
 
@@ -101,10 +95,8 @@ class ManageProducts extends ManageRelatedRecords
                 TextColumn::make('sub_category_product.title')
                     ->label('categorie')
                     ->sortable(),
-                ToggleColumn::make('is_active')
-                ,
-                ToggleColumn::make('preview')
-                ,
+                ToggleColumn::make('is_active'),
+                ToggleColumn::make('preview'),
 
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -116,7 +108,7 @@ class ManageProducts extends ManageRelatedRecords
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                TrashedFilter::make()
+                TrashedFilter::make(),
             ])
             ->headerActions([
                 CreateAction::make(),

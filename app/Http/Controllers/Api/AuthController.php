@@ -15,12 +15,11 @@ use App\Models\User;
 use App\Wrappers\ApiResponse;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -32,14 +31,14 @@ class AuthController extends Controller
     public function register(RegistrationRequest $request)
     {
         try {
-            //code...
-            $check_user=User::query()->where('email',$request->email)->first();
+            // code...
+            $check_user = User::query()->where('email', $request->email)->first();
 
-            if($check_user){
+            if ($check_user) {
                 return ApiResponse::BAD_REQUEST(
                     'Errors',
                     'Compte existant',
-                    "Un compte existe déjà avec cette adresse email. Connectez-vous pour continuer."
+                    'Un compte existe déjà avec cette adresse email. Connectez-vous pour continuer.'
                 );
             }
 
@@ -50,14 +49,14 @@ class AuthController extends Controller
                     'last_name' => $request->last_name,
                     'email' => $request->email,
                     'phone' => $request->phone,
-                    'slug' => Str::slug($request->name . '-' . time() . '-' . $request->last_name),
-                    'mobile_permissions'=>[MobilePermissions::AddOrder->value],
-                    'devices'=>[Device::Mobile->value,Device::Web->value]
+                    'slug' => Str::slug($request->name.'-'.time().'-'.$request->last_name),
+                    'mobile_permissions' => [MobilePermissions::AddOrder->value],
+                    'devices' => [Device::Mobile->value, Device::Web->value],
                 ]
             );
-            $user->type_user=TypeUser::Client->value;
-            $user->otp=self::generateOtp();
-            $user->otp_expire_at=now()->addMinutes(30);
+            $user->type_user = TypeUser::Client->value;
+            $user->otp = self::generateOtp();
+            $user->otp_expire_at = now()->addMinutes(30);
             $user->assignRole('client');
 
             $data['full_name'] = "{$user->last_name} {$user->name}";
@@ -65,67 +64,66 @@ class AuthController extends Controller
             $data['otp'] = $user->otp;
             Mail::to($user->email)->send(new WelcomeOtpMail($data));
 
-
             $user->save();
 
             return ApiResponse::SUCCESS_DATA(
                 $user,
-                "Bienvenue",
-                "Votre compte a été créé. Un code de vérification vient de vous être envoyé par email."
+                'Bienvenue',
+                'Votre compte a été créé. Un code de vérification vient de vous être envoyé par email.'
             );
 
         } catch (Exception $e) {
-            //throw $th;
+            // throw $th;
             return ApiResponse::SERVER_ERROR($e);
         }
     }
 
-    public function activation(Request $request){
-        try{
+    public function activation(Request $request)
+    {
+        try {
             $validator = Validator::make($request->all(), [
-                'email' => ['email', 'required', 'string','exists:users,email'],
+                'email' => ['email', 'required', 'string', 'exists:users,email'],
                 'otp' => ['required', 'string'],
 
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez saisir une adresse email valide');
             }
 
             $credentials = $request->only('email', 'otp');
 
-            $user = User::query()->where('email',  $credentials['email'])
+            $user = User::query()->where('email', $credentials['email'])
                 ->where('otp', $credentials['otp'])
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Ce code n'est pas valide");
             }
 
             // otp_expire_at etait renseigne a l'inscription mais jamais relu :
             // un code d'activation restait valable indefiniment.
-            if (!$user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
+            if (! $user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
                 return ApiResponse::BAD_REQUEST(
                     'Errors',
                     __('Oups'),
-                    "Ce code a expiré, demandez-en un nouveau"
+                    'Ce code a expiré, demandez-en un nouveau'
                 );
             }
 
-            $user->otp=null;
-            $user->otp_expire_at=null;
+            $user->otp = null;
+            $user->otp_expire_at = null;
 
-            $user->email_verified_at=now();
+            $user->email_verified_at = now();
 
             $user->save();
 
             return ApiResponse::SUCCESS_DATA(
                 $user,
-                "Compte activé",
-                "Votre compte est activé. Vous pouvez maintenant passer commande."
+                'Compte activé',
+                'Votre compte est activé. Vous pouvez maintenant passer commande.'
             );
-        }
-        catch (Exception $e) {
+        } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -147,7 +145,7 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez saisir une adresse email valide');
             }
 
             $user = User::query()
@@ -179,7 +177,7 @@ class AuthController extends Controller
     public function login(LoginUserRequest $request)
     {
         try {
-            //code...
+            // code...
 
             $validator = Validator::make($request->all(), [
                 'email' => ['email', 'required', 'string'],
@@ -188,20 +186,20 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez saisir une adresse email valide');
             }
             $credentials = $request->only('email', 'password');
 
-            $user = User::query()->where('email',  $credentials['email'])->first();
+            $user = User::query()->where('email', $credentials['email'])->first();
 
             // Un message distinct par champ permettait d'enumerer les comptes :
             // « Email incorrect » revelait qu'une adresse n'existe pas, et
             // « Password incorrect » qu'elle existe. Reponse unique.
-            if (!$user || !Hash::check($request->password, $user->password)) {
+            if (! $user || ! Hash::check($request->password, $user->password)) {
                 return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Email ou mot de passe incorrect');
             }
 
-            $token=$user->createToken('api token')->plainTextToken;
+            $token = $user->createToken('api token')->plainTextToken;
 
             $roles = $user->getRoleNames();
 
@@ -215,7 +213,7 @@ class AuthController extends Controller
             );
 
         } catch (Exception $e) {
-            //throw $th;
+            // throw $th;
             return ApiResponse::SERVER_ERROR($e);
         }
     }
@@ -234,7 +232,7 @@ class AuthController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Veuillez saisir une adresse email valide");
+                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez saisir une adresse email valide');
             }
 
             $user = User::query()->where('email', $request->email)->first();
@@ -279,7 +277,7 @@ class AuthController extends Controller
                 return ApiResponse::BAD_REQUEST(
                     $validator->errors(),
                     'Oups',
-                    "Le mot de passe doit contenir au moins 8 caractères, et les deux saisies doivent être identiques"
+                    'Le mot de passe doit contenir au moins 8 caractères, et les deux saisies doivent être identiques'
                 );
             }
 
@@ -288,15 +286,15 @@ class AuthController extends Controller
                 ->where('otp', $request->otp)
                 ->first();
 
-            if (!$user) {
+            if (! $user) {
                 return ApiResponse::BAD_REQUEST('Errors', 'Oups', "Ce code n'est pas valide");
             }
 
-            if (!$user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
+            if (! $user->otp_expire_at || now()->greaterThan($user->otp_expire_at)) {
                 return ApiResponse::BAD_REQUEST(
                     'Errors',
                     'Oups',
-                    "Ce code a expiré, demandez-en un nouveau"
+                    'Ce code a expiré, demandez-en un nouveau'
                 );
             }
 
@@ -328,7 +326,6 @@ class AuthController extends Controller
         }
     }
 
-
     public function refresh()
     {
         return response()->json([
@@ -337,14 +334,15 @@ class AuthController extends Controller
             'authorisation' => [
                 'token' => Auth::guard('api')->refresh(),
                 'type' => 'bearer',
-            ]
+            ],
         ]);
     }
 
-    public function notlogin(){
+    public function notlogin()
+    {
         return response()->json([
             'status' => 'error',
-            'title'=>'Not login',
+            'title' => 'Not login',
         ]);
     }
 }

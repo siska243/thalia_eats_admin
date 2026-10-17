@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\CityResource\Pages;
 
-use Filament\Actions\DeleteAction;
 use App\Filament\Resources\CityResource;
-use Filament\Actions;
+use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditCity extends EditRecord

@@ -20,10 +20,10 @@ class CommandeProductResource extends JsonResource
     {
         // return parent::toArray($request);
         return [
-            'price'=>$this->price,
-            'quantity'=>$this->quantity,
-            'currency'=>$this->currency,
-            'product'=>new ProductResource($this->product)
+            'price' => $this->price,
+            'quantity' => $this->quantity,
+            'currency' => $this->currency,
+            'product' => new ProductResource($this->product),
         ];
     }
 }

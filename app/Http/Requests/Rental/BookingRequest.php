@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Rental;
 
+use App\Models\CourseType;
 use App\Services\Rental\BookingPricing;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -48,6 +49,30 @@ class BookingRequest extends FormRequest
             'dropoff_location' => ['nullable', 'string', 'max:255'],
             'dropoff_lat' => ['nullable', 'numeric', 'between:-90,90'],
             'dropoff_lng' => ['nullable', 'numeric', 'between:-180,180'],
+
+            /*
+             * Le type de course. Nullable pour la meme raison que la commune :
+             * les applications deja installees n'en envoient pas, et leurs
+             * reservations sont des courses urbaines ordinaires.
+             */
+            'course_type_id' => ['nullable', 'exists:course_types,id'],
+            /*
+             * Le commentaire est exige quand LE TYPE le demande, et c'est la
+             * ligne du referentiel qui le dit — pas une liste de codes ecrite
+             * ici, qui rendrait un quatrieme type impossible a regler sans
+             * livraison.
+             *
+             * L'exigence vit dans la validation et non en base : une
+             * reservation prise au comptoir par l'administration ne doit pas
+             * etre bloquee par un commentaire manquant.
+             */
+            'course_note' => [
+                Rule::requiredIf(fn () => (bool) CourseType::query()
+                    ->whereKey($this->input('course_type_id'))
+                    ->value('note_required')),
+                'nullable', 'string', 'max:2000',
+            ],
+            'parking' => ['nullable', 'boolean'],
         ];
     }
 

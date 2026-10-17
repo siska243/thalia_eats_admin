@@ -2,9 +2,9 @@
 
 namespace App\Services;
 
-use App\Models\Product;
 use App\Exceptions\PrecommandeRefusee;
 use App\Models\Precommande;
+use App\Models\Product;
 use App\Models\Town;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +19,7 @@ class PrecommandeService
      * (adresse, nom et téléphone du destinataire) restent nulles : le client
      * les saisit lui-même sur la page du lien de paiement.
      *
-     * @param array<int, array{product: Product, quantity: int|float}> $lines
+     * @param  array<int, array{product: Product, quantity: int|float}>  $lines
      *
      * @throws PrecommandeRefusee
      */
@@ -28,7 +28,11 @@ class PrecommandeService
         $quotation = $this->quotations->quote($lines, $town);
 
         if (! $quotation->disponible) {
-            throw PrecommandeRefusee::pour((string) $quotation->raison);
+            // Le devis porte desormais une phrase pour les refus qui dependent
+            // d'un reglage — la distance en est un. La laisser derriere
+            // obligerait le controleur a reconstituer un message qu'il n'a pas
+            // les moyens de calculer.
+            throw PrecommandeRefusee::pour((string) $quotation->raison, $quotation->message);
         }
 
         // Le moteur tolère l'absence de tranche pour rester fidèle au client

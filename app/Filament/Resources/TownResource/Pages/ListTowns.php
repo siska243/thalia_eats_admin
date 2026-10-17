@@ -2,9 +2,8 @@
 
 namespace App\Filament\Resources\TownResource\Pages;
 
-use Filament\Actions\CreateAction;
 use App\Filament\Resources\TownResource;
-use Filament\Actions;
+use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
 class ListTowns extends ListRecords

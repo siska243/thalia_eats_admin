@@ -35,6 +35,13 @@
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="CACHE_DRIVER" value="array"/>
+        <!--
+            Le filet sur les actions qui echouent est ETEINT en test : la
+            suite parle depuis une seule adresse et plusieurs classes
+            enchainent des dizaines de refus attendus. LimiteDesEchecsTest le
+            rallume explicitement, la protection reste donc prouvee.
+        -->
+        <env name="LIMITE_ECHECS_ACTIF" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

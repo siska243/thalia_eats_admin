@@ -2,21 +2,23 @@
 
 namespace App\Providers\Filament;
 
-use App\Http\Middleware\SetAdminLocale;
-use Filament\Navigation\NavigationItem;
-use Filament\Pages\Dashboard;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
-use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use App\Filament\Pages\HealthCheckResults;
+use App\Filament\Widgets\CeQuiBloque;
+use App\Filament\Widgets\CommandesParJour;
+use App\Filament\Widgets\DernieresCommandes;
+use App\Filament\Widgets\StatistiquesDuJour;
+use App\Http\Middleware\SetAdminLocale;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages;
+use Filament\Navigation\NavigationItem;
+use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Widgets;
+use Filament\Widgets\AccountWidget;
+use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -46,6 +48,16 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
+                /*
+                 * Les widgets metier d'abord : en ouvrant l'admin, on cherche
+                 * l'etat du commerce, pas la version du cadriciel. Chacun
+                 * porte son propre garde de permission — `define_via_gate` est
+                 * a false, super_admin ne contourne rien.
+                 */
+                StatistiquesDuJour::class,
+                CeQuiBloque::class,
+                CommandesParJour::class,
+                DernieresCommandes::class,
                 AccountWidget::class,
                 FilamentInfoWidget::class,
             ])
@@ -65,25 +77,25 @@ class AdminPanelProvider extends PanelProvider
                 DispatchServingFilamentEvent::class,
             ])->plugins([
                 FilamentShieldPlugin::make()
-                ->gridColumns([
-                    'default' => 1,
-                    'sm' => 2,
-                    'lg' => 3
-                ])
-                ->sectionColumnSpan(1)
-                ->checkboxListColumns([
-                    'default' => 1,
-                    'sm' => 2,
-                    'lg' => 4,
-                ])
-                ->resourceCheckboxListColumns([
-                    'default' => 1,
-                    'sm' => 2,
-                ]),
+                    ->gridColumns([
+                        'default' => 1,
+                        'sm' => 2,
+                        'lg' => 3,
+                    ])
+                    ->sectionColumnSpan(1)
+                    ->checkboxListColumns([
+                        'default' => 1,
+                        'sm' => 2,
+                        'lg' => 4,
+                    ])
+                    ->resourceCheckboxListColumns([
+                        'default' => 1,
+                        'sm' => 2,
+                    ]),
                 ApiServicePlugin::make(),
                 FilamentSpatieLaravelHealthPlugin::make()
-                //->usingPage(\ShuvroRoy\FilamentSpatieLaravelHealth\Pages\HealthCheckResults::class),
-                 ->usingPage(HealthCheckResults::class),
+                // ->usingPage(\ShuvroRoy\FilamentSpatieLaravelHealth\Pages\HealthCheckResults::class),
+                    ->usingPage(HealthCheckResults::class),
             ])
             /*
              * saade/filament-laravel-log est retire : aucune version ne suit

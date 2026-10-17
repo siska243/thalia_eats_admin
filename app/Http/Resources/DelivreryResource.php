@@ -19,9 +19,9 @@ class DelivreryResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id_card'=>$this->resource->id_card,
-            'birth_date'=>$this->resource->birth_date,
-            'user'=>$this->whenLoaded('user',new UserResource($this->resource->user)),
+            'id_card' => $this->resource->id_card,
+            'birth_date' => $this->resource->birth_date,
+            'user' => $this->whenLoaded('user', new UserResource($this->resource->user)),
         ];
     }
 }

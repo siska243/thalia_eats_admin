@@ -19,7 +19,7 @@ return new class extends Migration
             $table->longText('description')->nullable();
             $table->float('price');
             $table->float('promotionnalPrice')->nullable();
-            $table->foreignIdFor(Restaurant::class,'restaurant_id');
+            $table->foreignIdFor(Restaurant::class, 'restaurant_id');
             $table->foreignIdFor(SubCategoryProduct::class, 'sub_category_product_id');
             $table->string('slug')->unique();
             $table->text('picture')->nullable();

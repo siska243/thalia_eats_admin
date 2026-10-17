@@ -33,7 +33,6 @@ class CourseLivreurTest extends TestCase
     {
         parent::setUp();
 
-
         $driverUser = User::factory()->create();
         Sanctum::actingAs($driverUser, ['*']);
 

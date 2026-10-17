@@ -3,10 +3,7 @@
 namespace App\Filament\Resources\BookingResource\Pages;
 
 use App\Filament\Resources\BookingResource;
-use App\Models\Vehicle;
-use App\Services\Rental\BookingPricing;
 use Filament\Resources\Pages\CreateRecord;
-use Illuminate\Support\Carbon;
 
 class CreateBooking extends CreateRecord
 {

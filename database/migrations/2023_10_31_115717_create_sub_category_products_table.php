@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('sub_category_products', function (Blueprint $table) {
             $table->id();
-            $table->foreignIdFor(CategoryProduct::class,'category_id');
+            $table->foreignIdFor(CategoryProduct::class, 'category_id');
             $table->text('title');
             $table->string('slug')->unique();
             $table->text('picture')->nullable();

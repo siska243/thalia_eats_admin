@@ -2,13 +2,10 @@
 
 namespace App\Enums;
 
-
-enum ActionOrderEnum :string
+enum ActionOrderEnum: string
 {
     case Accept = 'accept';
-    case Decline='decline';
-
-
+    case Decline = 'decline';
 
     public function getLabel(): string
     {
@@ -20,15 +17,13 @@ enum ActionOrderEnum :string
         };
     }
 
-
-    public static function getOptions(): array{
-        return  collect(self::cases())->mapWithKeys(fn(self $type): array
-        => [$type->value => $type->getLabel()])->toArray();
+    public static function getOptions(): array
+    {
+        return collect(self::cases())->mapWithKeys(fn (self $type): array => [$type->value => $type->getLabel()])->toArray();
     }
 
-    public static function getOptionFilter(): array{
-        return  collect(self::cases())->mapWithKeys(fn(self $type): array
-        => [$type->value => $type->getLabel()])->toArray();
+    public static function getOptionFilter(): array
+    {
+        return collect(self::cases())->mapWithKeys(fn (self $type): array => [$type->value => $type->getLabel()])->toArray();
     }
-
 }

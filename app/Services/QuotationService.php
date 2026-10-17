@@ -26,6 +26,9 @@ class QuotationService
 
     public const RAISON_RESTAURANT_INATTENDU = 'restaurant_inattendu';
 
+    /** Le restaurant est plus loin de l'adresse de livraison que le rayon autorisé. */
+    public const RAISON_HORS_RAYON = 'hors_rayon';
+
     public const WARNING_AUCUN_TARIF_ACTIF = 'aucun_tarif_actif';
 
     public const WARNING_HORS_TRANCHE = 'hors_tranche';
@@ -35,14 +38,23 @@ class QuotationService
     /** @var array<int, Collection<int, DelivreryPrice>> */
     private array $brackets_cache = [];
 
+    public function __construct(private readonly PorteeLivraison $portee) {}
+
     /**
      * @param  array<int, array{product: Product, quantity: int|float}>  $lines  la quantité arrive
      *                                                                           du client sans validation d'entier garantie côté service : l'intégrité relève de
      *                                                                           la validation de l'appelant (le FormRequest de l'endpoint la valide déjà en integer)
      * @param  Town  $town  town de l'adresse de LIVRAISON, jamais celle du restaurant
      */
-    public function quote(array $lines, Town $town, ?int $expected_restaurant_id = null): Quotation
-    {
+    public function quote(
+        array $lines,
+        Town $town,
+        ?int $expected_restaurant_id = null,
+        ?float $lat = null,
+        ?float $lng = null,
+        /** @var array{0: float, 1: float}|null Ou se trouve physiquement le client. */
+        ?array $positionClient = null,
+    ): Quotation {
         if ($lines === []) {
             return Quotation::refus(self::RAISON_PANIER_VIDE);
         }
@@ -84,6 +96,26 @@ class QuotationService
 
         if ($expected_restaurant_id !== null && ! isset($restaurant_ids[$expected_restaurant_id])) {
             return Quotation::refus(self::RAISON_RESTAURANT_INATTENDU);
+        }
+
+        /*
+         * La distance arrive en dernier des refus de panier.
+         *
+         * Un panier vide ou multi-restaurant doit se diagnostiquer pour ce
+         * qu'il est : répondre « hors rayon » à un panier vide enverrait le
+         * client corriger son adresse pour un problème qui n'est pas là.
+         *
+         * À ce stade un seul restaurant est en jeu, les lignes précédentes
+         * l'ont garanti.
+         */
+        $restaurant = $lines[array_key_first($lines)]['product']->restaurant;
+
+        if ($restaurant !== null) {
+            $portee = $this->portee->pour($restaurant, $town, $lat, $lng, $positionClient);
+
+            if (! $portee->autorise) {
+                return Quotation::refus(self::RAISON_HORS_RAYON, $portee->message);
+            }
         }
 
         $currency = $lines[array_key_first($lines)]['product']->currency;

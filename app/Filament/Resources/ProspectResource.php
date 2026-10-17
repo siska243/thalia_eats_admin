@@ -32,11 +32,13 @@ use Filament\Tables\Table;
  */
 class ProspectResource extends Resource
 {
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $model = Prospect::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-hand-raised';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Prospection';
+    protected static string|\UnitEnum|null $navigationGroup = 'Clients et partenaires';
 
     protected static ?string $label = 'Demande de partenariat';
 

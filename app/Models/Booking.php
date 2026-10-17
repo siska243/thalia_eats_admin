@@ -189,6 +189,12 @@ class Booking extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /** Le type de course demande, nul sur les reservations d'avant. */
+    public function courseType(): BelongsTo
+    {
+        return $this->belongsTo(CourseType::class);
+    }
+
     public function vehicle(): BelongsTo
     {
         return $this->belongsTo(Vehicle::class, 'vehicle_id');

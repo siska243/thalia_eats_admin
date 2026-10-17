@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('delivrery_drivers', function (Blueprint $table) {
             $table->id();
             $table->date('birth_date')->nullable();
-            $table->string('id_card',255);
+            $table->string('id_card', 255);
             $table->longText('contract')->nullable();
             $table->timestamp('deleted_at')->nullable();
             $table->boolean('is_active')->default(false);

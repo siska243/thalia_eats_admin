@@ -16,10 +16,10 @@ return new class extends Migration
     {
         Schema::create('commande_products', function (Blueprint $table) {
             $table->id();
-            $table->foreignIdFor(User::class,'user_id');
-            $table->foreignIdFor(Product::class,'product_id');
+            $table->foreignIdFor(User::class, 'user_id');
+            $table->foreignIdFor(Product::class, 'product_id');
             $table->float('price');
-            $table->foreignIdFor(Currency::class,'currency_id');
+            $table->foreignIdFor(Currency::class, 'currency_id');
             $table->integer('quantity')->default(1);
             $table->timestamps();
         });

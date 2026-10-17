@@ -2,10 +2,11 @@
 
 namespace Database\Factories;
 
+use App\Models\Payement;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Payement>
+ * @extends Factory<Payement>
  */
 class PayementFactory extends Factory
 {

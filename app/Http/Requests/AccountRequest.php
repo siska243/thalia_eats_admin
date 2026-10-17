@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Contracts\Validation\ValidationRule;
 use App\Wrappers\ApiResponse;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -25,26 +25,27 @@ class AccountRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email'=>'email|required',
-            'name'=>'required|min:3',
-            'last_name'=>'required|min:3',
+            'email' => 'email|required',
+            'name' => 'required|min:3',
+            'last_name' => 'required|min:3',
         ];
     }
 
-    public function failedValidation(Validator $validator){
+    public function failedValidation(Validator $validator)
+    {
 
-        return ApiResponse::BAD_REQUEST($validator->errors(),'Oups','Veuillez reverifier les informations envoyées');
+        return ApiResponse::BAD_REQUEST($validator->errors(), 'Oups', 'Veuillez reverifier les informations envoyées');
     }
 
     public function messages()
     {
         return [
-            'email.required'=>"L'email est obligatoire",
-            "email.email"=>"Veuillez saisir un email valide",
-            'name.required'=>"Le nom est obligatoire",
-            'last_name.required' => "Le prénom est obligatoire",
-            'name.min' => "Le nom doit contenir au moins 3 lettre",
-            'last_name.min' => "Le prénom doit contenir au moins 3 lettre",
+            'email.required' => "L'email est obligatoire",
+            'email.email' => 'Veuillez saisir un email valide',
+            'name.required' => 'Le nom est obligatoire',
+            'last_name.required' => 'Le prénom est obligatoire',
+            'name.min' => 'Le nom doit contenir au moins 3 lettre',
+            'last_name.min' => 'Le prénom doit contenir au moins 3 lettre',
         ];
     }
 }

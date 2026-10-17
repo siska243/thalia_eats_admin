@@ -2,34 +2,34 @@
 
 namespace App\Filament\Resources;
 
-use Filament\Schemas\Schema;
-use Filament\Forms\Components\TextInput;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\EditAction;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\CreateAction;
-use App\Filament\Resources\CommandeProductResource\Pages\ListCommandeProducts;
 use App\Filament\Resources\CommandeProductResource\Pages\CreateCommandeProduct;
 use App\Filament\Resources\CommandeProductResource\Pages\EditCommandeProduct;
-use App\Filament\Resources\CommandeProductResource\Pages;
-use App\Filament\Resources\CommandeProductResource\RelationManagers;
+use App\Filament\Resources\CommandeProductResource\Pages\ListCommandeProducts;
 use App\Models\CommandeProduct;
-use Filament\Forms;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
-use Filament\Tables;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CommandeProductResource extends Resource
 {
+    protected static ?int $navigationSort = 7;
+
     protected static ?string $model = CommandeProduct::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-cart';
-    protected static string | \UnitEnum | null $navigationGroup = "Thalia eats";
-    protected static ?string $navigationModeleLabel = "Produit commande";
-    protected static bool $shouldRegisterNavigation=false;
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-cart';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Restauration';
+
+    protected static ?string $navigationModeleLabel = 'Produit commande';
+
+    protected static bool $shouldRegisterNavigation = false;
+
     public static function form(Schema $schema): Schema
     {
         return $schema

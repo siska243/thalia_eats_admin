@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('last_name')->nullable();
             $table->string('principal_adresse')->nullable();
             $table->boolean('is_active')->default(false);
-            $table->foreignIdFor(Town::class,'town_id')->nullable();
+            $table->foreignIdFor(Town::class, 'town_id')->nullable();
         });
     }
 
@@ -30,7 +30,7 @@ return new class extends Migration
             //
             $table->dropColumn('last_name');
             $table->dropColumn('principal_adresse');
-            $table->dropForeignIdFor(Town::class,'town_id');
+            $table->dropForeignIdFor(Town::class, 'town_id');
             $table->dropColumn('is_active');
         });
     }

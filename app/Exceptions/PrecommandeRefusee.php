@@ -18,13 +18,20 @@ class PrecommandeRefusee extends Exception
 
     public const TROP_DE_PRECOMMANDES = 'trop_de_precommandes';
 
-    public function __construct(public readonly string $raison)
-    {
+    public function __construct(
+        public readonly string $raison,
+        /**
+         * La phrase à montrer, quand le refus dépend d'un réglage et ne peut
+         * donc pas être figée côté contrôleur. Même principe que
+         * `BookingRefusee::$messageClient`.
+         */
+        public readonly ?string $messageClient = null,
+    ) {
         parent::__construct($raison);
     }
 
-    public static function pour(string $raison): self
+    public static function pour(string $raison, ?string $messageClient = null): self
     {
-        return new self($raison);
+        return new self($raison, $messageClient);
     }
 }

@@ -387,6 +387,70 @@ class Commande extends Model
         });
     }
 
+    /**
+     * Retire du stock ce que cette commande emporte.
+     *
+     * **Le retrait vit ici, une seule fois.** Une commande devient payee a
+     * trois endroits — la verification demandee par le client, le webhook de
+     * la passerelle, la conversion d'une pre-commande — et trois copies de ce
+     * calcul finiraient par diverger.
+     *
+     * Appelee AU PAIEMENT et nulle part ailleurs : c'est le seul instant ou la
+     * commande est certaine. Plus tot, un panier abandonne immobiliserait du
+     * stock ; plus tard, deux clients paieraient le meme dernier plat.
+     *
+     * Deux protections, et aucune n'est superflue :
+     *
+     * - `stock_decremente_at` marque le passage. Le webhook de la passerelle
+     *   peut arriver DEUX FOIS pour une seule transaction, et l'un des trois
+     *   chemins ecrit `paied_at` sans condition : sans cette marque, le second
+     *   passage retirerait le stock une seconde fois.
+     * - Le verrou sur la ligne du produit serialise deux paiements simultanes.
+     *   Meme raisonnement que `BookingConfirmation`, ou le verrou porte sur le
+     *   vehicule : c'est la ressource disputee qu'on verrouille, pas la
+     *   commande.
+     *
+     * Un plat dont le stock n'est pas suivi n'est jamais touche, et le stock
+     * ne descend jamais sous zero : un nombre negatif en base serait
+     * ingerable pour l'administration, et les refus poses sur le panier ne
+     * couvrent pas le chemin de la pre-commande.
+     */
+    public function decrementerLesStocks(): void
+    {
+        DB::transaction(function () {
+            // Relue sous verrou : la marque lue avant la section critique ne
+            // prouve plus rien une fois qu'on y entre.
+            $commande = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
+
+            if (! $commande || $commande->stock_decremente_at) {
+                return;
+            }
+
+            // Un meme plat peut arriver sur plusieurs lignes : c'est le total
+            // qui part du stock.
+            $quantites = $commande->commande_products()
+                ->selectRaw('product_id, SUM(quantity) as total')
+                ->groupBy('product_id')
+                ->pluck('total', 'product_id');
+
+            foreach ($quantites as $productId => $total) {
+                $produit = Product::query()->whereKey($productId)->lockForUpdate()->first();
+
+                if (! $produit?->suitLeStock()) {
+                    continue;
+                }
+
+                $produit->stock_quantity = max(0, (int) $produit->stock_quantity - (int) $total);
+                $produit->save();
+            }
+
+            $commande->stock_decremente_at = now();
+            $commande->save();
+
+            $this->stock_decremente_at = $commande->stock_decremente_at;
+        });
+    }
+
     public function scopeNonAnnulee(Builder $query): Builder
     {
         return $query

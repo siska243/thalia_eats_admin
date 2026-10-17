@@ -13,7 +13,6 @@ class Payement extends Model
     /** @use HasFactory<PayementFactory> */
     use HasFactory,SoftDeletes;
 
-
     protected $fillable = [
         'code',
         'status_payement_id',
@@ -26,15 +25,15 @@ class Payement extends Model
         'amount_customer',
         'channel',
         'reference',
-        "webhook_sse_url"
+        'webhook_sse_url',
     ];
 
-    public function statusPayement():BelongsTo
+    public function statusPayement(): BelongsTo
     {
         return $this->belongsTo(StatusPayement::class);
     }
 
-    public function commande():BelongsTo
+    public function commande(): BelongsTo
     {
         return $this->belongsTo(Commande::class);
     }

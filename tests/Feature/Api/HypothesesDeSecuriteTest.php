@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Api;
 
+use App\Http\Middleware\RefuserAgentSansAbility;
 use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Session\Middleware\StartSession;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Tests\TestCase;
 
 /**
@@ -25,13 +28,13 @@ class HypothesesDeSecuriteTest extends TestCase
         $groupes = app(Kernel::class)->getMiddlewareGroups();
 
         $this->assertNotContains(
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            EnsureFrontendRequestsAreStateful::class,
             $groupes['api'],
             'Le groupe api est passe en mode stateful : relire EnsureNotAgentToken et RefuserAgentSansAbility avant d\'aller plus loin.'
         );
 
         $this->assertNotContains(
-            \Illuminate\Session\Middleware\StartSession::class,
+            StartSession::class,
             $groupes['api'],
             'Le groupe api demarre une session : meme consequence.'
         );
@@ -42,7 +45,7 @@ class HypothesesDeSecuriteTest extends TestCase
         $groupes = app(Kernel::class)->getMiddlewareGroups();
 
         $this->assertContains(
-            \App\Http\Middleware\RefuserAgentSansAbility::class,
+            RefuserAgentSansAbility::class,
             $groupes['api'],
             'Le refus par defaut a ete retire du groupe api : tout jeton d\'assistant atteint desormais toute route non marquee.'
         );

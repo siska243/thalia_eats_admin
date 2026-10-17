@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::create('user_adresses', function (Blueprint $table) {
             $table->id();
-            $table->foreignIdFor(User::class,'user_id')->constrained()->cascadeOnUpdate();
+            $table->foreignIdFor(User::class, 'user_id')->constrained()->cascadeOnUpdate();
             $table->text('adresse');
             $table->string('reference');
             $table->string('slug')->uniqid();

@@ -14,7 +14,7 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             //
-            $table->foreignIdFor(Role::class,'role_user');
+            $table->foreignIdFor(Role::class, 'role_user');
             $table->string('phone')->nullable();
             $table->string('slug')->unique();
             $table->timestamp('deleted_at')->nullable();
