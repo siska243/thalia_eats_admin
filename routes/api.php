@@ -81,7 +81,18 @@ Route::get('/categorie-restaurant/{restaurant:slug}', [RestaurantController::cla
 Route::get('/menu/{restaurant:slug}/{slug}', [RestaurantController::class, 'productRestaurant']);
 Route::get('/product/{slug}', [RestaurantController::class, 'product']);
 
-Route::post('/register', [AuthController::class, 'register'])->name('api.register');
+/*
+ * L'inscription, sous le MEME compteur que la connexion et les codes.
+ *
+ * Elle n'avait que le plafond general de soixante par minute : de quoi
+ * fabriquer des centaines de comptes a l'heure depuis une seule adresse,
+ * ce qu'on a vu le 17 octobre avec deux adresses au nom manifestement
+ * compose. Six par minute et trente par heure, par adresse IP et par
+ * courriel — un humain ne s'inscrit pas six fois de suite.
+ */
+Route::post('/register', [AuthController::class, 'register'])
+    ->middleware('throttle:auth-sensibles')
+    ->name('api.register');
 
 /*
  * Connexion et codes OTP sous limitation dediee.
