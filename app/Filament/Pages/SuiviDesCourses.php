@@ -280,24 +280,114 @@ class SuiviDesCourses extends Page
             ])
             ->groupBy('suivable_type', 'suivable_id')
             ->orderByDesc(DB::raw('max(created_at)'))
-            ->limit(200)
+            ->limit(self::PLAFOND_LISTE)
             ->get();
 
-        // Les references sont lues en deux requetes, pas une par ligne.
-        $references = $this->references($lignes);
+        // Les courses citees sont lues en DEUX requetes, pas une par ligne.
+        $courses = $this->coursesCitees($lignes);
+        $suivi = app(SuiviPositions::class);
 
-        return $lignes->map(function ($ligne) use ($references) {
+        return $lignes->map(function ($ligne) use ($courses, $suivi) {
             $type = array_search($ligne->suivable_type, self::TYPES, true) ?: 'inconnu';
+            $course = $courses["{$ligne->suivable_type}:{$ligne->suivable_id}"] ?? null;
+
+            $debut = Carbon::parse($ligne->debut);
+            $fin = Carbon::parse($ligne->fin);
 
             return [
                 'cle' => "{$type}:{$ligne->suivable_id}",
                 'type' => $type,
-                'reference' => $references["{$ligne->suivable_type}:{$ligne->suivable_id}"] ?? "#{$ligne->suivable_id}",
+                'reference' => $course ? $this->referenceDe($course) : "#{$ligne->suivable_id}",
                 'releves' => (int) $ligne->releves,
-                'debut' => Carbon::parse($ligne->debut),
-                'fin' => Carbon::parse($ligne->fin),
+                'debut' => $debut,
+                'fin' => $fin,
+                /*
+                 * La duree du suivi, en minutes. Un nombre de releves ne dit
+                 * rien a personne — « 14 releves » se traduit mentalement,
+                 * « 42 min » se lit.
+                 */
+                'duree_minutes' => (int) $debut->diffInMinutes($fin),
+                /*
+                 * La course roule-t-elle encore ? C'est le premier chose
+                 * qu'on vient chercher sur un ecran de suivi, et elle
+                 * n'apparaissait que dans la fiche, une fois la course
+                 * ouverte. Le modele est deja charge : aucune requete de
+                 * plus.
+                 */
+                'en_cours' => $course !== null && $suivi->fenetreActive($course),
             ];
         })->all();
+    }
+
+    /**
+     * Les chiffres de la periode, pour ne pas avoir a compter la liste.
+     *
+     * Un ecran d'analyse qui n'annonce aucun total laisse son lecteur
+     * additionner des lignes a l'oeil. Les trois premiers sortent d'une seule
+     * requete d'agregation ; le quatrieme se lit sur la liste deja construite.
+     *
+     * @return array<string, int>
+     */
+    public function getResumeProperty(): array
+    {
+        $ligne = $this->requeteFiltree()
+            ->selectRaw('count(*) as releves')
+            ->selectRaw('count(distinct concat(suivable_type, suivable_id)) as courses')
+            ->selectRaw('sum(case when suivable_type = ? then 1 else 0 end) as repas', [Commande::class])
+            ->first();
+
+        return [
+            'courses' => (int) ($ligne->courses ?? 0),
+            'releves' => (int) ($ligne->releves ?? 0),
+            'repas' => (int) ($ligne->repas ?? 0),
+            'location' => (int) ($ligne->releves ?? 0) - (int) ($ligne->repas ?? 0),
+            'en_cours' => count(array_filter(
+                $this->courses,
+                fn (array $course): bool => $course['en_cours'],
+            )),
+        ];
+    }
+
+    /**
+     * La liste est plafonnee : au-dela, l'ecran ne sert plus a lire.
+     *
+     * Le plafond etait SILENCIEUX — on croyait voir toute la periode alors
+     * qu'on en voyait les deux cents dernieres courses. L'export, lui, ne
+     * plafonne rien : c'est lui qui sert a tout reprendre.
+     */
+    public const PLAFOND_LISTE = 200;
+
+    public function listeTronquee(): bool
+    {
+        return count($this->courses) >= self::PLAFOND_LISTE;
+    }
+
+    /** Les periodes qu'on choisit vraiment, en un clic. */
+    public function periode(string $raccourci): void
+    {
+        $this->au = now()->toDateString();
+
+        $this->du = match ($raccourci) {
+            'jour' => now()->toDateString(),
+            'semaine' => now()->subDays(7)->toDateString(),
+            'mois' => now()->subDays(30)->toDateString(),
+            default => $this->du,
+        };
+    }
+
+    /** Le raccourci de periode actuellement en vigueur, s'il y en a un. */
+    public function raccourciActif(): ?string
+    {
+        if ($this->au !== now()->toDateString()) {
+            return null;
+        }
+
+        return match ($this->du) {
+            now()->toDateString() => 'jour',
+            now()->subDays(7)->toDateString() => 'semaine',
+            now()->subDays(30)->toDateString() => 'mois',
+            default => null,
+        };
     }
 
     /** Recalcule le trace de la course regardee. */
@@ -424,8 +514,8 @@ class SuiviDesCourses extends Page
             // lignes, et les charger d'un coup epuiserait la memoire du
             // serveur au moment ou l'on tente justement de les sauver.
             $requete->chunkById(500, function ($releves) use ($writer, &$references) {
-                foreach ($this->references($releves) as $cle => $reference) {
-                    $references[$cle] = $reference;
+                foreach ($this->coursesCitees($releves) as $cle => $course) {
+                    $references[$cle] = $this->referenceDe($course);
                 }
 
                 foreach ($releves as $releve) {
@@ -515,12 +605,16 @@ class SuiviDesCourses extends Page
     }
 
     /**
-     * Les references lisibles des courses citees, en deux requetes.
+     * Les courses citees par ces releves, en deux requetes.
+     *
+     * Les MODELES et non les seules references : la liste a aussi besoin de
+     * savoir si la course roule encore, et la relire ligne par ligne pour
+     * cela ferait deux cents requetes la ou deux suffisent.
      *
      * @param  iterable<object>  $lignes
-     * @return array<string, string>
+     * @return array<string, Model>
      */
-    private function references(iterable $lignes): array
+    private function coursesCitees(iterable $lignes): array
     {
         $parType = [];
 
@@ -528,24 +622,31 @@ class SuiviDesCourses extends Page
             $parType[$ligne->suivable_type][] = $ligne->suivable_id;
         }
 
-        $references = [];
+        $courses = [];
 
         foreach ($parType as $classe => $ids) {
-            // `refernce` cote repas, `reference` cote location : la faute de
-            // frappe est historique et fait partie du contrat, on ne la
-            // corrige pas, on compose avec.
-            $colonne = $classe === Commande::class ? 'refernce' : 'reference';
-
             if (! class_exists($classe)) {
                 continue;
             }
 
-            foreach ($classe::query()->whereKey(array_unique($ids))->get(['id', $colonne]) as $modele) {
-                $references["{$classe}:{$modele->id}"] = (string) $modele->{$colonne};
+            foreach ($classe::query()->whereKey(array_unique($ids))->get() as $modele) {
+                $courses["{$classe}:{$modele->getKey()}"] = $modele;
             }
         }
 
-        return $references;
+        return $courses;
+    }
+
+    /**
+     * La reference lisible d'une course.
+     *
+     * `refernce` cote repas, `reference` cote location : la faute de frappe
+     * est historique et fait partie du contrat d'API, on ne la corrige pas,
+     * on compose avec — en UN seul endroit.
+     */
+    private function referenceDe(Model $course): string
+    {
+        return (string) ($course instanceof Commande ? $course->refernce : $course->reference);
     }
 
     /**

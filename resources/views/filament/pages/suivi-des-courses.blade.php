@@ -160,61 +160,154 @@
 
     @else
 
+        {{-- Les filtres, avec les composants de Filament et non des champs
+             bricoles : des classes ecrites a la main divergent du theme des
+             la premiere mise a jour, et le mode sombre s'en apercoit en
+             premier. --}}
         <x-filament::section>
-            <x-slot name="heading">Période et type</x-slot>
+            <x-slot name="heading">Période observée</x-slot>
 
-            <div class="grid gap-4 sm:grid-cols-3">
-                <div>
-                    <label for="suivi-du" class="text-sm font-medium">Du</label>
-                    <input id="suivi-du" type="date" wire:model.live="du"
-                           class="fi-input block w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-white/5" />
+            <x-slot name="description">
+                Tout ce qui suit — les chiffres, la liste et l'export — porte sur cette période.
+            </x-slot>
+
+            <div class="flex flex-col gap-4">
+                {{-- Les trois periodes qu'on demande vraiment. Personne ne
+                     veut composer deux dates pour regarder sa journee. --}}
+                <div class="flex flex-wrap items-center gap-2">
+                    @foreach ([
+                        'jour' => "Aujourd'hui",
+                        'semaine' => '7 derniers jours',
+                        'mois' => '30 derniers jours',
+                    ] as $cle => $libelle)
+                        <x-filament::button
+                            size="sm"
+                            :color="$this->raccourciActif() === $cle ? 'primary' : 'gray'"
+                            :outlined="$this->raccourciActif() !== $cle"
+                            wire:click="periode('{{ $cle }}')"
+                        >
+                            {{ $libelle }}
+                        </x-filament::button>
+                    @endforeach
                 </div>
-                <div>
-                    <label for="suivi-au" class="text-sm font-medium">Au</label>
-                    <input id="suivi-au" type="date" wire:model.live="au"
-                           class="fi-input block w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-white/5" />
-                </div>
-                <div>
-                    <label for="suivi-type" class="text-sm font-medium">Type de course</label>
-                    <select id="suivi-type" wire:model.live="type"
-                            class="fi-input block w-full rounded-lg border-gray-300 dark:border-white/10 dark:bg-white/5">
-                        <option value="toutes">Toutes</option>
-                        <option value="repas">Livraison de repas</option>
-                        <option value="location">Location de véhicule</option>
-                    </select>
+
+                <div class="grid gap-4 sm:grid-cols-2 lg:max-w-xl">
+                    <div class="flex flex-col gap-1">
+                        <label for="suivi-du" class="text-sm font-medium text-gray-950 dark:text-white">Du</label>
+                        <x-filament::input.wrapper>
+                            <x-filament::input type="date" id="suivi-du" wire:model.live="du" />
+                        </x-filament::input.wrapper>
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label for="suivi-au" class="text-sm font-medium text-gray-950 dark:text-white">Au</label>
+                        <x-filament::input.wrapper>
+                            <x-filament::input type="date" id="suivi-au" wire:model.live="au" />
+                        </x-filament::input.wrapper>
+                    </div>
                 </div>
             </div>
         </x-filament::section>
 
+        {{-- Les chiffres de la periode. Un ecran d'analyse qui n'annonce
+             aucun total laisse son lecteur additionner les lignes a l'oeil. --}}
+        @php($resume = $this->resume)
+
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            @foreach ([
+                ['Courses suivies', number_format($resume['courses'], 0, ',', ' '), 'heroicon-m-truck', null],
+                ['Relevés de position', number_format($resume['releves'], 0, ',', ' '), 'heroicon-m-map-pin', null],
+                ['Repas / Location', number_format($resume['repas'], 0, ',', ' ') . ' / ' . number_format($resume['location'], 0, ',', ' '), 'heroicon-m-squares-2x2', null],
+                ['Courses en direct', number_format($resume['en_cours'], 0, ',', ' '), 'heroicon-m-signal', $resume['en_cours'] > 0 ? 'success' : null],
+            ] as [$libelle, $valeur, $icone, $couleur])
+                <x-filament::section>
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-sm text-gray-500 dark:text-gray-400">{{ $libelle }}</span>
+                            <span @class([
+                                'text-3xl font-semibold tracking-tight',
+                                'text-gray-950 dark:text-white' => ! $couleur,
+                                'text-success-600 dark:text-success-400' => $couleur === 'success',
+                            ])>{{ $valeur }}</span>
+                        </div>
+
+                        <x-filament::icon
+                            :icon="$icone"
+                            @class([
+                                'h-8 w-8',
+                                'text-gray-400 dark:text-gray-500' => ! $couleur,
+                                'text-success-500' => $couleur === 'success',
+                            ])
+                        />
+                    </div>
+                </x-filament::section>
+            @endforeach
+        </div>
+
         <x-filament::section>
-            <x-slot name="heading">Courses suivies sur la période</x-slot>
+            <x-slot name="heading">Courses suivies</x-slot>
 
             <x-slot name="description">
-                L'export reprend exactement ces filtres.
+                L'export reprend exactement ces filtres, sans aucun plafond.
+            </x-slot>
+
+            {{-- Le type en onglets plutot qu'en liste deroulante : trois
+                 choix se montrent, ils ne se deplient pas. --}}
+            <x-slot name="afterHeader">
+                <x-filament::tabs>
+                    @foreach ([
+                        'toutes' => 'Toutes',
+                        'repas' => 'Repas',
+                        'location' => 'Location',
+                    ] as $cle => $libelle)
+                        <x-filament::tabs.item
+                            :active="$this->type === $cle"
+                            wire:click="$set('type', '{{ $cle }}')"
+                        >
+                            {{ $libelle }}
+                        </x-filament::tabs.item>
+                    @endforeach
+                </x-filament::tabs>
             </x-slot>
 
             @forelse ($this->courses as $course)
-                <div class="flex items-center justify-between gap-4 border-b border-gray-100 py-2 last:border-0 dark:border-white/5">
-                    <div class="text-sm">
-                        <span class="font-medium">{{ $course['reference'] }}</span>
-                        <x-filament::badge class="ml-1 inline-flex" :color="$course['type'] === 'repas' ? 'info' : 'warning'">
-                            {{ $course['type'] === 'repas' ? 'Repas' : 'Location' }}
-                        </x-filament::badge>
-                        <div class="text-xs text-gray-500">
+                <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-gray-100 py-3 last:border-0 dark:border-white/5">
+                    <div class="flex min-w-0 flex-col gap-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-medium text-gray-950 dark:text-white">{{ $course['reference'] }}</span>
+
+                            <x-filament::badge :color="$course['type'] === 'repas' ? 'info' : 'warning'">
+                                {{ $course['type'] === 'repas' ? 'Repas' : 'Location' }}
+                            </x-filament::badge>
+
+                            {{-- Ce qui roule MAINTENANT, et c'est la premiere
+                                 chose qu'on vient chercher ici. Le direct
+                                 n'apparaissait qu'une fois la course ouverte. --}}
+                            @if ($course['en_cours'])
+                                <x-filament::badge color="success" icon="heroicon-m-signal">
+                                    En direct
+                                </x-filament::badge>
+                            @endif
+                        </div>
+
+                        <div class="text-xs text-gray-500 dark:text-gray-400">
                             {{ $course['debut']->format('d/m/Y H:i') }}
                             → {{ $course['fin']->format('H:i') }}
-                            · {{ $course['releves'] }} relevé(s)
+                            {{-- Une duree se lit ; un nombre de releves se
+                                 traduit mentalement. --}}
+                            · {{ $course['duree_minutes'] }} min
+                            · {{ $course['releves'] }} relevé{{ $course['releves'] > 1 ? 's' : '' }}
                         </div>
                     </div>
 
                     <x-filament::button
                         tag="a"
                         size="sm"
-                        color="gray"
+                        :color="$course['en_cours'] ? 'primary' : 'gray'"
                         icon="heroicon-m-map-pin"
                         :href="\App\Filament\Pages\SuiviDesCourses::getUrl(['course' => $course['cle']])"
                     >
-                        Suivre
+                        {{ $course['en_cours'] ? 'Suivre en direct' : 'Voir le trajet' }}
                     </x-filament::button>
                 </div>
             @empty
@@ -224,6 +317,18 @@
                     description="Élargissez la période, ou changez le type de course."
                 />
             @endforelse
+
+            {{-- Le plafond etait SILENCIEUX : on croyait voir toute la
+                 periode alors qu'on en voyait les deux cents dernieres
+                 courses. --}}
+            @if ($this->listeTronquee())
+                <x-slot name="footer">
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Seules les {{ \App\Filament\Pages\SuiviDesCourses::PLAFOND_LISTE }} courses
+                        les plus récentes sont affichées. Resserrez la période, ou exportez pour tout reprendre.
+                    </p>
+                </x-slot>
+            @endif
         </x-filament::section>
 
     @endif

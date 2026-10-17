@@ -393,4 +393,98 @@ class SuiviAdminCarteTest extends TestCase
         $this->assertNull($trace['client']);
         $this->assertNotNull($trace['chauffeur']);
     }
+
+    /**
+     * T126 — la vue d'ensemble annonce ses chiffres.
+     *
+     * Un ecran d'analyse qui n'affiche aucun total laisse son lecteur
+     * additionner les lignes a l'oeil.
+     */
+    public function test_la_vue_d_ensemble_resume_la_periode(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $resume = Livewire::test(SuiviDesCourses::class)->instance()->resume;
+
+        // Deux courses, quatre releves, deux de chaque nature.
+        $this->assertSame(2, $resume['courses']);
+        $this->assertSame(4, $resume['releves']);
+        $this->assertSame(2, $resume['repas']);
+        $this->assertSame(2, $resume['location']);
+    }
+
+    /**
+     * Ce qui roule MAINTENANT est la premiere chose qu'on vient chercher
+     * ici, et ca n'apparaissait qu'une fois la course ouverte.
+     */
+    public function test_la_liste_dit_quelles_courses_roulent_encore(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $courses = collect(Livewire::test(SuiviDesCourses::class)->instance()->courses)
+            ->keyBy('type');
+
+        // La reservation est confirmee et la commande au statut 2 : les deux
+        // sont dans leur fenetre de suivi.
+        $this->assertTrue($courses['location']['en_cours']);
+        $this->assertTrue($courses['repas']['en_cours']);
+
+        // Une course close sort du direct, sans disparaitre de l'historique.
+        $this->booking->update(['status' => Booking::STATUS_COMPLETED]);
+
+        $apres = collect(Livewire::test(SuiviDesCourses::class)->instance()->courses)
+            ->keyBy('type');
+
+        $this->assertFalse($apres['location']['en_cours']);
+        $this->assertSame(1, Livewire::test(SuiviDesCourses::class)->instance()->resume['en_cours']);
+    }
+
+    /** La duree se lit ; un nombre de releves se traduit mentalement. */
+    public function test_chaque_ligne_porte_la_duree_du_suivi(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $courses = collect(Livewire::test(SuiviDesCourses::class)->instance()->courses)
+            ->keyBy('type');
+
+        // Les deux releves de la location sont espaces de cinq minutes.
+        $this->assertSame(5, $courses['location']['duree_minutes']);
+    }
+
+    /** Les raccourcis de periode posent les deux dates, et se reconnaissent. */
+    public function test_les_raccourcis_de_periode(): void
+    {
+        Gate::before(fn () => true);
+        $this->actingAs($this->admin);
+
+        $composant = Livewire::test(SuiviDesCourses::class);
+
+        // Sept jours : la valeur posee au montage, donc deja reconnue.
+        $this->assertSame('semaine', $composant->instance()->raccourciActif());
+
+        $composant->call('periode', 'jour');
+        $this->assertSame(now()->toDateString(), $composant->get('du'));
+        $this->assertSame('jour', $composant->instance()->raccourciActif());
+
+        // Une periode composee a la main ne correspond a aucun raccourci :
+        // aucun bouton ne doit alors s'allumer.
+        $composant->set('du', now()->subDays(3)->toDateString());
+        $this->assertNull($composant->instance()->raccourciActif());
+    }
+
+    /** La page rend sans erreur avec sa nouvelle mise en page. */
+    public function test_la_vue_d_ensemble_s_affiche_en_entier(): void
+    {
+        Gate::before(fn () => true);
+
+        $this->actingAs($this->admin)
+            ->get(SuiviDesCourses::getUrl())
+            ->assertSuccessful()
+            ->assertSee('Courses suivies')
+            ->assertSee('Courses en direct')
+            ->assertSee("Aujourd'hui");
+    }
 }
