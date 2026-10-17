@@ -6,16 +6,21 @@ use App\Filament\Resources\VehicleResource\Pages\CreateVehicle;
 use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
 use App\Filament\Resources\VehicleResource\Pages\ListVehicles;
 use App\Filament\Resources\VehicleResource\RelationManagers\CoursePricesRelationManager;
+use App\Models\City;
+use App\Models\Town;
 use App\Models\Vehicle;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -28,6 +33,7 @@ use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Collection;
 
 class VehicleResource extends Resource
 {
@@ -291,10 +297,121 @@ class VehicleResource extends Resource
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
+                    static::zoneDesservieEnLot(),
                     DeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * Poser la zone desservie sur plusieurs vehicules a la fois.
+     *
+     * Demande du proprietaire le 17 octobre : « ajoute le bulk action pour
+     * selectionner la commune ou la ville a desservir ». Ouvrir quinze
+     * fiches pour cocher les memes trois communes est le genre de corvee qui
+     * finit par ne pas etre faite — et un parc mal renseigne se reserve de
+     * partout, ce que la portee geographique cherche justement a eviter.
+     *
+     * La VILLE est facultative : laissee vide, chaque vehicule garde la
+     * sienne. L'ecraser par defaut deplacerait tout un parc d'un clic.
+     *
+     * TROIS FACONS DE POSER LES COMMUNES, parce qu'elles ne veulent pas dire
+     * la meme chose : ajouter aux existantes, les remplacer, ou tout vider.
+     * « Vider » n'est pas « fermer » : sans commune, le vehicule dessert
+     * TOUTE sa ville — c'est la doctrine deja posee sur la fiche, et elle ne
+     * change pas ici.
+     *
+     * GARDE-FOU : une commune n'est attachee qu'aux vehicules de SA ville.
+     * Sans lui, selectionner un parc de deux villes et cocher Gombe
+     * rattacherait un vehicule de Lubumbashi a une commune de Kinshasa — une
+     * incoherence silencieuse, que seul un client hors zone revelerait.
+     */
+    protected static function zoneDesservieEnLot(): BulkAction
+    {
+        return BulkAction::make('zoneDesservie')
+            ->label('Zone desservie')
+            ->icon('heroicon-o-map-pin')
+            ->schema([
+                Select::make('city_id')
+                    ->label('Ville de rattachement')
+                    ->options(fn () => City::query()->orderBy('title')->pluck('title', 'id'))
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    ->helperText('Laissée vide, chaque véhicule garde sa ville actuelle.')
+                    ->live(),
+
+                Radio::make('mode')
+                    ->label('Les communes cochées')
+                    ->options([
+                        'ajouter' => 'S’ajoutent aux communes déjà desservies',
+                        'remplacer' => 'Remplacent les communes actuelles',
+                        'vider' => 'Sont effacées : tout véhicule desservira toute sa ville',
+                    ])
+                    ->default('ajouter')
+                    ->required()
+                    ->live(),
+
+                Select::make('towns')
+                    ->label('Communes desservies')
+                    ->options(fn (Get $get) => Town::query()
+                        ->when($get('city_id'), fn (Builder $q, $ville) => $q->where('city_id', $ville))
+                        ->orderBy('title')
+                        ->pluck('title', 'id'))
+                    ->multiple()
+                    ->searchable()
+                    ->preload()
+                    ->native(false)
+                    // Rien a cocher quand on vide : le champ n'aurait aucun
+                    // effet, et le laisser laisserait croire le contraire.
+                    ->visible(fn (Get $get): bool => $get('mode') !== 'vider')
+                    ->required(fn (Get $get): bool => $get('mode') !== 'vider')
+                    ->helperText('Seules les communes de la ville du véhicule lui seront rattachées.')
+                    ->columnSpanFull(),
+            ])
+            ->action(function (Collection $records, array $data): void {
+                $communes = Town::query()
+                    ->whereKey($data['towns'] ?? [])
+                    ->get(['id', 'city_id']);
+
+                foreach ($records as $vehicule) {
+                    if (! empty($data['city_id'])) {
+                        $vehicule->city_id = $data['city_id'];
+                        $vehicule->save();
+                    }
+
+                    if ($data['mode'] === 'vider') {
+                        $vehicule->towns()->detach();
+
+                        continue;
+                    }
+
+                    /*
+                     * Un vehicule sans ville accepte toutes les villes : on
+                     * ne filtre alors rien, puisqu'il n'y a rien contre quoi
+                     * filtrer.
+                     */
+                    $retenues = $vehicule->city_id
+                        ? $communes->where('city_id', $vehicule->city_id)
+                        : $communes;
+
+                    $data['mode'] === 'remplacer'
+                        ? $vehicule->towns()->sync($retenues->pluck('id'))
+                        : $vehicule->towns()->syncWithoutDetaching($retenues->pluck('id'));
+                }
+
+                Notification::make()
+                    ->title('Zone desservie mise à jour')
+                    ->body(trans_choice(
+                        '{1} Un véhicule modifié.|[2,*] :count véhicules modifiés.',
+                        $records->count(),
+                        ['count' => $records->count()],
+                    ))
+                    ->success()
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
     }
 
     public static function getEloquentQuery(): Builder

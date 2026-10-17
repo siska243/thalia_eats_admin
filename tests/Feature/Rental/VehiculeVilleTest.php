@@ -3,6 +3,7 @@
 namespace Tests\Feature\Rental;
 
 use App\Filament\Resources\VehicleResource\Pages\EditVehicle;
+use App\Filament\Resources\VehicleResource\Pages\ListVehicles;
 use App\Models\City;
 use App\Models\Currency;
 use App\Models\Town;
@@ -308,5 +309,112 @@ class VehiculeVilleTest extends TestCase
         $this->getJson('/api/rental/vehicles')
             ->assertSuccessful()
             ->assertJsonPath('data.0.reservable', true);
+    }
+
+    /**
+     * T128 — poser la zone desservie sur tout un lot.
+     *
+     * « Ajoute le bulk action pour selectionner la commune ou la ville a
+     * desservir. » Ouvrir quinze fiches pour cocher les memes communes est
+     * la corvee qui finit par ne pas etre faite, et un parc mal renseigne se
+     * reserve de partout.
+     */
+    public function test_l_action_groupee_pose_les_communes_sur_plusieurs_vehicules(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        Gate::before(fn () => true);
+        $this->actingAs($admin, 'web');
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa']);
+        $gombe = Town::factory()->create(['title' => 'Gombe', 'city_id' => $kinshasa->id]);
+        $limete = Town::factory()->create(['title' => 'Limete', 'city_id' => $kinshasa->id]);
+
+        $premier = $this->vehicule($kinshasa);
+        $second = $this->vehicule($kinshasa);
+
+        Livewire::test(ListVehicles::class)
+            ->callTableBulkAction(
+                'zoneDesservie',
+                [$premier->id, $second->id],
+                ['mode' => 'ajouter', 'towns' => [$gombe->id, $limete->id]],
+            )
+            ->assertHasNoActionErrors();
+
+        $this->assertEqualsCanonicalizing(
+            [$gombe->id, $limete->id],
+            $premier->fresh()->towns->pluck('id')->all(),
+        );
+        $this->assertCount(2, $second->fresh()->towns);
+    }
+
+    /**
+     * LE GARDE-FOU : une commune n'est attachee qu'aux vehicules de SA ville.
+     *
+     * Sans lui, selectionner un parc de deux villes et cocher Gombe
+     * rattacherait un vehicule de Lubumbashi a une commune de Kinshasa. Une
+     * incoherence silencieuse, que seul un client hors zone revelerait.
+     */
+    public function test_une_commune_ne_part_pas_dans_une_autre_ville(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        Gate::before(fn () => true);
+        $this->actingAs($admin, 'web');
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa']);
+        $lubumbashi = City::factory()->create(['title' => 'Lubumbashi']);
+        $gombe = Town::factory()->create(['title' => 'Gombe', 'city_id' => $kinshasa->id]);
+
+        $kinois = $this->vehicule($kinshasa);
+        $katangais = $this->vehicule($lubumbashi);
+
+        Livewire::test(ListVehicles::class)
+            ->callTableBulkAction(
+                'zoneDesservie',
+                [$kinois->id, $katangais->id],
+                ['mode' => 'ajouter', 'towns' => [$gombe->id]],
+            );
+
+        $this->assertCount(1, $kinois->fresh()->towns);
+        // Rien n'a ete pose sur celui de l'autre ville.
+        $this->assertCount(0, $katangais->fresh()->towns);
+    }
+
+    /** « Remplacer » efface les communes precedentes, « vider » les retire toutes. */
+    public function test_les_trois_modes_de_l_action_groupee(): void
+    {
+        $admin = User::factory()->create();
+        $admin->assignRole(Role::findOrCreate('super_admin', 'web'));
+        Gate::before(fn () => true);
+        $this->actingAs($admin, 'web');
+
+        $kinshasa = City::factory()->create(['title' => 'Kinshasa']);
+        $gombe = Town::factory()->create(['title' => 'Gombe', 'city_id' => $kinshasa->id]);
+        $limete = Town::factory()->create(['title' => 'Limete', 'city_id' => $kinshasa->id]);
+
+        $vehicule = $this->vehicule($kinshasa);
+        $vehicule->towns()->sync([$gombe->id]);
+
+        Livewire::test(ListVehicles::class)
+            ->callTableBulkAction(
+                'zoneDesservie',
+                [$vehicule->id],
+                ['mode' => 'remplacer', 'towns' => [$limete->id]],
+            );
+
+        $this->assertSame([$limete->id], $vehicule->fresh()->towns->pluck('id')->all());
+
+        Livewire::test(ListVehicles::class)
+            ->callTableBulkAction(
+                'zoneDesservie',
+                [$vehicule->id],
+                ['mode' => 'vider', 'towns' => []],
+            );
+
+        // Vide ne FERME rien : sans commune, le vehicule dessert toute sa
+        // ville. C'est la doctrine de la fiche, et elle ne change pas ici.
+        $this->assertCount(0, $vehicule->fresh()->towns);
+        $this->assertTrue($vehicule->fresh()->dessertLaCommune($gombe->id));
     }
 }
