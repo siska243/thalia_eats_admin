@@ -19,6 +19,15 @@ class DepositRequest extends FormRequest
     {
         return [
             'method' => ['nullable', Rule::in(DepositPayment::METHODES)],
+            /*
+             * PAS de regle de format ici, et c'est voulu.
+             *
+             * `BookingController::numeroValide()` le verifie deja, avec le
+             * meme validateur, et rend `{error: 'telephone_invalide'}` — la
+             * forme que les deux clients lisent pour afficher leur message.
+             * Ajouter la regle ici ferait repondre le 422 de Laravel a sa
+             * place, et les ecrans n'afficheraient plus rien d'utile.
+             */
             'phone' => ['required_if:method,mobile', 'nullable', 'string', 'max:30'],
 
             /*

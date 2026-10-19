@@ -2,10 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\TelephoneValide;
 use App\Wrappers\ApiResponse;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class AccountRequest extends FormRequest
 {
@@ -28,13 +30,33 @@ class AccountRequest extends FormRequest
             'email' => 'email|required',
             'name' => 'required|min:3',
             'last_name' => 'required|min:3',
+
+            /*
+             * `UserAccountController` ecrit `$user->phone = $request->phone`
+             * sans aucun controle. C'est AUSSI par ici que passe le numero
+             * saisi a la reservation d'une course, qui le pose sur le compte :
+             * un numero faux s'y installait, et le chauffeur appelait dans le
+             * vide.
+             */
+            'phone' => ['nullable', new TelephoneValide],
         ];
     }
 
+    /**
+     * Meme defaut que `RegistrationRequest`, meme correction.
+     *
+     * La methode RENDAIT la reponse au lieu de la LEVER : Laravel ignore ce
+     * retour, et la mise a jour du compte s'enregistrait quoi qu'on envoie.
+     *
+     * Les deux clients connus envoient deja `email`, `name` et `last_name` a
+     * chaque mise a jour — c'est verifie dans leur code, pas suppose — donc
+     * reveiller ces regles ne refuse rien qui passait hier.
+     */
     public function failedValidation(Validator $validator)
     {
-
-        return ApiResponse::BAD_REQUEST($validator->errors(), 'Oups', 'Veuillez reverifier les informations envoyées');
+        throw new HttpResponseException(
+            ApiResponse::BAD_REQUEST($validator->errors(), 'Oups', 'Veuillez reverifier les informations envoyées')
+        );
     }
 
     public function messages()
