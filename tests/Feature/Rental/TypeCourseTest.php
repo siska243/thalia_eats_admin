@@ -640,4 +640,132 @@ class TypeCourseTest extends TestCase
         $this->assertSame(60.0, (float) $devis['base_price']);
         $this->assertSame(90.0, (float) $devis['total']);
     }
+
+    // --- Le type devient obligatoire, la ou il est propose -------------------
+
+    /**
+     * Un vehicule qui propose des types ne se reserve plus sans en choisir un.
+     *
+     * Le type porte le tarif applique : reserver sans l'avoir choisi, c'est
+     * etre facture sur le tarif de repli du vehicule pour une course qui n'en
+     * releve pas.
+     */
+    public function test_un_vehicule_a_types_refuse_une_reservation_sans_type(): void
+    {
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration', 'forced_mode' => null, 'minimum_hours' => null],
+        );
+
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $b->id, 'hourly_rate' => 30, 'daily_rate' => 225,
+        ]);
+
+        $this->reserve()
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'type_requis');
+
+        $this->assertSame(0, Booking::query()->count());
+    }
+
+    /**
+     * Un vehicule sans type continue de se reserver sans rien envoyer.
+     *
+     * C'est la non-regression du parc installe : les applications deja
+     * livrees n'envoient pas de `course_type_id`, et la majorite des
+     * vehicules ne proposent aucun type. Exiger partout les aurait toutes
+     * arretees d'un coup.
+     */
+    public function test_un_vehicule_sans_type_se_reserve_toujours_sans_type(): void
+    {
+        $this->reserve()->assertSuccessful();
+
+        $this->assertSame(1, Booking::query()->count());
+        $this->assertNull(Booking::query()->first()->course_type_id);
+    }
+
+    /**
+     * Un type desactive ne reclame rien.
+     *
+     * Le catalogue ne le montre plus — `Vehicle::typesProposes()` l'ecarte —
+     * donc l'exiger demanderait un choix que l'ecran ne propose pas. Les deux
+     * cotes lisent la meme methode, et ce test le verrouille.
+     */
+    public function test_un_type_desactive_ne_rend_pas_le_choix_obligatoire(): void
+    {
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration', 'forced_mode' => null,
+                'minimum_hours' => null, 'is_active' => false,
+            ],
+        );
+
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $b->id, 'hourly_rate' => 30, 'daily_rate' => 225,
+        ]);
+
+        $this->reserve()->assertSuccessful();
+    }
+
+    /**
+     * Un type que CE vehicule ne propose pas est refuse comme un type absent.
+     *
+     * Sans ce refus, envoyer le code d'un autre type suffisait a esquiver la
+     * duree minimale ou le mode imposes par le vrai, tout en etant facture au
+     * tarif de repli du vehicule.
+     */
+    public function test_un_type_etranger_au_vehicule_est_refuse(): void
+    {
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration', 'forced_mode' => null,
+                'minimum_hours' => null, 'note_required' => false,
+            ],
+        );
+
+        // Le vehicule ne propose que B ; D existe au referentiel, pas ici.
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $b->id, 'hourly_rate' => 30, 'daily_rate' => 225,
+        ]);
+
+        $d = CourseType::query()->updateOrCreate(
+            ['code' => 'D'],
+            ['title' => 'Longue distance', 'forced_mode' => null,
+                'minimum_hours' => null, 'note_required' => false,
+            ],
+        );
+
+        $this->reserve(['course_type_id' => $d->id])
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'type_requis');
+
+        $this->assertSame(0, Booking::query()->count());
+    }
+
+    /** Le type choisi passe, et c'est SON tarif qui est facture. */
+    public function test_le_type_choisi_passe_et_porte_son_tarif(): void
+    {
+        // Les regles du type sont toutes eteintes : c'est le TARIF qu'on
+        // prouve ici, et un commentaire ou un mode impose repondrait a sa
+        // place par un refus.
+        $b = CourseType::query()->updateOrCreate(
+            ['code' => 'B'],
+            ['title' => 'Hors agglomeration', 'forced_mode' => null,
+                'minimum_hours' => null, 'note_required' => false,
+            ],
+        );
+
+        $this->vehicle->coursePrices()->create([
+            'course_type_id' => $b->id, 'hourly_rate' => 30, 'daily_rate' => 225,
+        ]);
+
+        $this->reserve(['course_type_id' => $b->id])->assertSuccessful();
+
+        $booking = Booking::query()->first();
+
+        // 10h -> 15h, au tarif du type et non aux 20 $ du vehicule.
+        $this->assertSame($b->id, $booking->course_type_id);
+        $this->assertSame(30.0, (float) $booking->unit_price);
+        $this->assertSame(150.0, (float) $booking->total);
+    }
 }

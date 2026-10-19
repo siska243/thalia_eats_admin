@@ -94,11 +94,7 @@ class VehicleResource extends JsonResource
              * reclame le commentaire et propose le parking sans rien savoir
              * des codes. Un quatrieme type reste donc gerable sans livraison.
              */
-            'course_types' => $this->resource->coursePrices
-                ->map(fn ($ligne) => $ligne->courseType)
-                ->filter(fn (?CourseType $type) => $type?->is_active)
-                ->sortBy('position')
-                ->values()
+            'course_types' => $this->resource->typesProposes()
                 ->map(fn (CourseType $type) => [
                     'id' => $type->id,
                     'code' => $type->code,
