@@ -41,6 +41,15 @@ class Turnstile
         try {
             $reponse = Http::asForm()
                 ->timeout(config('securite.turnstile.timeout'))
+                /*
+                 * Une reprise, pas plus.
+                 *
+                 * Une coupure d'une seconde ne doit pas valoir un refus, et le
+                 * reseau d'ici en produit. Au-dela, insister ferait patienter
+                 * le client devant un formulaire fige : mieux vaut un refus
+                 * qu'il comprend et peut reessayer.
+                 */
+                ->retry(2, 200, throw: false)
                 ->post(self::VERIFICATION, array_filter([
                     'secret' => config('securite.turnstile.secret'),
                     'response' => $jeton,
@@ -48,16 +57,23 @@ class Turnstile
                 ]));
         } catch (\Throwable $exception) {
             /*
-             * Cloudflare injoignable ne doit pas fermer les inscriptions.
-             * On laisse passer et on le journalise : le risque d'un bot qui
-             * entre pendant une panne reseau est moindre que celui de perdre
-             * tous les vrais clients pendant la meme panne.
+             * Cloudflare injoignable : on REFUSE, sauf consigne contraire.
+             *
+             * Laisser passer en silence rendait la mesure nulle sans que
+             * personne ne s'en apercoive — il suffisait d'empecher l'appel
+             * sortant pour desactiver le defi. En `error` et non `warning` :
+             * c'est une panne de securite, elle doit remonter.
+             *
+             * `TURNSTILE_FAIL_OPEN` existe pour le jour ou Cloudflare tombe
+             * vraiment : rouvrir alors tient a une variable, pas a une
+             * livraison. Fermee par defaut.
              */
-            Log::warning('Turnstile injoignable, inscription laissee passer', [
+            Log::error('Turnstile injoignable', [
                 'erreur' => $exception->getMessage(),
+                'laisse_passer' => config('securite.turnstile.fail_open'),
             ]);
 
-            return true;
+            return (bool) config('securite.turnstile.fail_open');
         }
 
         return $reponse->successful() && $reponse->json('success') === true;
