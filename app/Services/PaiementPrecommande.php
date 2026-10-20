@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Precommande;
+use App\Rules\TelephoneValide;
 use App\Wrappers\Cipher;
 use App\Wrappers\FlexPay;
 use App\Wrappers\LibPhoneNumber;
@@ -79,7 +80,9 @@ class PaiementPrecommande
             'number_street' => ['nullable', 'string', 'max:50'],
             'reference' => ['nullable', 'string', 'max:255'],
             'recipient_name' => ['required', 'string', 'max:120'],
-            'recipient_phone' => ['required', 'string', 'max:30'],
+            // Le seul numero que le livreur composera : la longueur ne dit
+            // rien de sa validite.
+            'recipient_phone' => ['required', 'string', 'max:30', new TelephoneValide],
         ];
     }
 
