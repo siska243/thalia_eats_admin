@@ -141,13 +141,35 @@ class BookingCreator
          * code : « le type c'est un referentiel », et un `if ($code === 'B')`
          * ici rendrait impossible d'ajouter un quatrieme type sans livraison.
          *
-         * Sans type transmis, aucune regle ne s'applique : les applications
-         * deja installees n'en envoient pas, et leurs reservations sont des
-         * courses urbaines ordinaires.
+         * Sans type transmis, aucune regle ne s'applique : un vehicule qui
+         * n'en propose aucun se reserve comme avant, et les applications deja
+         * installees continuent de passer dessus.
          */
         $courseType = ($details['course_type_id'] ?? null)
             ? CourseType::query()->find($details['course_type_id'])
             : null;
+
+        /*
+         * Mais quand le vehicule en propose, le type n'est plus facultatif.
+         *
+         * C'est lui qui porte le tarif applique, la duree minimale et parfois
+         * le mode : reserver sans l'avoir choisi, c'est etre facture sur le
+         * tarif de repli du vehicule pour une course qui n'en releve pas.
+         *
+         * La meme condition ecarte le type qui existe mais que CE vehicule ne
+         * propose pas : sans elle, envoyer le code d'un autre type suffirait a
+         * esquiver la duree minimale ou le mode imposes par le vrai. Aucun des
+         * deux ecrans ne peut l'envoyer — ils n'affichent que cette liste-la.
+         *
+         * La liste est celle que le catalogue a montree — `typesProposes()`,
+         * la meme methode des deux cotes — sinon un type desactive reclamerait
+         * un choix que l'ecran ne propose plus.
+         */
+        $typesProposes = $vehicle->typesProposes();
+
+        if ($typesProposes->isNotEmpty() && ! $typesProposes->contains('id', $courseType?->id)) {
+            throw new BookingRefusee(BookingRefusee::TYPE_REQUIS);
+        }
 
         if ($courseType?->forced_mode && $courseType->forced_mode !== $mode) {
             /*

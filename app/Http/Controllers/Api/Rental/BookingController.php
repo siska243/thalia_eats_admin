@@ -243,6 +243,7 @@ class BookingController extends Controller
             BookingRefusee::HORS_COMMUNE => "Ce véhicule n'effectue pas de course au départ de cette commune.",
             BookingRefusee::MODE_IMPOSE => 'Ce type de course impose un mode de réservation.',
             BookingRefusee::DUREE_MINIMALE_TYPE => 'Ce type de course demande une durée minimale.',
+            BookingRefusee::TYPE_REQUIS => 'Choisissez le type de course avant de réserver ce véhicule.',
             // Le service compose le message : il nomme la réservation qui
             // bloque. Cette phrase n'est qu'un filet si la référence manque.
             BookingRefusee::RESERVATION_NON_REGLEE => "Vous avez déjà une réservation non réglée. Payez-la ou annulez-la avant d'en réserver une autre.",
