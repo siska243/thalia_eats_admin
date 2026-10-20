@@ -74,23 +74,39 @@ class AuthController extends Controller
         return Str::padLeft(random_int(0, 9999), 4, '0');
     }
 
+    /**
+     * Le defi anti-robot, oppose a une requete.
+     *
+     * Rend la reponse de refus, ou null quand la requete peut continuer.
+     *
+     * Ecrit ICI et pas dans chaque methode : le controle vit sur trois
+     * routes — inscription, connexion, renvoi du code — et trois copies
+     * finiraient par ne plus dire la meme chose. Ce depot a deja paye deux
+     * fois une meme regle lue a deux endroits.
+     *
+     * Eteint tant que `TURNSTILE_SECRET_KEY` n'est pas posee, donc sans effet
+     * sur les clients mobiles deja installes, qui n'envoient pas ce jeton.
+     */
+    private function defiAntiRobot(Request $request, Turnstile $turnstile)
+    {
+        if ($turnstile->verifier($request->input('turnstile_token'), $request->ip())) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            'turnstile_echoue',
+            'Vérification impossible',
+            "Nous n'avons pas pu vérifier que vous n'êtes pas un robot. Rechargez la page et réessayez."
+        );
+    }
+
     public function register(RegistrationRequest $request, Turnstile $turnstile)
     {
         try {
-            /*
-             * Le defi anti-robot, AVANT tout le reste : inutile de chercher
-             * en base pour un appel qui ne vient pas d'un navigateur.
-             *
-             * Eteint tant que `TURNSTILE_SECRET_KEY` n'est pas posee, donc
-             * sans effet sur les clients mobiles deja installes, qui
-             * n'envoient pas ce jeton.
-             */
-            if (! $turnstile->verifier($request->input('turnstile_token'), $request->ip())) {
-                return ApiResponse::BAD_REQUEST(
-                    'turnstile_echoue',
-                    'Vérification impossible',
-                    "Nous n'avons pas pu vérifier que vous n'êtes pas un robot. Rechargez la page et réessayez."
-                );
+            // Avant tout le reste : inutile de chercher en base pour un appel
+            // qui ne vient pas d'un navigateur.
+            if ($refus = $this->defiAntiRobot($request, $turnstile)) {
+                return $refus;
             }
 
             // code...
@@ -199,9 +215,19 @@ class AuthController extends Controller
      * Comme pour la reinitialisation, la reponse ne dit pas si le compte
      * existe, ni s'il est deja active.
      */
-    public function resendActivation(Request $request)
+    public function resendActivation(Request $request, Turnstile $turnstile)
     {
         try {
+            /*
+             * Le renvoi du code n'etait protege que par un delai de 60 s pose
+             * dans l'ecran. Un delai cote client ne protege rien : il suffit
+             * d'appeler la route directement. Le limiteur `auth-sensibles`
+             * tient le volume, le defi tient l'automatisation.
+             */
+            if ($refus = $this->defiAntiRobot($request, $turnstile)) {
+                return $refus;
+            }
+
             $validator = Validator::make($request->all(), [
                 'email' => ['required', 'email', 'string'],
             ]);
@@ -236,10 +262,17 @@ class AuthController extends Controller
         }
     }
 
-    public function login(LoginUserRequest $request, DoubleAuthentification $double)
+    public function login(LoginUserRequest $request, DoubleAuthentification $double, Turnstile $turnstile)
     {
         try {
-            // code...
+            /*
+             * La connexion est la page la plus attaquee : c'est la qu'on
+             * essaie des listes d'identifiants voles. Le limiteur borne le
+             * volume par compte et par IP, le defi coupe l'automatisation.
+             */
+            if ($refus = $this->defiAntiRobot($request, $turnstile)) {
+                return $refus;
+            }
 
             $validator = Validator::make($request->all(), [
                 'email' => ['email', 'required', 'string'],
