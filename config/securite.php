@@ -98,6 +98,31 @@ return [
          * variable d'environnement, pas a une livraison.
          */
         'fail_open' => (bool) env('TURNSTILE_FAIL_OPEN', false),
+
+        /*
+         * Laisser passer les requetes SANS en-tete `Origin`.
+         *
+         * Turnstile est une mesure anti-robot de NAVIGATEUR : il n'existe pas
+         * de SDK natif, et l'application mobile n'en envoie donc aucun jeton.
+         * Poser la cle secrete sans cette exemption bloque tout le parc
+         * installe — connexion, inscription et renvoi du code — ce qui s'est
+         * produit le 20 octobre.
+         *
+         * `Origin` est pose par le NAVIGATEUR, pas par le code : le site et
+         * l'API etant sur deux sous-domaines, chaque appel est cross-origin et
+         * l'en-tete est present. JavaScript ne peut pas l'ecrire, c'est un
+         * en-tete interdit.
+         *
+         * CE QUE CA COUTE : un robot qui appelle l'API directement, sans
+         * `Origin`, n'est pas defie. Le defi protege donc le FORMULAIRE du
+         * site, pas l'endpoint. Ce qui protege l'endpoint pour tout le monde
+         * reste `throttle:auth-sensibles` (6/minute et 30/heure, par e-mail
+         * ET par IP) et la confirmation d'adresse obligatoire.
+         *
+         * A passer a faux le jour ou le mobile saura envoyer un jeton : le
+         * defi redevient alors universel, sans livraison.
+         */
+        'exempter_sans_origin' => (bool) env('TURNSTILE_EXEMPTER_SANS_ORIGIN', true),
     ],
 
     'confirmation_email' => [
