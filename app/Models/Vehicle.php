@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /** Un vehicule loue avec chauffeur, facture a l'heure. */
@@ -92,6 +93,29 @@ class Vehicle extends Model
     public function coursePrices(): HasMany
     {
         return $this->hasMany(VehicleCoursePrice::class);
+    }
+
+    /**
+     * Les types de course que ce vehicule propose vraiment.
+     *
+     * **La definition vit ici, une seule fois.** L'ecran fait disparaitre
+     * l'etape du type quand la liste est vide, et le serveur exige le type
+     * quand elle ne l'est pas : si les deux lisaient la relation chacun a sa
+     * facon, un type desactive suffirait a reclamer un choix que l'ecran ne
+     * propose plus. Ce depot a deja paye deux fois une meme definition lue a
+     * deux endroits.
+     *
+     * Un type desactive ne compte pas : il n'est ni affiche, ni exigible.
+     *
+     * @return Collection<int, CourseType>
+     */
+    public function typesProposes(): Collection
+    {
+        return $this->coursePrices
+            ->map(fn (VehicleCoursePrice $ligne) => $ligne->courseType)
+            ->filter(fn (?CourseType $type) => $type?->is_active)
+            ->sortBy('position')
+            ->values();
     }
 
     /**

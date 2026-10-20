@@ -55,6 +55,20 @@ class BookingRefusee extends Exception
 
     public const MODE_IMPOSE = 'mode_impose';
 
+    /**
+     * Le vehicule propose des types de course, et aucun n'a ete choisi.
+     *
+     * Le type decide du tarif applique, de la duree minimale et parfois du
+     * mode : le laisser vide revient a facturer une course au hasard de ce
+     * qui restait par defaut. L'ecran ne laisse plus passer l'etape, et le
+     * serveur le redit pour les clients qui ne l'ont pas encore.
+     *
+     * Exige SEULEMENT quand le vehicule en propose : un vehicule sans type
+     * reste reservable comme avant, sinon les applications deja installees
+     * cesseraient de pouvoir reserver quoi que ce soit.
+     */
+    public const TYPE_REQUIS = 'type_requis';
+
     /** Le creneau est plus court que la duree minimale propre a ce type. */
     public const DUREE_MINIMALE_TYPE = 'duree_minimale_type';
 

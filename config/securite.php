@@ -84,6 +84,20 @@ return [
     'turnstile' => [
         'secret' => env('TURNSTILE_SECRET_KEY'),
         'timeout' => (int) env('TURNSTILE_TIMEOUT', 5),
+
+        /*
+         * Que faire quand Cloudflare est INJOIGNABLE.
+         *
+         * Faux, le defaut : on refuse. Laisser passer en silence rendait la
+         * mesure nulle sans que personne ne s'en apercoive, puisqu'il
+         * suffisait d'empecher l'appel sortant pour eteindre le defi.
+         *
+         * Vrai existe pour le jour ou Cloudflare tombe vraiment : refuser
+         * ferme alors TOUTES les connexions du site, sur un reseau qui n'est
+         * pas toujours fiable ici. Ce jour-la, rouvrir doit tenir a une
+         * variable d'environnement, pas a une livraison.
+         */
+        'fail_open' => (bool) env('TURNSTILE_FAIL_OPEN', false),
     ],
 
     'confirmation_email' => [
