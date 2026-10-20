@@ -89,6 +89,29 @@ class AuthController extends Controller
      */
     private function defiAntiRobot(Request $request, Turnstile $turnstile)
     {
+        /*
+         * Les clients NATIFS passent.
+         *
+         * Turnstile n'existe que dans un navigateur, et l'application mobile
+         * n'envoie donc aucun jeton. Poser la cle secrete le 20 octobre a
+         * bloque tout le parc installe sur les trois routes d'un coup : un
+         * incident, pas un durcissement.
+         *
+         * `Origin` est pose par le NAVIGATEUR lui-meme — le site et l'API sont
+         * sur deux sous-domaines, chaque appel est donc cross-origin — et
+         * JavaScript ne peut pas l'ecrire. Son absence signe un appel qui ne
+         * vient pas d'une page web.
+         *
+         * Le cout est assume et documente dans `config/securite.php` : un
+         * robot qui appelle l'API sans `Origin` n'est pas defie. Le limiteur
+         * `auth-sensibles` et la confirmation d'adresse, eux, valent pour
+         * tout le monde.
+         */
+        if (blank($request->headers->get('Origin'))
+            && config('securite.turnstile.exempter_sans_origin')) {
+            return null;
+        }
+
         if ($turnstile->verifier($request->input('turnstile_token'), $request->ip())) {
             return null;
         }
