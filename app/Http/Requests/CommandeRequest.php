@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\TelephoneValide;
 use App\Wrappers\ApiResponse;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
@@ -32,6 +33,15 @@ class CommandeRequest extends FormRequest
                 'uid' => 'required',
                 'quantity' => 'required',
             ],
+
+            /*
+             * Le numero du destinataire, quand la commande est pour quelqu'un
+             * d'autre. Il n'avait AUCUNE regle, et le controleur l'ecrit tel
+             * quel sur la commande : c'est pourtant le seul numero que le
+             * livreur composera, et le client qui commande ne sera pas
+             * forcement joignable pour le corriger.
+             */
+            'recipient_phone' => ['nullable', new TelephoneValide],
         ];
     }
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Mail\DemandePartenariat;
 use App\Models\Prospect;
+use App\Rules\TelephoneValide;
 use App\Settings\ProspectionSettings;
 use App\Wrappers\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -33,7 +34,9 @@ class ProspectController extends Controller
             // « responsable », le formulaire livreur « votre nom » : c'est la
             // meme personne, celle qu'on rappellera.
             'responsable' => ['required', 'string', 'max:120'],
-            'telephone' => ['required', 'string', 'max:30'],
+            // C'est le numero qu'on rappellera : une demande de partenariat
+            // avec un numero faux est une demande perdue.
+            'telephone' => ['required', 'string', 'max:30', new TelephoneValide],
             'email' => ['nullable', 'email', 'max:160'],
             'commune' => ['nullable', 'string', 'max:120'],
             'message' => ['nullable', 'string', 'max:2000'],
