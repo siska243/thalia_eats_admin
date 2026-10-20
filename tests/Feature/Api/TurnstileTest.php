@@ -52,6 +52,20 @@ class TurnstileTest extends TestCase
     }
 
     /**
+     * Une requete telle que le SITE l'envoie.
+     *
+     * Le navigateur pose `Origin` de lui-meme, le site et l'API etant sur deux
+     * sous-domaines. Sans cet en-tete, la requete est traitee comme un appel
+     * natif et echappe au defi : tous les tests qui prouvent un REFUS doivent
+     * donc le porter, sinon ils passeraient en prouvant le contraire de ce
+     * qu'ils annoncent.
+     */
+    private function depuisLeSite(): self
+    {
+        return $this->withHeaders(['Origin' => 'https://thaliaeats.com']);
+    }
+
+    /**
      * ETEINT PAR DEFAUT.
      *
      * Sans cle, l'inscription se comporte exactement comme avant — c'est ce
@@ -63,7 +77,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => null]);
         Http::fake();
 
-        $this->postJson('/api/register', $this->inscription())->assertSuccessful();
+        $this->depuisLeSite()->postJson('/api/register', $this->inscription())->assertSuccessful();
 
         Http::assertNothingSent();
     }
@@ -72,7 +86,7 @@ class TurnstileTest extends TestCase
     {
         config(['securite.turnstile.secret' => 'secret-de-test']);
 
-        $reponse = $this->postJson('/api/register', $this->inscription());
+        $reponse = $this->depuisLeSite()->postJson('/api/register', $this->inscription());
 
         $reponse->assertStatus(400);
         $this->assertSame('turnstile_echoue', $reponse->json('error'));
@@ -83,7 +97,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => 'secret-de-test']);
         Http::fake(['*challenges.cloudflare.com*' => Http::response(['success' => false])]);
 
-        $this->postJson('/api/register', $this->inscription(['turnstile_token' => 'faux']))
+        $this->depuisLeSite()->postJson('/api/register', $this->inscription(['turnstile_token' => 'faux']))
             ->assertStatus(400);
     }
 
@@ -92,7 +106,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => 'secret-de-test']);
         Http::fake(['*challenges.cloudflare.com*' => Http::response(['success' => true])]);
 
-        $this->postJson('/api/register', $this->inscription(['turnstile_token' => 'bon']))
+        $this->depuisLeSite()->postJson('/api/register', $this->inscription(['turnstile_token' => 'bon']))
             ->assertSuccessful();
     }
 
@@ -108,7 +122,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => 'secret-de-test']);
         Http::fake(fn () => throw new \RuntimeException('reseau coupe'));
 
-        $reponse = $this->postJson('/api/register', $this->inscription(['turnstile_token' => 'bon']));
+        $reponse = $this->depuisLeSite()->postJson('/api/register', $this->inscription(['turnstile_token' => 'bon']));
 
         $reponse->assertStatus(400);
         $this->assertSame('turnstile_echoue', $reponse->json('error'));
@@ -129,7 +143,7 @@ class TurnstileTest extends TestCase
         ]);
         Http::fake(fn () => throw new \RuntimeException('reseau coupe'));
 
-        $this->postJson('/api/register', $this->inscription(['turnstile_token' => 'bon']))
+        $this->depuisLeSite()->postJson('/api/register', $this->inscription(['turnstile_token' => 'bon']))
             ->assertSuccessful();
     }
 
@@ -159,7 +173,7 @@ class TurnstileTest extends TestCase
         $this->compte();
         Http::fake();
 
-        $this->postJson('/api/login', [
+        $this->depuisLeSite()->postJson('/api/login', [
             'email' => 'eva@example.com',
             'password' => 'motdepasse',
         ])->assertSuccessful();
@@ -172,7 +186,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => 'secret-de-test']);
         $this->compte();
 
-        $reponse = $this->postJson('/api/login', [
+        $reponse = $this->depuisLeSite()->postJson('/api/login', [
             'email' => 'eva@example.com',
             'password' => 'motdepasse',
         ]);
@@ -187,7 +201,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => 'secret-de-test']);
         $this->compte();
 
-        $reponse = $this->postJson('/api/login', [
+        $reponse = $this->depuisLeSite()->postJson('/api/login', [
             'email' => 'eva@example.com',
             'password' => 'mauvais-mot-de-passe',
         ]);
@@ -201,7 +215,7 @@ class TurnstileTest extends TestCase
         $this->compte();
         Http::fake(['*challenges.cloudflare.com*' => Http::response(['success' => true])]);
 
-        $this->postJson('/api/login', [
+        $this->depuisLeSite()->postJson('/api/login', [
             'email' => 'eva@example.com',
             'password' => 'motdepasse',
             'turnstile_token' => 'bon',
@@ -220,7 +234,7 @@ class TurnstileTest extends TestCase
         config(['securite.turnstile.secret' => 'secret-de-test']);
         $this->compte(['email_verified_at' => null]);
 
-        $reponse = $this->postJson('/api/resend-activation', ['email' => 'eva@example.com']);
+        $reponse = $this->depuisLeSite()->postJson('/api/resend-activation', ['email' => 'eva@example.com']);
 
         $reponse->assertStatus(400);
         $this->assertSame('turnstile_echoue', $reponse->json('error'));
@@ -233,7 +247,7 @@ class TurnstileTest extends TestCase
         $this->compte(['email_verified_at' => null]);
         Http::fake(['*challenges.cloudflare.com*' => Http::response(['success' => true])]);
 
-        $this->postJson('/api/resend-activation', [
+        $this->depuisLeSite()->postJson('/api/resend-activation', [
             'email' => 'eva@example.com',
             'turnstile_token' => 'bon',
         ])->assertSuccessful();
@@ -247,9 +261,95 @@ class TurnstileTest extends TestCase
         $this->compte(['email_verified_at' => null]);
         Http::fake();
 
+        $this->depuisLeSite()->postJson('/api/resend-activation', ['email' => 'eva@example.com'])
+            ->assertSuccessful();
+
+        Http::assertNothingSent();
+    }
+
+    // --- Les clients natifs passent -----------------------------------------
+
+    /**
+     * LE PARC MOBILE N'EST PAS BLOQUE.
+     *
+     * Turnstile n'existe que dans un navigateur : l'application n'en envoie
+     * aucun jeton, et poser la cle secrete le 20 octobre a bloque tout le parc
+     * installe. L'absence d'`Origin` signe un appel qui ne vient pas d'une
+     * page web, et laisse passer.
+     *
+     * Ce test est la remise en service elle-meme : s'il tombe, plus personne
+     * ne peut se connecter depuis son telephone.
+     */
+    public function test_sans_origin_la_connexion_passe_sans_jeton(): void
+    {
+        config(['securite.turnstile.secret' => 'secret-de-test']);
+        $this->compte();
+        Http::fake();
+
+        $this->postJson('/api/login', [
+            'email' => 'eva@example.com',
+            'password' => 'motdepasse',
+        ])->assertSuccessful();
+
+        // Cloudflare n'est meme pas sollicite : on n'a rien a lui demander.
+        Http::assertNothingSent();
+    }
+
+    public function test_sans_origin_l_inscription_passe_sans_jeton(): void
+    {
+        config(['securite.turnstile.secret' => 'secret-de-test']);
+        Http::fake();
+
+        $this->postJson('/api/register', $this->inscription())->assertSuccessful();
+
+        Http::assertNothingSent();
+    }
+
+    public function test_sans_origin_le_renvoi_du_code_passe_sans_jeton(): void
+    {
+        config(['securite.turnstile.secret' => 'secret-de-test']);
+        $this->compte(['email_verified_at' => null]);
+        Http::fake();
+
         $this->postJson('/api/resend-activation', ['email' => 'eva@example.com'])
             ->assertSuccessful();
 
         Http::assertNothingSent();
+    }
+
+    /**
+     * L'interrupteur, pour le jour ou le mobile saura envoyer un jeton.
+     *
+     * A faux, le defi redevient universel et l'absence d'`Origin` ne sauve
+     * plus personne — sans livraison, juste une variable.
+     */
+    public function test_l_exemption_se_coupe_par_configuration(): void
+    {
+        config([
+            'securite.turnstile.secret' => 'secret-de-test',
+            'securite.turnstile.exempter_sans_origin' => false,
+        ]);
+        $this->compte();
+
+        $reponse = $this->postJson('/api/login', [
+            'email' => 'eva@example.com',
+            'password' => 'motdepasse',
+        ]);
+
+        $reponse->assertStatus(400);
+        $this->assertSame('turnstile_echoue', $reponse->json('error'));
+    }
+
+    /** Un `Origin` vide vaut une absence : un en-tete pose a blanc ne contourne rien. */
+    public function test_un_origin_vide_est_traite_comme_une_absence(): void
+    {
+        config(['securite.turnstile.secret' => 'secret-de-test']);
+        $this->compte();
+        Http::fake();
+
+        $this->withHeaders(['Origin' => ''])->postJson('/api/login', [
+            'email' => 'eva@example.com',
+            'password' => 'motdepasse',
+        ])->assertSuccessful();
     }
 }
