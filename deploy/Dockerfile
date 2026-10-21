@@ -12,7 +12,7 @@
 # extensions effectivement chargees par le serveur local. imagick et redis en
 # sont absents, aucun code ne les utilise et le cache est en fichier.
 # ---------------------------------------------------------------------------
-FROM php:8.3-fpm-bookworm AS base
+FROM php:8.3.36-fpm-bookworm AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
