@@ -51,6 +51,7 @@ class CommandeHorsRayonTest extends TestCase
             'use_client_position' => false,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
 
         foreach ([[1, 'En attente', 'en-attente'], [5, 'En attente paiement', 'en-attente-paiement']] as [$id, $titre, $slug]) {

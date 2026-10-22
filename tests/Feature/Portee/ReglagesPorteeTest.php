@@ -24,6 +24,7 @@ class ReglagesPorteeTest extends TestCase
             'use_client_position' => false,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
 
         $settings = app(FoodSettings::class);
