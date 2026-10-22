@@ -256,6 +256,38 @@ class ConfirmationEmailTest extends TestCase
         ])->assertSuccessful();
     }
 
+    /**
+     * LA DECONNEXION RESTE OUVERTE, QUELLE QUE SOIT LA ROUTE.
+     *
+     * Deux existent : la notre et celle du paquet rupadana, qui n'a pas de
+     * nom propre. La liste blanche les nomme desormais par leur URL — le nom
+     * d'une route de paquet n'est pas un contrat que nous maitrisons.
+     *
+     * L'enjeu : un compte non confirme ne doit jamais se retrouver enferme
+     * dedans, incapable a la fois de commander et de partir.
+     */
+    public function test_les_deux_routes_de_deconnexion_restent_ouvertes(): void
+    {
+        $this->exigerDepuis();
+
+        foreach (['/api/logout', '/api/auth/logout'] as $url) {
+            $client = User::factory()->create([
+                'email_verified_at' => null,
+                'created_at' => now(),
+            ]);
+
+            Sanctum::actingAs($client, ['*']);
+
+            $this->assertNotSame(
+                'adresse_non_confirmee',
+                $this->postJson($url)->json('error'),
+                "La deconnexion par {$url} doit rester possible sans confirmation."
+            );
+
+            $this->app['auth']->forgetGuards();
+        }
+    }
+
     /** La reservation de vehicule obeit a la meme regle. */
     public function test_reserver_un_vehicule_exige_aussi_la_confirmation(): void
     {

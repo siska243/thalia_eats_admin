@@ -85,9 +85,30 @@ class ExigerAdresseConfirmee
      */
     private function toujoursPermis(Request $request): bool
     {
-        return $request->routeIs(
-            'api.logout',
-            'api.account',
-        ) || $request->is('api/user', 'api/user/account/update');
+        /*
+         * PAR L'URL, et non par le nom de la route, pour la deconnexion.
+         *
+         * Deux routes de deconnexion existent : `api/logout`, la notre, et
+         * `api/auth/logout`, celle du paquet rupadana/filament-api-service.
+         * La seconde n'a pas de nom propre — elle herite du seul prefixe
+         * `api.` de son groupe — donc `routeIs('api.logout')` ne la couvre
+         * pas.
+         *
+         * Elle n'est pas dans le groupe de middleware `api` aujourd'hui, et
+         * ce garde ne la voit donc jamais. Le jour ou elle y entre, ou le
+         * jour ou le paquet nomme ses routes autrement, un compte non
+         * confirme ne pourrait plus se deconnecter : enferme dedans, sans
+         * pouvoir ni commander ni partir.
+         *
+         * Le nom d'une route de paquet n'est pas un contrat que nous
+         * maitrisons ; son URL, si — c'est elle que les clients appellent.
+         */
+        return $request->routeIs('api.account')
+            || $request->is(
+                'api/logout',
+                'api/auth/logout',
+                'api/user',
+                'api/user/account/update',
+            );
     }
 }
