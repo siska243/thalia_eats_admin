@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -242,6 +243,40 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     public function debloquer(): void
     {
         $this->forceFill(['blocked_at' => null, 'blocked_reason' => null])->save();
+    }
+
+    /**
+     * Ce compte doit-il confirmer son adresse avant d'entrer ?
+     *
+     * Meme raison que `estBloque()` juste au-dessus : la question se pose a
+     * deux endroits — la connexion, qui refuse d'emettre un jeton, et le
+     * garde ExigerAdresseConfirmee, qui ferme l'API. Deux lectures de la
+     * date pivot finiraient par diverger, et l'une des deux laisserait
+     * passer ce que l'autre refuse.
+     *
+     * La date vient de la configuration et se pose au deploiement. Vide, la
+     * regle ne s'applique a personne : c'est l'etat d'avant, et il suffit de
+     * ne rien regler pour revenir en arriere. Seuls les comptes crees a
+     * partir de ce moment sont tenus de confirmer — dix-neuf des vingt-trois
+     * comptes existants ne l'ont jamais fait, et les fermer du jour au
+     * lendemain mettrait de vrais clients dehors.
+     */
+    public function doitConfirmerSonAdresse(): bool
+    {
+        if ($this->email_verified_at !== null) {
+            return false;
+        }
+
+        $pivot = config('securite.confirmation_email.exigee_depuis');
+
+        if (! $pivot) {
+            return false;
+        }
+
+        // Un compte sans date de creation est forcement ancien : on ne bloque
+        // personne sur une donnee manquante.
+        return $this->created_at !== null
+            && $this->created_at->greaterThanOrEqualTo(Carbon::parse($pivot));
     }
 
     /**

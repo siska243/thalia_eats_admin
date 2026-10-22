@@ -8,6 +8,7 @@ use App\Http\Requests\CommandeRequest;
 use App\Http\Resources\CommandeResource;
 use App\Models\Commande;
 use App\Models\CommandeProduct;
+use App\Models\Currency;
 use App\Models\Payement;
 use App\Models\Product;
 use App\Models\Restaurant;
@@ -158,6 +159,73 @@ class CommandeController extends Controller
      *
      * @param  array<int, array<string, mixed>>|null  $products  Les lignes recues, portant un uid chiffre.
      */
+    /**
+     * LE PANIER MINIMUM, quand l'administration en a pose un.
+     *
+     * Le seuil se regle dans Parametres > Livraison des repas, et vaut zero
+     * par defaut : tant que personne n'y touche, rien ne change.
+     *
+     * Il porte sur le SOUS-TOTAL des plats, pas sur le total paye. Compter
+     * la livraison et le service ferait franchir la barre a un panier qui ne
+     * l'atteint pas, et le seuil ne voudrait plus dire ce qu'il annonce a
+     * l'administration.
+     *
+     * Les prix viennent de la BASE, jamais du corps de la requete : un
+     * minimum qu'on contourne en annonçant un autre montant ne protege rien.
+     * Et l'arrondi est celui de `QuotationService`, pour qu'un panier pile
+     * sur le seuil ne soit pas accepte d'un cote et refuse de l'autre.
+     */
+    private function refuserSiPanierTropPetit(?array $products, string $cle = 'product_id'): ?JsonResponse
+    {
+        $minimum = FoodSettings::montantMinimum();
+
+        // Le cas de loin le plus frequent : aucun seuil pose. On sort avant
+        // d'interroger la base.
+        if ($minimum <= 0) {
+            return null;
+        }
+
+        $quantites = [];
+
+        foreach ($products ?? [] as $ligne) {
+            $id = Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null);
+
+            if ($id === false || $id === '' || ! ctype_digit((string) $id)) {
+                continue;
+            }
+
+            $quantites[(int) $id] = ($quantites[(int) $id] ?? 0) + max(1, (int) ($ligne['quantity'] ?? 1));
+        }
+
+        if (! $quantites) {
+            return null;
+        }
+
+        $lignes = Product::query()
+            ->whereIn('id', array_keys($quantites))
+            ->get()
+            ->map(fn (Product $produit) => [
+                'product' => $produit,
+                'quantity' => $quantites[$produit->id],
+            ])
+            ->all();
+
+        $sous_total = QuotationService::sousTotalDe($lignes);
+
+        if ($sous_total >= $minimum) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            'panier_sous_le_minimum',
+            __('Panier trop petit'),
+            __('Le montant minimum pour commander est de :minimum. Votre panier est à :total.', [
+                'minimum' => rtrim(rtrim(number_format($minimum, 2, ',', ' '), '0'), ','),
+                'total' => rtrim(rtrim(number_format($sous_total, 2, ',', ' '), '0'), ','),
+            ])
+        );
+    }
+
     private function refuserSiProduitEpuise(?array $products, string $cle = 'product_id'): ?JsonResponse
     {
         $demande = [];
@@ -348,6 +416,10 @@ class CommandeController extends Controller
 
             $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
 
+            if ($refus = $this->refuserSiCommuneInconnue($town)) {
+                return $refus;
+            }
+
             // Avant toute ecriture : une commande posee puis refusee laisserait
             // une ligne orpheline, et le client la verrait dans sa liste.
             if ($refus = $this->refuserSiRestaurantTropLoin(
@@ -450,6 +522,10 @@ class CommandeController extends Controller
             }
 
             if ($refus = $this->refuserSiProduitEpuise($products)) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiPanierTropPetit($products)) {
                 return $refus;
             }
 
@@ -1030,6 +1106,37 @@ class CommandeController extends Controller
      *   decider de perdre une commande.
      * Ces trois-la sont journalises en alerte : ils doivent se voir.
      */
+    /**
+     * UNE COMMANDE SANS COMMUNE RESOLUE NE VA PAS PLUS LOIN.
+     *
+     * `store()` et `valide()` faisaient tous deux `$commande->town_id =
+     * $town->id` sans verifier que la commune avait ete trouvee. Une adresse
+     * dont le slug ne tombe sur rien — commune desactivee depuis, adresse
+     * enregistree avant un renommage, champ absent du corps de la requete —
+     * donnait donc « Attempt to read property id on null », rattrape par le
+     * catch general et rendu en 500.
+     *
+     * Cote client, cela s'affiche « erreur de paiement », sans rien dire de
+     * ce qu'il faut corriger. Le web n'en souffrait pas : son adresse vient
+     * d'un panier construit sur la meme page, avec sa commune. Le telephone,
+     * lui, relit une adresse enregistree il y a des semaines.
+     *
+     * Le garde est ici, dans un seul endroit, et non recopie chez les deux
+     * appelants : le troisieme a venir l'oublierait.
+     */
+    private function refuserSiCommuneInconnue(?Town $town): ?JsonResponse
+    {
+        if ($town !== null) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            'commune_inconnue',
+            __('Adresse incomplète'),
+            __("Nous n'avons pas reconnu la commune de cette adresse. Choisissez-la de nouveau avant de payer.")
+        );
+    }
+
     private function refuserFauteDeCotation(?Quotation $quotation, ?string $indisponibilite, $reference): ?JsonResponse
     {
         $refus_moteur = [
@@ -1037,10 +1144,56 @@ class CommandeController extends Controller
             QuotationService::RAISON_QUANTITE_INVALIDE,
         ];
 
+        /*
+         * UNE COTATION SANS TRANCHE NE FACTURE PAS, ELLE REFUSE.
+         *
+         * Ces deux avertissements decrivent un chiffrage que le moteur n'a
+         * pas su faire : la commune n'a aucun tarif actif, ou le sous-total
+         * sort de toutes les tranches. Le moteur rendait quand meme
+         * `disponible = true` avec des frais a 0,00 — pour rester
+         * bug-compatible avec `calculePrice.js`, qui retombe lui aussi sur 0.
+         *
+         * Sauf que les deux ne retombent pas ensemble : le navigateur
+         * calcule sur le sous-total qu'il porte, le serveur sur les prix en
+         * base. Quand ils divergent, le navigateur annonce 2,50 de livraison,
+         * le serveur n'en trouve aucune et ses zeros, faisant autorite,
+         * ecrasent le montant correct. La commande est alors livree
+         * gratuitement, frais de service compris — une perte seche sur
+         * chaque course concernee, et une commande que personne ne sait plus
+         * rapprocher dans Filament.
+         *
+         * WARNING_AUCUN_TARIF_ACTIF N'EST PAS DANS CETTE LISTE, ET C'EST
+         * VOULU. Treize communes de Kinshasa n'ont aucune grille : le
+         * navigateur n'en trouve pas non plus et affiche 0. Les deux
+         * CONCORDENT, il n'y a pas de divergence, et refuser ici fermerait
+         * ces treize communes du jour au lendemain. Leur cas se regle en
+         * back-office, en saisissant les grilles, pas en refusant les
+         * commandes. Voir le test
+         * `test_une_commune_sans_grille_livre_gratuitement_et_le_dit`.
+         *
+         * Le chemin des precommandes refuse les deux, lui, parce qu'un
+         * assistant ne doit rien engager sur un prix qu'il ne sait pas
+         * justifier. Un client devant son ecran, si.
+         *
+         * On ne touche pas au moteur : ses avertissements servent aussi au
+         * simulateur et aux suggestions de budget, qui doivent continuer de
+         * voir le cas sans le refuser. La decision appartient a l'endroit ou
+         * l'argent se decide.
+         */
+        $warnings_non_facturables = [
+            QuotationService::WARNING_HORS_TRANCHE,
+        ];
+
+        $non_facturable = array_values(
+            array_intersect($warnings_non_facturables, $quotation->warnings ?? [])
+        );
+
         $motif = null;
 
         if ($quotation !== null && ! $quotation->disponible && in_array($quotation->raison, $refus_moteur, true)) {
             $motif = $quotation->raison;
+        } elseif ($quotation !== null && $quotation->disponible && $non_facturable !== []) {
+            $motif = $non_facturable[0];
         } elseif (in_array($indisponibilite, ['produit_introuvable', 'panier_vide', 'commune_inconnue'], true)) {
             $motif = $indisponibilite;
         }
@@ -1054,7 +1207,16 @@ class CommandeController extends Controller
             return ApiResponse::BAD_REQUEST(
                 'panier_impossible_a_chiffrer',
                 __('Oups'),
-                __("Votre panier n'a pas pu être chiffré. Actualisez-le, puis réessayez.")
+                /*
+                 * Deux causes tres differentes, deux phrases : repondre
+                 * « actualisez votre panier » a quelqu'un dont la commune
+                 * n'est pas desservie le fait corriger ce qui n'est pas en
+                 * cause. Le chemin des precommandes fait deja cette
+                 * distinction.
+                 */
+                $motif === QuotationService::WARNING_AUCUN_TARIF_ACTIF
+                    ? __('Nous ne livrons pas encore à cette adresse. Choisissez une autre commune de livraison.')
+                    : __("Votre panier n'a pas pu être chiffré. Actualisez-le, puis réessayez.")
             );
         }
 
@@ -1144,9 +1306,19 @@ class CommandeController extends Controller
                 return $refus;
             }
 
+            if ($refus = $this->refuserSiPanierTropPetit($products, 'uid')) {
+                return $refus;
+            }
+
             $adresse = $request->input('address');
 
             $town = Town::query()->where('slug', ! empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
+
+            // Avant le controle de distance, qui prend deja cette commune, et
+            // bien avant l'ecriture de `town_id` qui la lisait sans garde.
+            if ($refus = $this->refuserSiCommuneInconnue($town)) {
+                return $refus;
+            }
 
             // Avant tout appel a la passerelle, comme le refus de restaurant
             // ferme juste au-dessus : un debit lance pour une livraison
@@ -1178,10 +1350,6 @@ class CommandeController extends Controller
 
             $commande->price_delivery = $pricing['frais_livraison'];
             $commande->price_service = $pricing['service_price'];
-
-            if ($total_price <= 2 && $method == 'cart') {
-                return ApiResponse::BAD_REQUEST(__('Oups'), __('Error paiement'), __("Pour le paiement par cart le montant minimum c'est 2USD"));
-            }
 
             $commande->town_id = $town->id;
             $commande->reference_adresse = ! empty($adresse['reference']) ? $adresse['reference'] : null;
@@ -1385,6 +1553,66 @@ class CommandeController extends Controller
 
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
+
+            /*
+             * LE MINIMUM DE PAIEMENT, REGLABLE ET PAR DEVISE.
+             *
+             * La regle existait, ecrite en dur :
+             *
+             *     if ($total_price <= 2 && $method == 'cart')
+             *
+             * Trois defauts, corriges ensemble.
+             *
+             * 1. Elle n'etait pas reglable. Le seuil se saisit desormais
+             *    sur la fiche de la devise, en administration.
+             *
+             * 2. Elle ne valait que pour la carte. Le proprietaire la veut
+             *    « pour cart ou mobile » : la passerelle refuse les petits
+             *    montants dans les deux cas.
+             *
+             * 3. Elle comparait un nombre a « 2 » SANS SAVOIR DANS QUELLE
+             *    DEVISE ce nombre etait exprime. Deux dollars et deux
+             *    francs congolais ne sont pas la meme barre : sur une
+             *    commande en CDF, la regle ne refusait rien, et sur une
+             *    commande en USD elle refusait au mauvais endroit des que
+             *    le seuil voulu changeait. Le seuil appartient donc a la
+             *    devise, pas au code.
+             *
+             * Elle porte sur `$montant_facture`, le montant que la
+             * passerelle va reellement prelever, et non sur le total
+             * annonce par le client. Un telephone qui annonçait zero — ce
+             * qu'il faisait, son ecran et sa requete ne comptant pas la
+             * meme chose — voyait sinon son paiement refuse sur un panier
+             * parfaitement normal.
+             *
+             * C'est pourquoi elle se trouve APRES l'ecriture de la
+             * commande, comme le controle du numero juste en dessous : le
+             * montant facture et la devise facturee n'existent pas avant.
+             * Une commande refusee ici reste non reglee et sera reprise
+             * telle quelle au prochain essai, `Commande::nonReglee()` la
+             * retrouvant.
+             *
+             * Sans devise resolue, on ne refuse pas : un seuil sans unite
+             * ne veut rien dire, et bloquer un paiement sur une inconnue
+             * serait pire que de le laisser passer.
+             */
+            $devise_du_seuil = $devise_facturee
+                ?? (! empty($pricing['currency']['id'])
+                    ? Currency::query()->find($pricing['currency']['id'])
+                    : null);
+
+            $minimum_paiement = $devise_du_seuil?->montantMinimumPaiement() ?? 0.0;
+
+            if ($minimum_paiement > 0 && (float) $montant_facture < $minimum_paiement) {
+                return ApiResponse::BAD_REQUEST(
+                    'montant_sous_le_minimum_paiement',
+                    __('Montant trop faible'),
+                    __('Le montant minimum pour payer est de :minimum :devise. Complétez votre panier.', [
+                        'minimum' => rtrim(rtrim(number_format($minimum_paiement, 2, ',', ' '), '0'), ','),
+                        'devise' => $devise_du_seuil->code,
+                    ])
+                );
+            }
 
             if ($method != 'cart') {
                 $phone_check = new LibPhoneNumber($phone);

@@ -331,6 +331,31 @@ class AuthController extends Controller
             }
 
             /*
+             * L'ADRESSE NON CONFIRMEE, elle aussi apres le mot de passe, et
+             * pour la meme raison que le blocage juste au-dessus.
+             *
+             * Aucun jeton n'est emis. Le garde ExigerAdresseConfirmee fermait
+             * deja l'API a ce compte, mais APRES coup : la connexion
+             * reussissait, le client voyait son nom dans l'en-tete, et tout
+             * ce qu'il touchait ensuite echouait sans qu'on lui dise ou
+             * aller. Le refus appartient a la connexion.
+             *
+             * `error` porte le code machine que les clients attendent pour
+             * router vers l'ecran de confirmation ; le code recu a
+             * l'inscription vaut trente minutes, celui d'un client qui
+             * revient le lendemain est donc toujours mort, et seul cet ecran
+             * sait en redemander un.
+             */
+            if ($user->doitConfirmerSonAdresse()) {
+                return ApiResponse::BAD_REQUEST(
+                    'adresse_non_confirmee',
+                    'Confirmez votre adresse',
+                    'Saisissez le code reçu par courriel pour activer votre compte. '
+                        .'Vous pouvez en demander un nouveau depuis l’écran de confirmation.',
+                );
+            }
+
+            /*
              * LE SECOND FACTEUR, s'il est actif.
              *
              * Aucun jeton n'est emis a ce stade : le mot de passe seul ne

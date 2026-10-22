@@ -25,6 +25,41 @@ class Currency extends Model
         });
     }
 
+    /**
+     * Le plancher impose par la passerelle, en dollars.
+     *
+     * FlexPay refuse une transaction sous deux dollars, carte comme mobile
+     * money. Ce n'est pas une preference commerciale : en dessous, le
+     * paiement echoue chez eux, et le client lit un refus sans raison.
+     *
+     * Il ne s'applique qu'au dollar, faute de taux de change : traduire ce
+     * plancher dans une autre devise demanderait une conversion que cette
+     * plateforme ne fait nulle part.
+     */
+    public const PLANCHER_PAIEMENT_USD = 2.0;
+
+    /**
+     * Le montant minimum d'un paiement dans cette devise.
+     *
+     * Zero signifie « aucun seuil ». La valeur se saisit en administration,
+     * sur la fiche de la devise : un montant n'a pas de sens sans son
+     * unite, et deux dollars ne sont pas deux francs congolais.
+     *
+     * Le dollar ne descend jamais sous le plancher de la passerelle, meme
+     * si quelqu'un ecrit moins en base. L'ecran l'interdit deja ; ce second
+     * filet couvre une valeur posee autrement.
+     */
+    public function montantMinimumPaiement(): float
+    {
+        $seuil = (float) ($this->montant_minimum_paiement ?? 0);
+
+        if (strtoupper((string) $this->code) === 'USD') {
+            return max(self::PLANCHER_PAIEMENT_USD, $seuil);
+        }
+
+        return $seuil;
+    }
+
     public function product(): HasMany
     {
         return $this->hasMany(Product::class, 'product_id');
