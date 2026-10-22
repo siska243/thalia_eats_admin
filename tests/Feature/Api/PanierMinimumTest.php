@@ -224,6 +224,119 @@ class PanierMinimumTest extends TestCase
             ->assertJsonPath('error', 'panier_sous_le_minimum');
     }
 
+    /**
+     * LE MINIMUM DE PAIEMENT, PAR DEVISE.
+     *
+     * Il valait « 2 » en dur, pour la carte seulement, et se mesurait sur le
+     * total ANNONCE par le client — sans savoir dans quelle devise ce total
+     * etait exprime. Il se regle desormais sur la fiche de la devise, vaut
+     * pour la carte comme pour le mobile money, et porte sur le montant que
+     * la passerelle va reellement prelever.
+     */
+    public function test_le_paiement_par_carte_refuse_sous_le_seuil_de_la_devise(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte();
+
+        $this->minimum(0);
+        // Le total facture vaut 5500 : on pose la barre au-dessus.
+        $currency->update(['montant_minimum_paiement' => 99999]);
+
+        $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 2))
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'montant_sous_le_minimum_paiement');
+    }
+
+    /** « Pour cart ou mobile » : le mobile money obeit a la meme barre. */
+    public function test_le_mobile_money_refuse_aussi_sous_le_seuil(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte();
+
+        $this->minimum(0);
+        $currency->update(['montant_minimum_paiement' => 99999]);
+
+        $payload = $this->payload($town, $currency, $product, 2);
+        $payload['method'] = 'mobile';
+        $payload['phone'] = '0810000000';
+
+        $this->postJson('/api/user/commande/valide', $payload)
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'montant_sous_le_minimum_paiement');
+    }
+
+    public function test_un_montant_au_dessus_du_seuil_passe(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte();
+
+        $this->minimum(0);
+        $currency->update(['montant_minimum_paiement' => 100]);
+
+        $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 2))
+            ->assertStatus(201);
+    }
+
+    /** Zero sur la devise : aucun seuil, comme avant la mesure. */
+    public function test_une_devise_sans_seuil_ne_refuse_rien(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte();
+
+        $this->minimum(0);
+        $currency->update(['montant_minimum_paiement' => 0]);
+
+        $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 1))
+            ->assertStatus(201);
+    }
+
+    /**
+     * LE SEUIL EST DANS LA DEVISE, ET N'EST PAS CONVERTI.
+     *
+     * Deux dollars et deux francs congolais ne sont pas la meme barre. Une
+     * devise qui n'a pas de seuil ne doit pas heriter de celui d'une autre.
+     */
+    public function test_le_seuil_d_une_devise_ne_s_applique_pas_a_une_autre(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte();
+
+        $this->minimum(0);
+        $currency->update(['montant_minimum_paiement' => 0]);
+
+        // Une autre devise, avec une barre tres haute : elle ne concerne pas
+        // cette commande.
+        Currency::factory()->create([
+            'code' => 'XXX',
+            'montant_minimum_paiement' => 99999,
+        ]);
+
+        $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 2))
+            ->assertStatus(201);
+    }
+
+    /** Le dollar ne descend jamais sous le plancher de la passerelle. */
+    public function test_le_dollar_ne_descend_jamais_sous_deux(): void
+    {
+        $usd = Currency::factory()->create([
+            'code' => 'USD',
+            'montant_minimum_paiement' => 0.5,
+        ]);
+
+        $this->assertSame(2.0, $usd->montantMinimumPaiement());
+    }
+
+    /** Une autre devise, elle, peut valoir zero : aucun plancher a traduire. */
+    public function test_une_autre_devise_peut_valoir_zero(): void
+    {
+        $cdf = Currency::factory()->create([
+            'code' => 'CDF',
+            'montant_minimum_paiement' => 0,
+        ]);
+
+        $this->assertSame(0.0, $cdf->montantMinimumPaiement());
+    }
+
     /** Les applications doivent pouvoir l'annoncer avant le paiement. */
     public function test_le_seuil_est_expose_aux_applications(): void
     {
