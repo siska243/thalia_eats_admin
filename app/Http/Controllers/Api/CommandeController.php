@@ -1037,10 +1037,56 @@ class CommandeController extends Controller
             QuotationService::RAISON_QUANTITE_INVALIDE,
         ];
 
+        /*
+         * UNE COTATION SANS TRANCHE NE FACTURE PAS, ELLE REFUSE.
+         *
+         * Ces deux avertissements decrivent un chiffrage que le moteur n'a
+         * pas su faire : la commune n'a aucun tarif actif, ou le sous-total
+         * sort de toutes les tranches. Le moteur rendait quand meme
+         * `disponible = true` avec des frais a 0,00 — pour rester
+         * bug-compatible avec `calculePrice.js`, qui retombe lui aussi sur 0.
+         *
+         * Sauf que les deux ne retombent pas ensemble : le navigateur
+         * calcule sur le sous-total qu'il porte, le serveur sur les prix en
+         * base. Quand ils divergent, le navigateur annonce 2,50 de livraison,
+         * le serveur n'en trouve aucune et ses zeros, faisant autorite,
+         * ecrasent le montant correct. La commande est alors livree
+         * gratuitement, frais de service compris — une perte seche sur
+         * chaque course concernee, et une commande que personne ne sait plus
+         * rapprocher dans Filament.
+         *
+         * WARNING_AUCUN_TARIF_ACTIF N'EST PAS DANS CETTE LISTE, ET C'EST
+         * VOULU. Treize communes de Kinshasa n'ont aucune grille : le
+         * navigateur n'en trouve pas non plus et affiche 0. Les deux
+         * CONCORDENT, il n'y a pas de divergence, et refuser ici fermerait
+         * ces treize communes du jour au lendemain. Leur cas se regle en
+         * back-office, en saisissant les grilles, pas en refusant les
+         * commandes. Voir le test
+         * `test_une_commune_sans_grille_livre_gratuitement_et_le_dit`.
+         *
+         * Le chemin des precommandes refuse les deux, lui, parce qu'un
+         * assistant ne doit rien engager sur un prix qu'il ne sait pas
+         * justifier. Un client devant son ecran, si.
+         *
+         * On ne touche pas au moteur : ses avertissements servent aussi au
+         * simulateur et aux suggestions de budget, qui doivent continuer de
+         * voir le cas sans le refuser. La decision appartient a l'endroit ou
+         * l'argent se decide.
+         */
+        $warnings_non_facturables = [
+            QuotationService::WARNING_HORS_TRANCHE,
+        ];
+
+        $non_facturable = array_values(
+            array_intersect($warnings_non_facturables, $quotation->warnings ?? [])
+        );
+
         $motif = null;
 
         if ($quotation !== null && ! $quotation->disponible && in_array($quotation->raison, $refus_moteur, true)) {
             $motif = $quotation->raison;
+        } elseif ($quotation !== null && $quotation->disponible && $non_facturable !== []) {
+            $motif = $non_facturable[0];
         } elseif (in_array($indisponibilite, ['produit_introuvable', 'panier_vide', 'commune_inconnue'], true)) {
             $motif = $indisponibilite;
         }
@@ -1054,7 +1100,16 @@ class CommandeController extends Controller
             return ApiResponse::BAD_REQUEST(
                 'panier_impossible_a_chiffrer',
                 __('Oups'),
-                __("Votre panier n'a pas pu être chiffré. Actualisez-le, puis réessayez.")
+                /*
+                 * Deux causes tres differentes, deux phrases : repondre
+                 * « actualisez votre panier » a quelqu'un dont la commune
+                 * n'est pas desservie le fait corriger ce qui n'est pas en
+                 * cause. Le chemin des precommandes fait deja cette
+                 * distinction.
+                 */
+                $motif === QuotationService::WARNING_AUCUN_TARIF_ACTIF
+                    ? __('Nous ne livrons pas encore à cette adresse. Choisissez une autre commune de livraison.')
+                    : __("Votre panier n'a pas pu être chiffré. Actualisez-le, puis réessayez.")
             );
         }
 
