@@ -81,10 +81,7 @@ class QuotationService
             $sous_total += (float) $product->price * $quantity;
         }
 
-        // calcul_price() applique parseFloat(sum.toFixed(2)) côté client. PHP round()
-        // diverge de toFixed(2) d'un centime sur les valeurs charnières
-        // (round(8.165,2)=8.17 contre 8.16 en JS) : sprintf reproduit toFixed.
-        $sous_total = (float) sprintf('%.2F', $sous_total);
+        $sous_total = self::arrondiClient($sous_total);
 
         if (count($restaurant_ids) > 1) {
             return Quotation::refus(self::RAISON_MULTI_RESTAURANT);
@@ -167,6 +164,37 @@ class QuotationService
     /**
      * @return Collection<int, DelivreryPrice>
      */
+    /**
+     * Le sous-total des plats, arrondi comme le client l'arrondit.
+     *
+     * `calcul_price()` applique `parseFloat(sum.toFixed(2))` côté client. PHP
+     * `round()` en diverge d'un centime sur les valeurs charnières —
+     * `round(8.165, 2)` vaut 8.17 ici et 8.16 en JS — et `sprintf` reproduit
+     * `toFixed`.
+     *
+     * Ce détail vivait au milieu de `quote()`. Le controle du panier minimum
+     * pose la MEME question, et la recopier aurait donne deux reponses
+     * differentes a un centime pres : un panier refuse ici et accepte la,
+     * sur la valeur exacte du seuil.
+     *
+     * @param  array<int, array{product: Product, quantity: int|float}>  $lines
+     */
+    public static function sousTotalDe(array $lines): float
+    {
+        $sous_total = 0.0;
+
+        foreach ($lines as $line) {
+            $sous_total += (float) $line['product']->price * (float) $line['quantity'];
+        }
+
+        return self::arrondiClient($sous_total);
+    }
+
+    private static function arrondiClient(float $montant): float
+    {
+        return (float) sprintf('%.2F', $montant);
+    }
+
     private function bracketsFor(Town $town): Collection
     {
         $id = (int) $town->id;

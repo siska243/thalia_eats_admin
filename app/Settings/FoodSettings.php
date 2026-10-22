@@ -67,6 +67,23 @@ class FoodSettings extends Settings
      */
     public bool $stock_actif;
 
+    /**
+     * Le montant minimum d'un panier.
+     *
+     * Zero signifie « aucune limite », et c'est la valeur de depart : ce
+     * reglage arrive sur une application en production, ou poser un seuil
+     * refuserait des paniers aujourd'hui acceptes sans que personne ne l'ait
+     * decide.
+     *
+     * Exprime dans la devise de la commande, celle des plats commandes. La
+     * plateforme n'a qu'une devise active a la fois.
+     *
+     * Il porte sur le SOUS-TOTAL des plats, pas sur le total paye : compter
+     * la livraison et le service ferait passer la barre a un panier qui ne
+     * l'atteint pas, et le seuil ne voudrait plus dire ce qu'il annonce.
+     */
+    public float $montant_minimum_commande;
+
     public static function group(): string
     {
         return 'food';
@@ -91,6 +108,23 @@ class FoodSettings extends Settings
             return app(self::class)->stock_actif;
         } catch (Throwable) {
             return true;
+        }
+    }
+
+    /**
+     * Le montant minimum, et zero quand les reglages ne repondent pas.
+     *
+     * Meme repli que `stockActif()` au-dessus, et meme raison : un reglage
+     * absent — deploiement en cours, migration pas encore passee — ne doit
+     * pas casser un chemin de commande. Zero ne refuse personne, c'est le
+     * repli sur lequel on peut se tromper sans consequence.
+     */
+    public static function montantMinimum(): float
+    {
+        try {
+            return (float) app(self::class)->montant_minimum_commande;
+        } catch (Throwable) {
+            return 0.0;
         }
     }
 }

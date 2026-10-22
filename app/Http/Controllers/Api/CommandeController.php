@@ -158,6 +158,73 @@ class CommandeController extends Controller
      *
      * @param  array<int, array<string, mixed>>|null  $products  Les lignes recues, portant un uid chiffre.
      */
+    /**
+     * LE PANIER MINIMUM, quand l'administration en a pose un.
+     *
+     * Le seuil se regle dans Parametres > Livraison des repas, et vaut zero
+     * par defaut : tant que personne n'y touche, rien ne change.
+     *
+     * Il porte sur le SOUS-TOTAL des plats, pas sur le total paye. Compter
+     * la livraison et le service ferait franchir la barre a un panier qui ne
+     * l'atteint pas, et le seuil ne voudrait plus dire ce qu'il annonce a
+     * l'administration.
+     *
+     * Les prix viennent de la BASE, jamais du corps de la requete : un
+     * minimum qu'on contourne en annonçant un autre montant ne protege rien.
+     * Et l'arrondi est celui de `QuotationService`, pour qu'un panier pile
+     * sur le seuil ne soit pas accepte d'un cote et refuse de l'autre.
+     */
+    private function refuserSiPanierTropPetit(?array $products, string $cle = 'product_id'): ?JsonResponse
+    {
+        $minimum = FoodSettings::montantMinimum();
+
+        // Le cas de loin le plus frequent : aucun seuil pose. On sort avant
+        // d'interroger la base.
+        if ($minimum <= 0) {
+            return null;
+        }
+
+        $quantites = [];
+
+        foreach ($products ?? [] as $ligne) {
+            $id = Cipher::Decrypt($ligne[$cle] ?? $ligne['uid'] ?? null);
+
+            if ($id === false || $id === '' || ! ctype_digit((string) $id)) {
+                continue;
+            }
+
+            $quantites[(int) $id] = ($quantites[(int) $id] ?? 0) + max(1, (int) ($ligne['quantity'] ?? 1));
+        }
+
+        if (! $quantites) {
+            return null;
+        }
+
+        $lignes = Product::query()
+            ->whereIn('id', array_keys($quantites))
+            ->get()
+            ->map(fn (Product $produit) => [
+                'product' => $produit,
+                'quantity' => $quantites[$produit->id],
+            ])
+            ->all();
+
+        $sous_total = QuotationService::sousTotalDe($lignes);
+
+        if ($sous_total >= $minimum) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            'panier_sous_le_minimum',
+            __('Panier trop petit'),
+            __('Le montant minimum pour commander est de :minimum. Votre panier est à :total.', [
+                'minimum' => rtrim(rtrim(number_format($minimum, 2, ',', ' '), '0'), ','),
+                'total' => rtrim(rtrim(number_format($sous_total, 2, ',', ' '), '0'), ','),
+            ])
+        );
+    }
+
     private function refuserSiProduitEpuise(?array $products, string $cle = 'product_id'): ?JsonResponse
     {
         $demande = [];
@@ -450,6 +517,10 @@ class CommandeController extends Controller
             }
 
             if ($refus = $this->refuserSiProduitEpuise($products)) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiPanierTropPetit($products)) {
                 return $refus;
             }
 
@@ -1141,6 +1212,10 @@ class CommandeController extends Controller
             }
 
             if ($refus = $this->refuserSiProduitEpuise($products, 'uid')) {
+                return $refus;
+            }
+
+            if ($refus = $this->refuserSiPanierTropPetit($products, 'uid')) {
                 return $refus;
             }
 

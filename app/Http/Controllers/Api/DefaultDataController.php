@@ -35,6 +35,17 @@ class DefaultDataController extends Controller
            */
             'reglages' => [
                 'position_client' => self::positionClientActive(),
+                /*
+                 * Le panier minimum, pour que l'application le dise AVANT
+                 * le paiement plutot que de laisser decouvrir le refus a la
+                 * derniere etape. Le serveur le fait respecter de toute
+                 * facon : ceci ne sert qu'a l'affichage.
+                 *
+                 * Zero signifie « aucun minimum ». Ajout pur, comme
+                 * `position_client` : les clients qui ne lisent pas cette
+                 * cle continuent de fonctionner a l'identique.
+                 */
+                'montant_minimum_commande' => FoodSettings::montantMinimum(),
             ],
         ];
     }
