@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -161,6 +162,98 @@ class ConfirmationEmailTest extends TestCase
         Sanctum::actingAs($client, ['*']);
 
         $this->postJson('/api/logout')->assertSuccessful();
+    }
+
+    /**
+     * LE REFUS APPARTIENT A LA CONNEXION.
+     *
+     * Avant, `login` n'avait jamais regarde `email_verified_at` : il emettait
+     * le jeton, la connexion reussissait, le client voyait son nom dans
+     * l'en-tete — et le garde refusait tout ce qu'il touchait ensuite. Il
+     * etait dedans sans pouvoir rien faire, et rien ne lui disait ou aller.
+     */
+    public function test_la_connexion_refuse_un_compte_non_confirme(): void
+    {
+        $this->exigerDepuis();
+
+        User::factory()->create([
+            'email' => 'oublie@thalia.test',
+            'password' => Hash::make('leBonMotDePasse1'),
+            'email_verified_at' => null,
+            'created_at' => now(),
+        ]);
+
+        $reponse = $this->postJson('/api/login', [
+            'email' => 'oublie@thalia.test',
+            'password' => 'leBonMotDePasse1',
+        ]);
+
+        $reponse->assertStatus(400)
+            ->assertJsonPath('error', 'adresse_non_confirmee');
+
+        // Aucun jeton : c'est tout l'objet du refus. Un jeton emis puis
+        // refuse partout, c'est l'etat d'avant.
+        $this->assertNull($reponse->json('data.token'));
+    }
+
+    /** Le code machine doit etre la : c'est lui qui route vers l'ecran. */
+    public function test_le_refus_de_connexion_porte_le_code_attendu_par_les_clients(): void
+    {
+        $this->exigerDepuis();
+
+        User::factory()->create([
+            'email' => 'oublie2@thalia.test',
+            'password' => Hash::make('leBonMotDePasse1'),
+            'email_verified_at' => null,
+            'created_at' => now(),
+        ]);
+
+        $this->postJson('/api/login', [
+            'email' => 'oublie2@thalia.test',
+            'password' => 'leBonMotDePasse1',
+        ])->assertJsonStructure(['title', 'message', 'error']);
+    }
+
+    /**
+     * ON NE REVELE PAS L'EXISTENCE DU COMPTE.
+     *
+     * Le refus vient APRES la verification du mot de passe. Sinon il suffirait
+     * d'essayer une adresse avec n'importe quel mot de passe pour apprendre
+     * qu'elle existe et qu'elle n'est pas encore confirmee.
+     */
+    public function test_un_mauvais_mot_de_passe_ne_revele_pas_le_compte_non_confirme(): void
+    {
+        $this->exigerDepuis();
+
+        User::factory()->create([
+            'email' => 'oublie3@thalia.test',
+            'password' => Hash::make('leBonMotDePasse1'),
+            'email_verified_at' => null,
+            'created_at' => now(),
+        ]);
+
+        $this->postJson('/api/login', [
+            'email' => 'oublie3@thalia.test',
+            'password' => 'leMauvaisMotDePasse1',
+        ])->assertJsonPath('message', 'Email ou mot de passe incorrect');
+    }
+
+    /** Un ancien compte non confirme se connecte toujours : meme pivot. */
+    public function test_la_connexion_laisse_passer_un_compte_anterieur_au_pivot(): void
+    {
+        $this->exigerDepuis('2026-01-01');
+
+        User::factory()->create([
+            'email' => 'ancien@thalia.test',
+            'password' => Hash::make('leBonMotDePasse1'),
+            'email_verified_at' => null,
+            'created_at' => '2025-06-01 10:00:00',
+        ]);
+
+        $this->postJson('/api/login', [
+            'email' => 'ancien@thalia.test',
+            'password' => 'leBonMotDePasse1',
+        ])->assertSuccessful();
     }
 
     /** La reservation de vehicule obeit a la meme regle. */

@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use App\Wrappers\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -39,6 +38,12 @@ use Symfony\Component\HttpFoundation\Response;
  * On ne marque pas non plus les anciens comptes comme « verifies » pour s'en
  * debarrasser : ce serait ecrire une chose fausse en base, et on ne saurait
  * plus jamais qui a reellement prouve son adresse.
+ *
+ * La regle — « ce compte doit-il confirmer ? » — vit sur le modele, dans
+ * `User::doitConfirmerSonAdresse()`. Ce garde ne decide pas, il applique.
+ * La connexion pose exactement la meme question, et refuse d'emettre un
+ * jeton : voir Api\AuthController::login(). Ici on ne tient plus que la
+ * liste des trois exceptions.
  */
 class ExigerAdresseConfirmee
 {
@@ -46,15 +51,14 @@ class ExigerAdresseConfirmee
     {
         $utilisateur = $request->user();
 
-        if (! $utilisateur || $utilisateur->email_verified_at !== null) {
+        // La regle elle-meme vit sur le modele : la connexion pose la meme
+        // question avant d'emettre un jeton, et deux lectures de la date
+        // pivot finiraient par diverger.
+        if (! $utilisateur?->doitConfirmerSonAdresse()) {
             return $next($request);
         }
 
         if ($this->toujoursPermis($request)) {
-            return $next($request);
-        }
-
-        if (! $this->tenuDeConfirmer($utilisateur->created_at)) {
             return $next($request);
         }
 
@@ -85,26 +89,5 @@ class ExigerAdresseConfirmee
             'api.logout',
             'api.account',
         ) || $request->is('api/user', 'api/user/account/update');
-    }
-
-    /**
-     * Ce compte est-il soumis a la regle ?
-     *
-     * La date vient de la configuration : elle se pose au deploiement et ne
-     * bouge plus. Vide, la regle ne s'applique a personne — c'est l'etat
-     * d'avant, et il suffit de ne rien regler pour revenir en arriere si la
-     * mesure genait.
-     */
-    private function tenuDeConfirmer(?Carbon $creeLe): bool
-    {
-        $pivot = config('securite.confirmation_email.exigee_depuis');
-
-        if (! $pivot) {
-            return false;
-        }
-
-        // Un compte sans date de creation est forcement ancien : on ne va pas
-        // bloquer quelqu'un sur une donnee manquante.
-        return $creeLe !== null && $creeLe->greaterThanOrEqualTo(Carbon::parse($pivot));
     }
 }
