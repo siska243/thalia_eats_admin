@@ -52,6 +52,15 @@ class CurrencyResource extends Resource
                         TextInput::make('icon')
                             ->maxLength(255),
 
+                        TextInput::make('montant_minimum_paiement')
+                            ->label('Montant minimum de paiement')
+                            ->numeric()
+                            ->minValue(0)
+                            ->step(0.01)
+                            ->default(0)
+                            ->required()
+                            ->helperText("En dessous, le paiement est refusé — carte comme mobile money. Le seuil est exprimé dans CETTE devise : la plateforme ne convertit rien. Laisser à 0 pour n'imposer aucun minimum. En dollars, la passerelle refuse de toute façon sous 2."),
+
                     ]),
 
             ]);
@@ -67,6 +76,11 @@ class CurrencyResource extends Resource
                     ->searchable(),
                 TextColumn::make('icon')
                     ->searchable(),
+
+                TextColumn::make('montant_minimum_paiement')
+                    ->label('Minimum de paiement')
+                    ->numeric(decimalPlaces: 2)
+                    ->sortable(),
 
                 ToggleColumn::make('is_active'),
                 TextColumn::make('created_at')

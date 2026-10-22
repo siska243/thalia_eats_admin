@@ -8,6 +8,7 @@ use App\Http\Requests\CommandeRequest;
 use App\Http\Resources\CommandeResource;
 use App\Models\Commande;
 use App\Models\CommandeProduct;
+use App\Models\Currency;
 use App\Models\Payement;
 use App\Models\Product;
 use App\Models\Restaurant;
@@ -1350,10 +1351,6 @@ class CommandeController extends Controller
             $commande->price_delivery = $pricing['frais_livraison'];
             $commande->price_service = $pricing['service_price'];
 
-            if ($total_price <= 2 && $method == 'cart') {
-                return ApiResponse::BAD_REQUEST(__('Oups'), __('Error paiement'), __("Pour le paiement par cart le montant minimum c'est 2USD"));
-            }
-
             $commande->town_id = $town->id;
             $commande->reference_adresse = ! empty($adresse['reference']) ? $adresse['reference'] : null;
             $commande->adresse_delivery = $adresse['adresse'];
@@ -1556,6 +1553,66 @@ class CommandeController extends Controller
 
             $user_name = auth()->user()->name;
             $user_email = auth()->user()->email;
+
+            /*
+             * LE MINIMUM DE PAIEMENT, REGLABLE ET PAR DEVISE.
+             *
+             * La regle existait, ecrite en dur :
+             *
+             *     if ($total_price <= 2 && $method == 'cart')
+             *
+             * Trois defauts, corriges ensemble.
+             *
+             * 1. Elle n'etait pas reglable. Le seuil se saisit desormais
+             *    sur la fiche de la devise, en administration.
+             *
+             * 2. Elle ne valait que pour la carte. Le proprietaire la veut
+             *    « pour cart ou mobile » : la passerelle refuse les petits
+             *    montants dans les deux cas.
+             *
+             * 3. Elle comparait un nombre a « 2 » SANS SAVOIR DANS QUELLE
+             *    DEVISE ce nombre etait exprime. Deux dollars et deux
+             *    francs congolais ne sont pas la meme barre : sur une
+             *    commande en CDF, la regle ne refusait rien, et sur une
+             *    commande en USD elle refusait au mauvais endroit des que
+             *    le seuil voulu changeait. Le seuil appartient donc a la
+             *    devise, pas au code.
+             *
+             * Elle porte sur `$montant_facture`, le montant que la
+             * passerelle va reellement prelever, et non sur le total
+             * annonce par le client. Un telephone qui annonçait zero — ce
+             * qu'il faisait, son ecran et sa requete ne comptant pas la
+             * meme chose — voyait sinon son paiement refuse sur un panier
+             * parfaitement normal.
+             *
+             * C'est pourquoi elle se trouve APRES l'ecriture de la
+             * commande, comme le controle du numero juste en dessous : le
+             * montant facture et la devise facturee n'existent pas avant.
+             * Une commande refusee ici reste non reglee et sera reprise
+             * telle quelle au prochain essai, `Commande::nonReglee()` la
+             * retrouvant.
+             *
+             * Sans devise resolue, on ne refuse pas : un seuil sans unite
+             * ne veut rien dire, et bloquer un paiement sur une inconnue
+             * serait pire que de le laisser passer.
+             */
+            $devise_du_seuil = $devise_facturee
+                ?? (! empty($pricing['currency']['id'])
+                    ? Currency::query()->find($pricing['currency']['id'])
+                    : null);
+
+            $minimum_paiement = $devise_du_seuil?->montantMinimumPaiement() ?? 0.0;
+
+            if ($minimum_paiement > 0 && (float) $montant_facture < $minimum_paiement) {
+                return ApiResponse::BAD_REQUEST(
+                    'montant_sous_le_minimum_paiement',
+                    __('Montant trop faible'),
+                    __('Le montant minimum pour payer est de :minimum :devise. Complétez votre panier.', [
+                        'minimum' => rtrim(rtrim(number_format($minimum_paiement, 2, ',', ' '), '0'), ','),
+                        'devise' => $devise_du_seuil->code,
+                    ])
+                );
+            }
 
             if ($method != 'cart') {
                 $phone_check = new LibPhoneNumber($phone);
