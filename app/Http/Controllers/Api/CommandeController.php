@@ -348,6 +348,10 @@ class CommandeController extends Controller
 
             $town = Town::query()->where('id', Cipher::Decrypt($adresse['town']['uid']))->first();
 
+            if ($refus = $this->refuserSiCommuneInconnue($town)) {
+                return $refus;
+            }
+
             // Avant toute ecriture : une commande posee puis refusee laisserait
             // une ligne orpheline, et le client la verrait dans sa liste.
             if ($refus = $this->refuserSiRestaurantTropLoin(
@@ -1030,6 +1034,37 @@ class CommandeController extends Controller
      *   decider de perdre une commande.
      * Ces trois-la sont journalises en alerte : ils doivent se voir.
      */
+    /**
+     * UNE COMMANDE SANS COMMUNE RESOLUE NE VA PAS PLUS LOIN.
+     *
+     * `store()` et `valide()` faisaient tous deux `$commande->town_id =
+     * $town->id` sans verifier que la commune avait ete trouvee. Une adresse
+     * dont le slug ne tombe sur rien — commune desactivee depuis, adresse
+     * enregistree avant un renommage, champ absent du corps de la requete —
+     * donnait donc « Attempt to read property id on null », rattrape par le
+     * catch general et rendu en 500.
+     *
+     * Cote client, cela s'affiche « erreur de paiement », sans rien dire de
+     * ce qu'il faut corriger. Le web n'en souffrait pas : son adresse vient
+     * d'un panier construit sur la meme page, avec sa commune. Le telephone,
+     * lui, relit une adresse enregistree il y a des semaines.
+     *
+     * Le garde est ici, dans un seul endroit, et non recopie chez les deux
+     * appelants : le troisieme a venir l'oublierait.
+     */
+    private function refuserSiCommuneInconnue(?Town $town): ?JsonResponse
+    {
+        if ($town !== null) {
+            return null;
+        }
+
+        return ApiResponse::BAD_REQUEST(
+            'commune_inconnue',
+            __('Adresse incomplète'),
+            __("Nous n'avons pas reconnu la commune de cette adresse. Choisissez-la de nouveau avant de payer.")
+        );
+    }
+
     private function refuserFauteDeCotation(?Quotation $quotation, ?string $indisponibilite, $reference): ?JsonResponse
     {
         $refus_moteur = [
@@ -1202,6 +1237,12 @@ class CommandeController extends Controller
             $adresse = $request->input('address');
 
             $town = Town::query()->where('slug', ! empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
+
+            // Avant le controle de distance, qui prend deja cette commune, et
+            // bien avant l'ecriture de `town_id` qui la lisait sans garde.
+            if ($refus = $this->refuserSiCommuneInconnue($town)) {
+                return $refus;
+            }
 
             // Avant tout appel a la passerelle, comme le refus de restaurant
             // ferme juste au-dessus : un debit lance pour une livraison
