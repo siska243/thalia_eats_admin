@@ -67,6 +67,24 @@ class Booking extends Model
         self::STATUS_IN_PROGRESS,
     ];
 
+    /**
+     * Les statuts qui retiennent encore le client a nous.
+     *
+     * Une troisieme liste, et non `COURSE_ENGAGEE` reutilisee : celle-la dit
+     * ce qu'on a le droit de montrer, celle-ci ce qui empeche un compte de
+     * partir. `pending_payment` en fait partie alors qu'il ne retient aucun
+     * creneau — un acompte attendu est une dette, et s'effacer ne doit pas
+     * l'effacer avec soi.
+     *
+     * Elle se lit par `statutEffectif()`, jamais par la colonne nue : une
+     * reservation perimee ne retient plus personne.
+     */
+    public const STATUTS_ENGAGEANTS = [
+        self::STATUS_PENDING_PAYMENT,
+        self::STATUS_CONFIRMED,
+        self::STATUS_IN_PROGRESS,
+    ];
+
     protected $guarded = [];
 
     /*

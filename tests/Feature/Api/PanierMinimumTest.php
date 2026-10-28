@@ -152,9 +152,10 @@ class PanierMinimumTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency, $product] = $this->contexte();
 
-        $this->minimum(5000);
+        $this->minimum(6000);
 
-        // 1500 x 2 = 3000, sous les 5000 exiges.
+        // 1500 x 2 = 3000 de plats, plus 2500 de livraison et de service :
+        // 5500 au total, sous les 6000 exiges.
         $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 2))
             ->assertStatus(400)
             ->assertJsonPath('error', 'panier_sous_le_minimum');
@@ -178,20 +179,22 @@ class PanierMinimumTest extends TestCase
         Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency, $product] = $this->contexte();
 
-        $this->minimum(3000);
+        // 3000 de plats plus 2500 de livraison et de service.
+        $this->minimum(5500);
 
         $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 2))
             ->assertStatus(201);
     }
 
     /**
-     * LE SEUIL PORTE SUR LES PLATS, PAS SUR LE TOTAL PAYE.
+     * LE SEUIL PORTE SUR LE TOTAL GENERAL, LIVRAISON COMPRISE.
      *
-     * 1500 x 2 = 3000 de plats, plus 2500 de frais, font 5500 payes. Avec un
-     * seuil a 5000, compter les frais ferait passer ce panier — et le reglage
-     * ne voudrait plus dire ce qu'il annonce a l'administration.
+     * Arbitrage du proprietaire, le 28 octobre : « non pas sous-total mais le
+     * total general ». 1500 x 2 = 3000 de plats, plus 2500 de livraison et de
+     * service, font 5500. Avec un seuil a 5000, cette commande passe — alors
+     * que le sous-total seul, 3000, l'aurait fait refuser.
      */
-    public function test_les_frais_ne_font_pas_franchir_le_seuil(): void
+    public function test_les_frais_comptent_dans_le_seuil(): void
     {
         Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency, $product] = $this->contexte();
@@ -199,22 +202,24 @@ class PanierMinimumTest extends TestCase
         $this->minimum(5000);
 
         $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 2))
-            ->assertStatus(400)
-            ->assertJsonPath('error', 'panier_sous_le_minimum');
+            ->assertStatus(201);
     }
 
     /**
      * ON NE CONTOURNE PAS LE SEUIL EN ANNONÇANT UN AUTRE MONTANT.
      *
-     * Les prix viennent de la base, jamais du corps de la requete : c'est la
-     * meme doctrine que le reste des chemins d'argent de ce controleur.
+     * Les montants viennent de la base et de la cotation du serveur, jamais
+     * du corps de la requete : c'est la meme doctrine que le reste des
+     * chemins d'argent de ce controleur. Le total general est recalcule, pas
+     * recopie — sans quoi il suffirait d'annoncer un gros chiffre pour
+     * franchir le seuil.
      */
     public function test_un_total_annonce_genereux_ne_contourne_pas_le_seuil(): void
     {
         Sanctum::actingAs(User::factory()->create(), ['*']);
         [$town, $currency, $product] = $this->contexte();
 
-        $this->minimum(5000);
+        $this->minimum(6000);
 
         $payload = $this->payload($town, $currency, $product, 2);
         $payload['total_price'] = 999999;

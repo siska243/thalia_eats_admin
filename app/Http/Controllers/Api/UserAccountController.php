@@ -31,6 +31,68 @@ class UserAccountController extends Controller
         ]);
     }
 
+    /**
+     * Suppression du compte par son titulaire.
+     *
+     * Exigee par Google Play de toute application qui permet de creer un
+     * compte : depuis l'application, et depuis une adresse web accessible
+     * sans l'installer.
+     *
+     * Le mot de passe est redemande, sauf pour les comptes Google : ceux-la
+     * n'en ont jamais choisi — `GoogleAuthController` leur pose un
+     * `md5(Str::random(10))` que personne ne connait. L'exiger les
+     * empecherait de partir, et une porte de sortie qui ne s'ouvre pas ne
+     * vaut pas mieux que pas de porte.
+     *
+     * La suppression elle-meme vit sur le modele, pas ici : l'administration
+     * et un futur traitement de demandes web poseront la meme question.
+     */
+    public function destroy(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user->google_id) {
+            $validator = Validator::make($request->all(), [
+                'password' => 'required|string',
+            ], ['password.required' => 'Votre mot de passe est requis pour confirmer la suppression.']);
+
+            if ($validator->fails()) {
+                return ApiResponse::BAD_REQUEST(
+                    $validator->errors(),
+                    'Confirmation requise',
+                    'Votre mot de passe est requis pour confirmer la suppression.'
+                );
+            }
+
+            if (! Hash::check($request->input('password'), $user->password)) {
+                return ApiResponse::BAD_REQUEST(
+                    ['password' => ['Mot de passe incorrect.']],
+                    'Mot de passe incorrect',
+                    'Le mot de passe saisi ne correspond pas a celui du compte.'
+                );
+            }
+        }
+
+        $raisons = $user->engagementsEnCours();
+
+        if ($raisons !== []) {
+            return ApiResponse::BAD_REQUEST(
+                ['engagements' => $raisons],
+                'Suppression impossible',
+                'Votre compte ne peut pas être supprimé tant que '.implode(' et ', $raisons)
+                    .'. Annulez-la ou attendez la fin, puis réessayez.'
+            );
+        }
+
+        $user->supprimerLeCompte();
+
+        return ApiResponse::SUCCESS_DATA(
+            null,
+            'Compte supprimé',
+            'Votre compte a été supprimé et vos données personnelles effacées. Vous avez été déconnecté.'
+        );
+    }
+
     public function expo(Request $request)
     {
         $user = auth()->user();
@@ -147,13 +209,5 @@ class UserAccountController extends Controller
         } catch (Exception $e) {
             return ApiResponse::SERVER_ERROR($e);
         }
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(User $user)
-    {
-        //
     }
 }
