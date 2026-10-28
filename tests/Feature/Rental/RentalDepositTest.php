@@ -103,6 +103,34 @@ class RentalDepositTest extends TestCase
         ]);
     }
 
+    /**
+     * La passerelle repond, mais sans transaction.
+     *
+     * `FlexPay::sendData()` rend le corps de la reponse quel que soit le code
+     * HTTP : une erreur 401 ou 500 revenait donc comme une reponse normale,
+     * sans `code`, et le service repondait « ok » avec une URL nulle. Le
+     * client lisait « momentanement indisponible » et, pire, sa reservation
+     * restait creee et impayee — elle lui interdisait ensuite d'en prendre
+     * une autre. C'est exactement ce qui est arrive sur R-A7XIMHUWPP.
+     */
+    public function test_une_reponse_sans_transaction_est_un_refus(): void
+    {
+        Http::fake(['*' => Http::response(['message' => 'Unauthorized'], 401)]);
+
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->postJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id).'/deposit', [
+            'method' => 'cart', 'phone' => '',
+        ])->assertStatus(400);
+
+        // Aucune tentative tracee : il n'y a pas eu de transaction.
+        $this->assertSame(
+            0,
+            BookingPayment::query()->where('booking_id', $booking->id)->count(),
+        );
+    }
+
     public function test_le_client_engage_l_acompte(): void
     {
         $this->passerelleAccepte();

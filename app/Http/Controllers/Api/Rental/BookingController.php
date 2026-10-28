@@ -255,6 +255,13 @@ class BookingController extends Controller
             'reservation_expiree' => 'Cette réservation a expiré faute de paiement. Réservez à nouveau.',
             'creneau_passe' => 'Ce créneau est déjà passé.',
             'paiement_refuse' => "Le paiement n'a pas pu être engagé, réessayez.",
+            /*
+             * La passerelle a repondu, mais sans transaction : cle du
+             * marchand, format, ou panne de son cote. Le client n'y peut
+             * rien et son creneau a ete relache — le dire autrement
+             * l'enverrait verifier sa carte pour rien.
+             */
+            'paiement_indisponible' => 'Le paiement est momentanément indisponible. Réessayez dans quelques minutes, ou choisissez un autre moyen de paiement.',
             default => "Cette réservation n'a pas pu être enregistrée.",
         };
     }
