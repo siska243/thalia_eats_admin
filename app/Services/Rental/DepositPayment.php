@@ -137,6 +137,24 @@ class DepositPayment
          */
         $this->tracer($booking, $orderNumber, $method, $phone);
 
+        /*
+         * En carte, l'absence d'URL est un echec silencieux.
+         *
+         * Le client lit « Le paiement par carte est momentanement
+         * indisponible » et personne ne sait pourquoi : la passerelle a
+         * repondu sans code d'erreur, mais sans page de saisie non plus. La
+         * reponse brute est donc journalisee — c'est la seule trace qui
+         * permette de dire si la cle du marchand manque, si le montant est
+         * refuse, ou si le format a change.
+         */
+        if ($method !== 'mobile' && empty($result['url'])) {
+            Log::warning('FlexPay carte : aucune URL de paiement rendue', [
+                'booking_id' => $booking->id,
+                'reference' => $booking->reference,
+                'reponse' => $result,
+            ]);
+        }
+
         return [
             'ok' => true,
             'orderNumber' => $orderNumber,
