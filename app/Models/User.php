@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -100,6 +103,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     protected $casts = [
         'email_verified_at' => 'datetime',
         'blocked_at' => 'datetime',
+        'account_deleted_at' => 'datetime',
         /*
          * Le secret TOTP et les codes de secours sont CHIFFRES en base.
          *
@@ -243,6 +247,127 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     public function debloquer(): void
     {
         $this->forceFill(['blocked_at' => null, 'blocked_reason' => null])->save();
+    }
+
+    // --- Suppression du compte par son titulaire ---------------------------
+
+    public function compteSupprime(): bool
+    {
+        return $this->account_deleted_at !== null;
+    }
+
+    /**
+     * Ce qui retient encore ce compte, dit en francais.
+     *
+     * Rend la liste des raisons de refuser la suppression. Vide, le compte
+     * peut partir. Le proprietaire : « on ne peut pas supprimer si une
+     * commande est en cours, il doit soit annuler sa commande soit attendre
+     * que ca se termine. »
+     *
+     * Les deux listes de statuts viennent des modeles concernes et ne sont
+     * pas recopiees ici : `Commande::STATUTS_EN_COURS` et
+     * `Booking::STATUTS_ENGAGEANTS`. Le filtre repasse par `statutEffectif()`
+     * apres la requete, parce qu'une commande ou une reservation perimee
+     * porte encore son ancien `status_id` en base alors qu'elle ne retient
+     * plus rien — c'est l'ecart connu des lignes heritees.
+     */
+    public function engagementsEnCours(): array
+    {
+        $raisons = [];
+
+        $commandes = $this->commande()
+            ->whereIn('status_id', Commande::STATUTS_EN_COURS)
+            ->nonAnnulee()
+            ->get()
+            ->filter(fn (Commande $commande): bool => in_array(
+                $commande->statutEffectif(),
+                Commande::STATUTS_EN_COURS,
+                true
+            ));
+
+        if ($commandes->isNotEmpty()) {
+            $raisons[] = $commandes->count() === 1
+                ? 'une commande est encore en cours'
+                : $commandes->count().' commandes sont encore en cours';
+        }
+
+        $courses = Booking::query()
+            ->where('user_id', $this->id)
+            ->whereIn('status', Booking::STATUTS_ENGAGEANTS)
+            ->get()
+            ->filter(fn (Booking $course): bool => in_array(
+                $course->statutEffectif(),
+                Booking::STATUTS_ENGAGEANTS,
+                true
+            ));
+
+        if ($courses->isNotEmpty()) {
+            $raisons[] = $courses->count() === 1
+                ? 'une location est encore en cours'
+                : $courses->count().' locations sont encore en cours';
+        }
+
+        return $raisons;
+    }
+
+    /**
+     * Anonymise le compte et le ferme.
+     *
+     * La ligne `users` reste : commandes, paiements et livraisons la
+     * referencent, et les effacer effacerait la comptabilite. Ce qui part,
+     * c'est tout ce qui designe une personne.
+     *
+     * L'adresse est remplacee plutot que videe : la colonne est UNIQUE, et
+     * deux comptes supprimes se marcheraient dessus. Le domaine `.invalid`
+     * est reserve par la RFC 2606, aucun courriel ne pourra jamais y partir.
+     *
+     * Le mot de passe est remplace par une valeur aleatoire que personne ne
+     * connait : le laisser en place ferait d'un ancien mot de passe une cle
+     * encore valable le jour ou le blocage sauterait.
+     *
+     * `bloquer()` ferme la porte, et c'est volontairement le meme chemin que
+     * le blocage administratif : il efface deja les jetons Sanctum, et
+     * `estBloque()` est relu a la connexion comme par le garde
+     * `RefuserCompteBloque`. Une suppression n'a pas a inventer son propre
+     * verrou — un second verrou serait un second endroit ou se tromper.
+     *
+     * Le restaurant n'est pas touche, seul son gerant s'en detache : le
+     * catalogue, les commandes et l'historique de l'enseigne survivent a
+     * celui qui la tenait.
+     */
+    public function supprimerLeCompte(): void
+    {
+        DB::transaction(function (): void {
+            $this->restaurant()->update(['user_id' => null]);
+
+            UserAdresse::query()->where('user_id', $this->id)->delete();
+            FcmToken::query()->where('user_id', $this->id)->delete();
+            ExpoPushToken::query()->where('user_id', $this->id)->delete();
+            UserNotificationTokens::query()->where('user_id', $this->id)->delete();
+
+            $this->forceFill([
+                'name' => 'Compte supprimé',
+                'last_name' => null,
+                'email' => 'supprime+'.$this->id.'@thaliaeats.invalid',
+                'slug' => 'compte-supprime-'.$this->id,
+                'phone' => null,
+                'street' => null,
+                'number_street' => null,
+                'principal_adresse' => null,
+                'town_id' => null,
+                'google_id' => null,
+                'social_media_avatar' => null,
+                'expo_push_token' => null,
+                'devices' => null,
+                'otp' => null,
+                'otp_expire_at' => null,
+                'api_token' => null,
+                'password' => Hash::make(Str::random(64)),
+                'account_deleted_at' => now(),
+            ])->save();
+
+            $this->bloquer('Compte supprimé par son titulaire');
+        });
     }
 
     /**

@@ -33,6 +33,16 @@ class UserResource extends JsonResource
             'number_street' => $this->resource->number_street,
             'town_id' => $this->resource->town,
             'slug' => $this->resource->slug,
+            /*
+             * Un booleen, jamais l'identifiant Google lui-meme.
+             *
+             * Les deux clients en ont besoin pour une seule raison : un
+             * compte Google n'a jamais choisi de mot de passe, et l'ecran de
+             * suppression ne doit pas lui en reclamer un. Le serveur prend la
+             * meme decision de son cote ; cette cle ne fait que l'annoncer a
+             * l'avance, pour ne pas montrer un champ qui sera ignore.
+             */
+            'compte_google' => $this->resource->google_id !== null,
             'phone_mask' => Str::mask($this->resource->phone, '*', 2),
             'full_name_mask' => Str::mask($this->resource->last_name.' '.$this->resource->name, '*', 3),
         ];

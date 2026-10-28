@@ -149,6 +149,13 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
         Route::post('/update/password', 'current_password');
         Route::post('/update/adresse', 'update_adresse');
 
+        /*
+         * Suppression du compte par son titulaire, exigee par Google Play.
+         * DELETE et non POST : l'action est la suppression de la ressource
+         * que ce groupe expose deja en lecture et en mise a jour.
+         */
+        Route::delete('/', 'destroy');
+
     });
 
     /*
