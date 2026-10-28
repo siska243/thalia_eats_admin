@@ -165,17 +165,28 @@ class CommandeController extends Controller
      * Le seuil se regle dans Parametres > Livraison des repas, et vaut zero
      * par defaut : tant que personne n'y touche, rien ne change.
      *
-     * Il porte sur le SOUS-TOTAL des plats, pas sur le total paye. Compter
-     * la livraison et le service ferait franchir la barre a un panier qui ne
-     * l'atteint pas, et le seuil ne voudrait plus dire ce qu'il annonce a
-     * l'administration.
+     * Il porte sur le TOTAL GENERAL — plats, livraison et service — et non
+     * sur le seul sous-total des plats. C'est l'arbitrage du proprietaire du
+     * 28 octobre : le seuil est celui de la commande, pas celui du panier.
      *
-     * Les prix viennent de la BASE, jamais du corps de la requete : un
-     * minimum qu'on contourne en annonçant un autre montant ne protege rien.
-     * Et l'arrondi est celui de `QuotationService`, pour qu'un panier pile
-     * sur le seuil ne soit pas accepte d'un cote et refuse de l'autre.
+     * Les montants viennent du SERVEUR, jamais du corps de la requete.
+     * `$request->pricing` est fourni par le client et ne vaut rien comme
+     * garde : un minimum qu'on contourne en annoncant un autre montant ne
+     * protege rien. La cotation est donc recalculee ici a partir des prix en
+     * base et de la commune de livraison, par `QuotationService` — le meme
+     * arrondi que partout, pour qu'une commande pile sur le seuil ne soit pas
+     * acceptee d'un cote et refusee de l'autre.
+     *
+     * Sans commune, il n'y a pas de livraison a chiffrer : la garde se retire
+     * plutot que de comparer un total incomplet. L'appelant qui n'a pas
+     * encore resolu l'adresse la rappellera quand il l'aura.
+     *
+     * Une cotation refusee — hors zone, hors tranche, aucun tarif actif — se
+     * retire aussi : ce refus-la a sa propre garde et son propre message, et
+     * en poser un second dirait au client que son panier est trop petit alors
+     * que c'est sa commune qui n'est pas desservie.
      */
-    private function refuserSiPanierTropPetit(?array $products, string $cle = 'product_id'): ?JsonResponse
+    private function refuserSiPanierTropPetit(?array $products, string $cle = 'product_id', ?Town $town = null): ?JsonResponse
     {
         $minimum = FoodSettings::montantMinimum();
 
@@ -210,18 +221,26 @@ class CommandeController extends Controller
             ])
             ->all();
 
-        $sous_total = QuotationService::sousTotalDe($lignes);
+        if (! $town) {
+            return null;
+        }
 
-        if ($sous_total >= $minimum) {
+        $cotation = app(QuotationService::class)->quote($lignes, $town);
+
+        if (! $cotation->disponible) {
+            return null;
+        }
+
+        if ($cotation->total >= $minimum) {
             return null;
         }
 
         return ApiResponse::BAD_REQUEST(
             'panier_sous_le_minimum',
-            __('Panier trop petit'),
-            __('Le montant minimum pour commander est de :minimum. Votre panier est à :total.', [
+            __('Commande trop petite'),
+            __('Le montant minimum pour commander est de :minimum, livraison comprise. Votre commande est à :total.', [
                 'minimum' => rtrim(rtrim(number_format($minimum, 2, ',', ' '), '0'), ','),
-                'total' => rtrim(rtrim(number_format($sous_total, 2, ',', ' '), '0'), ','),
+                'total' => rtrim(rtrim(number_format($cotation->total, 2, ',', ' '), '0'), ','),
             ])
         );
     }
@@ -525,7 +544,13 @@ class CommandeController extends Controller
                 return $refus;
             }
 
-            if ($refus = $this->refuserSiPanierTropPetit($products)) {
+            /*
+             * La commune vient de la commande en cours, pas de la requete :
+             * c'est elle qui porte la livraison a chiffrer. Une commande qui
+             * n'en a pas encore ne peut pas etre jugee sur un total general,
+             * et la garde se retire — le reglement la rappellera.
+             */
+            if ($refus = $this->refuserSiPanierTropPetit($products, 'product_id', $commande?->town)) {
                 return $refus;
             }
 
@@ -1306,16 +1331,22 @@ class CommandeController extends Controller
                 return $refus;
             }
 
-            if ($refus = $this->refuserSiPanierTropPetit($products, 'uid')) {
-                return $refus;
-            }
-
             $adresse = $request->input('address');
 
             $town = Town::query()->where('slug', ! empty($adresse['town']['slug']) ? $adresse['town']['slug'] : null)->first();
 
             // Avant le controle de distance, qui prend deja cette commune, et
             // bien avant l'ecriture de `town_id` qui la lisait sans garde.
+            /*
+             * Le minimum se juge sur le TOTAL GENERAL, livraison comprise :
+             * il ne peut donc etre verifie qu'une fois la commune connue.
+             * C'est pour cela que cette garde est posee ici, et non plus haut
+             * avec les autres.
+             */
+            if ($refus = $this->refuserSiPanierTropPetit($products, 'uid', $town)) {
+                return $refus;
+            }
+
             if ($refus = $this->refuserSiCommuneInconnue($town)) {
                 return $refus;
             }
