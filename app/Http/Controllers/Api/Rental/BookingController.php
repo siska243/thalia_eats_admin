@@ -8,11 +8,13 @@ use App\Http\Requests\Rental\BookingRequest;
 use App\Http\Requests\Rental\DepositRequest;
 use App\Http\Resources\Rental\BookingResource;
 use App\Models\Booking;
+use App\Models\BookingPayment;
 use App\Models\Vehicle;
 use App\Services\Rental\BookingCreator;
 use App\Services\Rental\BookingPricing;
 use App\Services\Rental\BookingWorkflow;
 use App\Services\Rental\DepositPayment;
+use App\Services\Rental\DepositWebhook;
 use App\Settings\RentalSettings;
 use App\Wrappers\ApiResponse;
 use App\Wrappers\Cipher;
@@ -28,6 +30,7 @@ class BookingController extends Controller
         private readonly BookingCreator $creator,
         private readonly BookingWorkflow $workflow,
         private readonly DepositPayment $deposit,
+        private readonly DepositWebhook $webhook,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -139,6 +142,45 @@ class BookingController extends Controller
                 // ouvrir. En mobile money, le client valide sur son telephone.
                 'url' => $resultat['url'],
             ],
+        ]);
+    }
+
+    /**
+     * Ou en est l'acompte, d'apres la passerelle elle-meme.
+     *
+     * Le webhook est le chemin normal, mais il ne revient pas toujours : une
+     * instance de developpement n'est pas joignable, et un reseau peut le
+     * perdre. L'ecran d'attente restait alors a tourner indefiniment sur une
+     * reservation que FlexPay savait deja reglee — ou deja perdue.
+     *
+     * Rien n'est reimplemente ici : `DepositWebhook::traiter()` interroge
+     * deja la passerelle, confronte reference et montant, puis confirme ou
+     * echoue. L'appeler depuis l'ecran du client, c'est lui donner le meme
+     * verdict par l'autre porte — et une seule regle a maintenir.
+     *
+     * Sans numero de transaction, il n'y a rien a verifier : l'acompte n'a
+     * jamais ete engage, et on rend la reservation telle quelle.
+     */
+    public function depositStatus(Request $request, string $uid): JsonResponse
+    {
+        $booking = $this->trouver($request, $uid);
+
+        if (! $booking) {
+            return ApiResponse::NOT_FOUND('Oups', 'Cette réservation est introuvable');
+        }
+
+        $orderNumber = BookingPayment::query()
+            ->where('booking_id', $booking->id)
+            ->where('kind', BookingPayment::KIND_DEPOSIT)
+            ->whereNull('paid_at')
+            ->value('reference');
+
+        if ($orderNumber && $booking->status === Booking::STATUS_PENDING_PAYMENT) {
+            $this->webhook->traiter($booking->reference, $orderNumber);
+        }
+
+        return ApiResponse::GET_DATA([
+            'data' => new BookingResource($booking->refresh()),
         ]);
     }
 

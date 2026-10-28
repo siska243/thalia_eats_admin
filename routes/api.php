@@ -297,6 +297,17 @@ Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
             Route::get('/{uid}', 'show');
             Route::post('/{uid}/cancel', 'cancel');
             Route::post('/{uid}/deposit', 'deposit');
+
+            /*
+             * L'ecran d'attente demande a la passerelle ou en est l'acompte.
+             *
+             * Le webhook reste le chemin normal ; celui-ci est le recours
+             * quand il ne revient pas. Limite par le compteur des agents de
+             * lecture : l'appel interroge FlexPay, il ne doit pas pouvoir
+             * etre martele.
+             */
+            Route::get('/{uid}/deposit/status', 'depositStatus')
+                ->middleware('throttle:60,1');
         });
 
     /*

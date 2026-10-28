@@ -131,6 +131,50 @@ class RentalDepositTest extends TestCase
         );
     }
 
+    /**
+     * L'ecran d'attente demande le verdict a la passerelle.
+     *
+     * Le webhook ne revient pas toujours — une instance de developpement
+     * n'est pas joignable, un reseau le perd. L'ecran restait alors a tourner
+     * sur une reservation que FlexPay savait deja reglee, ou deja perdue.
+     */
+    public function test_le_statut_confirme_depuis_la_passerelle(): void
+    {
+        $this->passerelleAccepte();
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $uid = Cipher::Encrypt($booking->id);
+
+        $this->postJson('/api/rental/bookings/'.$uid.'/deposit', [
+            'method' => 'mobile', 'phone' => '+243810000000',
+        ])->assertSuccessful();
+
+        // La passerelle annonce un acompte regle, sans qu'aucun webhook ne
+        // soit arrive.
+        $this->verificationRend([
+            'reference' => $booking->reference,
+            'amount' => 5,
+            'status' => '0',
+        ]);
+
+        $this->getJson('/api/rental/bookings/'.$uid.'/deposit/status')->assertOk();
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $booking->refresh()->status);
+    }
+
+    /** Sans transaction engagee, il n'y a rien a verifier. */
+    public function test_le_statut_sans_acompte_engage_ne_change_rien(): void
+    {
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->getJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id).'/deposit/status')
+            ->assertOk();
+
+        $this->assertSame(Booking::STATUS_PENDING_PAYMENT, $booking->refresh()->status);
+    }
+
     public function test_le_client_engage_l_acompte(): void
     {
         $this->passerelleAccepte();
