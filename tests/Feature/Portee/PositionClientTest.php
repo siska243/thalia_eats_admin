@@ -48,6 +48,7 @@ class PositionClientTest extends TestCase
             'use_client_position' => $positionClient,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
     }
 

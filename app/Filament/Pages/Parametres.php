@@ -218,6 +218,18 @@ class Parametres extends SettingsPage
                                         ->helperText("Activé, deux adresses d'une même ville se livrent quelle que soit la distance. Le rayon ci-dessus ne sert plus que de repli : quand les deux villes diffèrent, ou quand l'une des deux n'est pas renseignée."),
                                 ]),
 
+                            Section::make('Montant minimum')
+                                ->description("En dessous de ce montant, la commande est refusee. Zero signifie qu'il n'y a pas de minimum.")
+                                ->schema([
+                                    TextInput::make('montant_minimum_commande')
+                                        ->label('Panier minimum')
+                                        ->numeric()
+                                        ->minValue(0)
+                                        ->step(0.01)
+                                        ->required()
+                                        ->helperText("Porte sur le total des plats, hors frais de livraison et de service : compter les frais ferait passer la barre a un panier qui ne l'atteint pas. Exprime dans la devise de la plateforme. Laisser a 0 pour n'imposer aucun minimum."),
+                                ]),
+
                             Section::make('Stock des plats')
                                 ->description("Le suivi se decide PLAT PAR PLAT, depuis la fiche du plat. Cet interrupteur ne sert qu'a tout eteindre d'un coup.")
                                 ->schema([

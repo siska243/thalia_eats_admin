@@ -149,6 +149,13 @@ Route::middleware('auth:sanctum')->prefix('/user')->group(function () {
         Route::post('/update/password', 'current_password');
         Route::post('/update/adresse', 'update_adresse');
 
+        /*
+         * Suppression du compte par son titulaire, exigee par Google Play.
+         * DELETE et non POST : l'action est la suppression de la ressource
+         * que ce groupe expose deja en lecture et en mise a jour.
+         */
+        Route::delete('/', 'destroy');
+
     });
 
     /*
@@ -290,6 +297,17 @@ Route::middleware('auth:sanctum')->prefix('/rental')->group(function () {
             Route::get('/{uid}', 'show');
             Route::post('/{uid}/cancel', 'cancel');
             Route::post('/{uid}/deposit', 'deposit');
+
+            /*
+             * L'ecran d'attente demande a la passerelle ou en est l'acompte.
+             *
+             * Le webhook reste le chemin normal ; celui-ci est le recours
+             * quand il ne revient pas. Limite par le compteur des agents de
+             * lecture : l'appel interroge FlexPay, il ne doit pas pouvoir
+             * etre martele.
+             */
+            Route::get('/{uid}/deposit/status', 'depositStatus')
+                ->middleware('throttle:60,1');
         });
 
     /*

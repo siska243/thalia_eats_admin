@@ -40,6 +40,7 @@ class PorteeLivraisonTest extends TestCase
             'use_client_position' => false,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
     }
 
@@ -312,6 +313,7 @@ class PorteeLivraisonTest extends TestCase
             'use_client_position' => $actif,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
     }
 
@@ -440,6 +442,7 @@ class PorteeLivraisonTest extends TestCase
             'use_client_position' => false,
             'city_first' => $actif,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
     }
 
@@ -596,6 +599,7 @@ class PorteeLivraisonTest extends TestCase
             'use_client_position' => true,
             'city_first' => true,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
 
         $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);
@@ -630,6 +634,7 @@ class PorteeLivraisonTest extends TestCase
             'use_client_position' => true,
             'city_first' => true,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
 
         $kinshasa = City::factory()->create(['title' => 'Kinshasa', 'is_active' => true]);

@@ -312,6 +312,57 @@ class PrixServeurFaitFoiTest extends TestCase
         $this->assertStringContainsString('aucun_tarif_actif', $this->journal());
     }
 
+    /**
+     * UN PANIER HORS TRANCHE N'EST PLUS LIVRE GRATUITEMENT.
+     *
+     * La commune a bien une grille, mais le sous-total sort de toutes ses
+     * tranches. Le moteur rendait alors `disponible = true` avec des frais a
+     * 0,00, et ces zeros, faisant autorite, ecrasaient le montant correct
+     * annonce par le navigateur — qui, lui, avait trouve sa tranche parce
+     * qu'il calcule sur le sous-total qu'il porte et non sur les prix en
+     * base.
+     *
+     * C'est le defaut observe en production : « frais 2,5, service 0,5 » a
+     * l'ecran, tout a zero dans l'administration. Une course livree
+     * gratuitement a chaque fois.
+     */
+    public function test_un_panier_hors_tranche_est_refuse_au_lieu_d_etre_facture_zero(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte(avec_tarifs: false);
+
+        // Une grille existe, mais elle ne couvre que les petits paniers.
+        DelivreryPrice::factory()->create([
+            'town_id' => $town->id, 'currency_id' => $currency->id,
+            'interval_pricing' => 0, 'interval_max_price' => 1000,
+            'frais' => 2000, 'service_price' => 500,
+        ]);
+
+        // Le produit vaut 1500 : au-dela de la seule tranche saisie.
+        $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 3000))
+            ->assertStatus(400)
+            ->assertJsonPath('error', 'panier_impossible_a_chiffrer');
+
+        // Et surtout : rien n'est enregistre a zero.
+        $this->assertDatabaseMissing('commandes', ['price_delivery' => 0, 'global_price' => 3000]);
+    }
+
+    /**
+     * LE CONTRE-EXEMPLE, qui compte autant.
+     *
+     * Treize communes de Kinshasa n'ont aucune grille. Le navigateur n'en
+     * trouve pas non plus et affiche 0 : les deux concordent, il n'y a pas
+     * de divergence a arbitrer. Refuser ici fermerait ces communes.
+     */
+    public function test_une_commune_sans_grille_reste_servie(): void
+    {
+        Sanctum::actingAs(User::factory()->create(), ['*']);
+        [$town, $currency, $product] = $this->contexte(avec_tarifs: false);
+
+        $this->postJson('/api/user/commande/valide', $this->payload($town, $currency, $product, 3000))
+            ->assertStatus(201);
+    }
+
     public function test_le_drapeau_a_false_rend_exactement_l_ancien_comportement(): void
     {
         config(['quotation.authoritative' => false]);

@@ -35,6 +35,7 @@ class CataloguePorteeTest extends TestCase
             'use_client_position' => false,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
     }
 
@@ -107,6 +108,7 @@ class CataloguePorteeTest extends TestCase
             'use_client_position' => true,
             'city_first' => false,
             'stock_actif' => true,
+            'montant_minimum_commande' => 0.0,
         ], loadMissingValues: false);
 
         $restaurant = Restaurant::factory()->located(...self::GOMBE)->create();

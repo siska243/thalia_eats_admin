@@ -103,6 +103,78 @@ class RentalDepositTest extends TestCase
         ]);
     }
 
+    /**
+     * La passerelle repond, mais sans transaction.
+     *
+     * `FlexPay::sendData()` rend le corps de la reponse quel que soit le code
+     * HTTP : une erreur 401 ou 500 revenait donc comme une reponse normale,
+     * sans `code`, et le service repondait « ok » avec une URL nulle. Le
+     * client lisait « momentanement indisponible » et, pire, sa reservation
+     * restait creee et impayee — elle lui interdisait ensuite d'en prendre
+     * une autre. C'est exactement ce qui est arrive sur R-A7XIMHUWPP.
+     */
+    public function test_une_reponse_sans_transaction_est_un_refus(): void
+    {
+        Http::fake(['*' => Http::response(['message' => 'Unauthorized'], 401)]);
+
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->postJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id).'/deposit', [
+            'method' => 'cart', 'phone' => '',
+        ])->assertStatus(400);
+
+        // Aucune tentative tracee : il n'y a pas eu de transaction.
+        $this->assertSame(
+            0,
+            BookingPayment::query()->where('booking_id', $booking->id)->count(),
+        );
+    }
+
+    /**
+     * L'ecran d'attente demande le verdict a la passerelle.
+     *
+     * Le webhook ne revient pas toujours — une instance de developpement
+     * n'est pas joignable, un reseau le perd. L'ecran restait alors a tourner
+     * sur une reservation que FlexPay savait deja reglee, ou deja perdue.
+     */
+    public function test_le_statut_confirme_depuis_la_passerelle(): void
+    {
+        $this->passerelleAccepte();
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $uid = Cipher::Encrypt($booking->id);
+
+        $this->postJson('/api/rental/bookings/'.$uid.'/deposit', [
+            'method' => 'mobile', 'phone' => '+243810000000',
+        ])->assertSuccessful();
+
+        // La passerelle annonce un acompte regle, sans qu'aucun webhook ne
+        // soit arrive.
+        $this->verificationRend([
+            'reference' => $booking->reference,
+            'amount' => 5,
+            'status' => '0',
+        ]);
+
+        $this->getJson('/api/rental/bookings/'.$uid.'/deposit/status')->assertOk();
+
+        $this->assertSame(Booking::STATUS_CONFIRMED, $booking->refresh()->status);
+    }
+
+    /** Sans transaction engagee, il n'y a rien a verifier. */
+    public function test_le_statut_sans_acompte_engage_ne_change_rien(): void
+    {
+        $booking = $this->reservation();
+        Sanctum::actingAs($this->client, ['*']);
+
+        $this->getJson('/api/rental/bookings/'.Cipher::Encrypt($booking->id).'/deposit/status')
+            ->assertOk();
+
+        $this->assertSame(Booking::STATUS_PENDING_PAYMENT, $booking->refresh()->status);
+    }
+
     public function test_le_client_engage_l_acompte(): void
     {
         $this->passerelleAccepte();

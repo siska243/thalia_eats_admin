@@ -127,6 +127,39 @@ class DepositPayment
             ];
         }
 
+        /*
+         * Une reponse sans numero de transaction n'est pas un paiement.
+         *
+         * `FlexPay::sendData()` rend le corps de la reponse QUEL QUE SOIT le
+         * code HTTP — ses deux branches sont identiques. Une erreur 401 ou
+         * 500 de la passerelle revenait donc ici comme une reponse normale :
+         * sans `code`, elle echappait au refus juste au-dessus, et le service
+         * repondait « ok » avec une URL nulle. Le client lisait « Le paiement
+         * par carte est momentanement indisponible », et surtout la
+         * reservation restait creee et impayee — elle lui interdisait ensuite
+         * d'en prendre une autre.
+         *
+         * Le journal garde la reponse brute : c'est la seule trace qui dise
+         * si la cle du marchand manque, si le montant est refuse, ou si le
+         * format a change.
+         */
+        if (empty($result['orderNumber'])) {
+            Log::warning('FlexPay : reponse sans numero de transaction', [
+                'booking_id' => $booking->id,
+                'reference' => $booking->reference,
+                'method' => $method,
+                'reponse' => $result,
+            ]);
+
+            $this->relacherLeCreneau($booking);
+
+            return [
+                'ok' => false,
+                'raison' => 'paiement_indisponible',
+                'message' => $result['message'] ?? null,
+            ];
+        }
+
         $orderNumber = $result['orderNumber'] ?? null;
 
         /*
@@ -136,6 +169,24 @@ class DepositPayment
          * debite sans obtenir sa voiture.
          */
         $this->tracer($booking, $orderNumber, $method, $phone);
+
+        /*
+         * En carte, l'absence d'URL est un echec silencieux.
+         *
+         * Le client lit « Le paiement par carte est momentanement
+         * indisponible » et personne ne sait pourquoi : la passerelle a
+         * repondu sans code d'erreur, mais sans page de saisie non plus. La
+         * reponse brute est donc journalisee — c'est la seule trace qui
+         * permette de dire si la cle du marchand manque, si le montant est
+         * refuse, ou si le format a change.
+         */
+        if ($method !== 'mobile' && empty($result['url'])) {
+            Log::warning('FlexPay carte : aucune URL de paiement rendue', [
+                'booking_id' => $booking->id,
+                'reference' => $booking->reference,
+                'reponse' => $result,
+            ]);
+        }
 
         return [
             'ok' => true,
