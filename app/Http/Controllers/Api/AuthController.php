@@ -297,25 +297,78 @@ class AuthController extends Controller
                 return $refus;
             }
 
-            $validator = Validator::make($request->all(), [
-                'email' => ['email', 'required', 'string'],
-                'password' => ['required', 'string'],
+            /*
+             * DEUX IDENTIFIANTS, UN SEUL CHEMIN.
+             *
+             * `phone` est le nouvel identifiant, `email` reste celui que tous
+             * les clients deja installes envoient : le champ telephone est
+             * donc facultatif, et son absence ramene exactement au
+             * comportement precedent. Aucun build n'a besoin de sortir pour
+             * que l'ancien chemin continue de marcher.
+             */
+            $parTelephone = filled($request->input('phone'));
 
-            ]);
+            $validator = Validator::make($request->all(), $parTelephone
+                ? [
+                    'phone' => ['required', 'string'],
+                    'password' => ['required', 'string'],
+                ]
+                : [
+                    'email' => ['email', 'required', 'string'],
+                    'password' => ['required', 'string'],
+                ]);
 
             if ($validator->fails()) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Veuillez saisir une adresse email valide');
+                return ApiResponse::BAD_REQUEST(
+                    'Errors',
+                    'Oups',
+                    $parTelephone
+                        ? 'Veuillez saisir un numéro de téléphone valide'
+                        : 'Veuillez saisir une adresse email valide'
+                );
             }
-            $credentials = $request->only('email', 'password');
 
-            $user = User::query()->where('email', $credentials['email'])->first();
+            /*
+             * LE MOT DE PASSE DEPARTAGE LES COMPTES QUI PARTAGENT UN NUMERO.
+             *
+             * Onze comptes heritent de cinq numeros communs, et le
+             * proprietaire a demande de les garder en l'etat : prendre le
+             * premier venu ferait entrer quelqu'un chez un autre. On essaie
+             * donc le mot de passe contre chaque candidat et on n'ouvre la
+             * session que s'il en designe exactement un.
+             *
+             * Ce detour ne dit rien a l'exterieur : un numero partage et un
+             * numero inconnu rendent le meme refus. Annoncer « plusieurs
+             * comptes utilisent ce numero » apprendrait a un inconnu qu'il a
+             * trouve quelque chose.
+             *
+             * `User::comptesAvecTelephone()` est la seule definition du
+             * « meme numero », celle que lit aussi la regle d'unicite a
+             * l'inscription : « 0821693466 » et « +243 821 693 466 » sont le
+             * meme abonne des deux cotes.
+             */
+            $candidats = $parTelephone
+                ? User::comptesAvecTelephone($request->input('phone'))
+                : User::query()->where('email', $request->input('email'))->get();
+
+            $reconnus = $candidats
+                ->filter(fn (User $compte) => Hash::check($request->password, $compte->password))
+                ->values();
 
             // Un message distinct par champ permettait d'enumerer les comptes :
             // « Email incorrect » revelait qu'une adresse n'existe pas, et
             // « Password incorrect » qu'elle existe. Reponse unique.
-            if (! $user || ! Hash::check($request->password, $user->password)) {
-                return ApiResponse::BAD_REQUEST('Errors', 'Oups', 'Email ou mot de passe incorrect');
+            if ($reconnus->count() !== 1) {
+                return ApiResponse::BAD_REQUEST(
+                    'Errors',
+                    'Oups',
+                    $parTelephone
+                        ? 'Numéro ou mot de passe incorrect'
+                        : 'Email ou mot de passe incorrect'
+                );
             }
+
+            $user = $reconnus->first();
 
             /*
              * Le refus vient APRES la verification du mot de passe : annoncer
