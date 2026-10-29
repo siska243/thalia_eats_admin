@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Support\Providers\RouteServiceProvider as ServiceProvider;
 use Illuminate\Http\Request;
@@ -192,21 +193,37 @@ class RouteServiceProvider extends ServiceProvider
     }
 
     /**
-     * Cle de limitation des points d'authentification : l'e-mail vise et l'IP
-     * d'ou part la tentative.
+     * Cle de limitation des points d'authentification : le compte vise et
+     * l'IP d'ou part la tentative.
      *
-     * L'e-mail est normalise et hache : deux casses du meme e-mail comptent
-     * ensemble, et la cle ne porte pas l'adresse en clair dans le cache. Sans
-     * e-mail dans la requete, on retombe sur la seule IP.
+     * L'identifiant est normalise et hache : deux casses du meme e-mail
+     * comptent ensemble, et la cle ne porte pas l'adresse en clair dans le
+     * cache. Sans identifiant, on retombe sur la seule IP.
+     *
+     * LE TELEPHONE COMPTE COMME L'E-MAIL. Depuis qu'on peut se connecter par
+     * numero, l'omettre ici aurait laisse le compteur par compte au seul
+     * chemin e-mail : une liste de numeros essayee depuis des IP tournantes
+     * n'aurait rencontre aucune borne par compte. Il passe par
+     * `User::normaliserTelephone()`, la meme definition que la connexion et
+     * la regle d'unicite, pour que « 0821693466 » et « +243 821 693 466 »
+     * alimentent un seul compteur.
      */
     private static function cleAuth(Request $request): string
     {
         $email = $request->input('email');
 
-        $partieEmail = is_string($email) && $email !== ''
-            ? sha1(mb_strtolower(trim($email)))
-            : 'sans-email';
+        if (is_string($email) && $email !== '') {
+            $partieCompte = sha1(mb_strtolower(trim($email)));
+        } else {
+            $telephone = $request->input('phone');
 
-        return 'auth:'.$partieEmail.'|'.$request->ip();
+            $e164 = is_string($telephone) || is_numeric($telephone)
+                ? User::normaliserTelephone((string) $telephone)
+                : null;
+
+            $partieCompte = $e164 !== null ? sha1($e164) : 'sans-compte';
+        }
+
+        return 'auth:'.$partieCompte.'|'.$request->ip();
     }
 }

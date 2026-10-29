@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
+use App\Wrappers\LibPhoneNumber;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Auth\MultiFactor\Email\Contracts\HasEmailAuthentication;
@@ -421,5 +422,72 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         }
 
         $this->forceFill(['email_verified_at' => now()])->save();
+    }
+
+    /**
+     * Le numero, ramene a sa forme canonique E.164.
+     *
+     * Les numeros sont entres en base sous toutes les formes possibles :
+     * « 0766742252 », « +243 821 693 466 », « 53876866 ». Comparer ces
+     * chaines entre elles ne veut rien dire — le meme abonne saisi une fois
+     * en national et une fois en international donne deux valeurs
+     * differentes, donc deux comptes qui ne se reconnaissent pas.
+     *
+     * La definition de « ce numero est valide » reste dans LibPhoneNumber,
+     * qui sert deja aux chemins de paiement et a la regle TelephoneValide :
+     * une seconde definition finirait par la contredire.
+     *
+     * Rend null sur un numero inexploitable, jamais une chaine a moitie
+     * nettoyee : un appelant qui compare deux null croirait avoir trouve une
+     * correspondance.
+     */
+    public static function normaliserTelephone(?string $phone): ?string
+    {
+        if ($phone === null || trim($phone) === '') {
+            return null;
+        }
+
+        $lib = new LibPhoneNumber(trim($phone));
+
+        return $lib->checkValidationNumber() ? $lib->phoneE164() : null;
+    }
+
+    /**
+     * Les comptes qui portent ce numero.
+     *
+     * Definition unique du « meme numero », lue par l'inscription — qui
+     * refuse un numero deja pris — et par la connexion — qui refuse d'agir
+     * si le numero en designe plusieurs. Deux lectures differentes de cette
+     * question laisseraient s'inscrire un numero avec lequel on ne pourrait
+     * pas se connecter.
+     *
+     * Deux temps. Le SQL degrossit sur les neuf derniers chiffres, en
+     * neutralisant les separateurs que les anciennes saisies ont laisses ;
+     * PHP tranche ensuite sur la forme E.164, seule comparaison qui fasse
+     * foi. Le LIKE ne peut pas servir d'index, mais il evite d'hydrater
+     * toute la table a chaque tentative de connexion — l'endpoint le plus
+     * attaque de l'application.
+     *
+     * Plafond assume : au-dela de quelques milliers de comptes, il faudra
+     * une colonne normalisee et son index. On n'y est pas.
+     */
+    public static function comptesAvecTelephone(?string $phone)
+    {
+        $e164 = self::normaliserTelephone($phone);
+
+        if ($e164 === null) {
+            return collect();
+        }
+
+        $fragment = substr(preg_replace('/\D/', '', $e164), -9);
+
+        $sansSeparateur = "REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '(', ''), ')', '')";
+
+        return self::query()
+            ->whereNotNull('phone')
+            ->whereRaw("{$sansSeparateur} LIKE ?", ['%'.$fragment])
+            ->get()
+            ->filter(fn (self $compte) => self::normaliserTelephone($compte->phone) === $e164)
+            ->values();
     }
 }
