@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\TelephoneDisponible;
 use App\Rules\TelephoneValide;
 use App\Wrappers\ApiResponse;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -42,7 +43,12 @@ class RegistrationRequest extends FormRequest
              * n'envoient pas ce champ, et l'exiger les arreterait tous. La
              * regle juge le format, pas la presence.
              */
-            'phone' => ['nullable', new TelephoneValide],
+            /*
+             * L'unicite est posee ici, a l'inscription, et non par un index :
+             * voir TelephoneDisponible pour les onze comptes deja en doublon
+             * que cette decision laisse en place.
+             */
+            'phone' => ['nullable', new TelephoneValide, new TelephoneDisponible],
         ];
     }
 
