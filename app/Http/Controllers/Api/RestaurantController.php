@@ -24,6 +24,7 @@ use App\Wrappers\Cipher;
 use App\Wrappers\FirebasePushNotification;
 use Exception;
 use Flowframe\Trend\Trend;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -158,8 +159,32 @@ class RestaurantController extends Controller
      * detail ne savait pas qu'il etait hors zone, et laissait remplir un
      * panier que le paiement allait refuser. Une promesse tenue trop tard.
      */
+    /**
+     * Un restaurant desactive n'existe pas pour le client.
+     *
+     * La liste le filtre deja, mais la fiche, la carte et le menu se
+     * resolvent par slug : un lien garde en favori, un partage WhatsApp ou un
+     * appel direct a l'API rouvraient la vitrine d'un restaurant eteint, et
+     * le panier qui en sortait allait jusqu'au paiement.
+     */
+    private function refuserSiDesactive(Restaurant $restaurant): ?JsonResponse
+    {
+        if ($restaurant->is_active) {
+            return null;
+        }
+
+        return ApiResponse::NOT_FOUND(
+            __('Restaurant indisponible'),
+            __('Ce restaurant ne prend plus de commande.'),
+        );
+    }
+
     public function show(Restaurant $restaurant, Request $request)
     {
+        if ($refus = $this->refuserSiDesactive($restaurant)) {
+            return $refus;
+        }
+
         $restaurant->loadMissing('town.city');
 
         $this->attacherLaPortee($restaurant, $request);
@@ -169,6 +194,10 @@ class RestaurantController extends Controller
 
     public function categorie(Restaurant $restaurant)
     {
+        if ($refus = $this->refuserSiDesactive($restaurant)) {
+            return $refus;
+        }
+
         $restaurantId = $restaurant->id;
 
         $categories = CategoryProduct::with(['sub_category_product' => function ($query) use ($restaurantId) {
@@ -193,6 +222,10 @@ class RestaurantController extends Controller
 
     public function productRestaurant(Restaurant $restaurant, string $slug)
     {
+        if ($refus = $this->refuserSiDesactive($restaurant)) {
+            return $refus;
+        }
+
         try {
             // code...
             $menu = SubCategoryProduct::query()
