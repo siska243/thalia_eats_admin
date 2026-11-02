@@ -88,7 +88,8 @@ class CommandeController extends Controller
     }
 
     /**
-     * Refuse une commande dont un produit vient d'un restaurant ferme.
+     * Refuse une commande dont un produit vient d'un restaurant ferme, ou
+     * desactive par l'administration.
      *
      * Le proprietaire, le 10 octobre : « on refuse car c'est fermer et
      * personne peut preparer la commande ». Donc aucune marge, et c'est
@@ -118,14 +119,33 @@ class CommandeController extends Controller
             return null;
         }
 
-        $ferme = Product::query()
+        $restaurants = Product::query()
             ->with('restaurant')
             ->whereIn('id', $ids)
             ->get()
             ->pluck('restaurant')
             ->filter()
-            ->unique('id')
-            ->first(fn (Restaurant $restaurant) => ! $restaurant->estOuvert());
+            ->unique('id');
+
+        /*
+         * DESACTIVE AVANT FERME, et avec son propre message : un restaurant
+         * que l'administration a eteint ne rouvre pas a une heure, lui
+         * annoncer « ouvre a 9h » enverrait le client attendre pour rien.
+         *
+         * La liste des restaurants filtre deja `is_active`, mais un panier
+         * rempli avant la desactivation — ou un appel direct a l'API —
+         * passait quand meme au reglement : la garde du catalogue ne vaut
+         * que pour l'ecran, celle-ci vaut pour la commande.
+         */
+        if ($eteint = $restaurants->first(fn (Restaurant $restaurant) => ! $restaurant->is_active)) {
+            return ApiResponse::BAD_REQUEST(
+                ['restaurant' => $eteint->name],
+                __('Restaurant indisponible'),
+                __(':restaurant ne prend plus de commande.', ['restaurant' => $eteint->name]),
+            );
+        }
+
+        $ferme = $restaurants->first(fn (Restaurant $restaurant) => ! $restaurant->estOuvert());
 
         if (! $ferme) {
             return null;
